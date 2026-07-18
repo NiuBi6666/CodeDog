@@ -131,6 +131,20 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void sanitizerKeepsSafeDingTalkFormattingAndMathSources() {
+        String clean = sanitizer.clean("""
+            <p style="text-align:center; margin-left:24px; font-size:18px; position:fixed; background-image:url(javascript:bad)">
+              x<sup>2</sup>+a<sub>n</sub>
+              <span class="math-formula other" data-latex="\\frac{3^{30}-1}{2}" data-display="true"><b>discard rendered markup</b></span>
+            </p>
+            """);
+        assertThat(clean).contains("doc-align-center", "doc-indent-1", "doc-font-18");
+        assertThat(clean).contains("<sup>2</sup>", "<sub>n</sub>");
+        assertThat(clean).contains("class=\"math-formula\"", "data-latex=\"\\frac{3^{30}-1}{2}\"", "data-display=\"true\"");
+        assertThat(clean).doesNotContain("style=", "position", "background-image", "discard rendered markup", "other");
+    }
+
+    @Test
     void auditLogsCanBeFilteredAndRemainPrivate() throws Exception {
         String createdBody = mvc.perform(post("/api/documents").session(session).with(csrf())
                 .contentType(APPLICATION_JSON)

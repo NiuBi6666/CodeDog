@@ -22,6 +22,7 @@
 
 旧的 `/documents/:id`、`/admin/documents` 和 `/admin/documents/:id/edit` 地址继续兼容。
 文档对外使用唯一的 8 位 UUID；旧数字 ID 链接仍可访问，并会自动规范为 UUID 地址。
+编辑器支持图片、表格、代码块和 KaTeX 数学公式，并尽量保留从钉钉文档粘贴的上下标、字号、缩进、行高与列表格式。
 
 ## 本地开发
 

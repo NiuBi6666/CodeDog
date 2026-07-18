@@ -2,12 +2,15 @@
 import { nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, notify, writeClipboard } from "../api";
+import { enhanceDocumentMath } from "../documentMath";
 import { formatDateTime } from "../utils";
 
 const props = defineProps({ notFound: Boolean });
 const route = useRoute(); const router = useRouter(); const document = ref(null); const state = ref("loading");
 async function enhanceCodeBlocks() {
   await nextTick();
+  const content = window.document.querySelector(".document-content");
+  enhanceDocumentMath(content);
   document.value && window.document.querySelectorAll(".document-content pre").forEach((pre) => {
     if (pre.parentElement?.classList.contains("code-block")) return;
     const wrapper = window.document.createElement("div"); wrapper.className = "code-block"; pre.parentNode.insertBefore(wrapper, pre); wrapper.appendChild(pre);

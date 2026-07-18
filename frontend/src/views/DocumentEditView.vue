@@ -4,10 +4,11 @@ import { useRoute, useRouter } from "vue-router";
 import {
   AlignCenter, AlignLeft, AlignRight, Bold, Code2, ImagePlus, Italic, Link2, List,
   ListOrdered, Minus, Quote, Redo2, RemoveFormatting, Save, Strikethrough,
-  Table2, Underline, Undo2, Unlink,
+  Sigma, Table2, Underline, Undo2, Unlink,
 } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
+import { createMathElement, enhanceDocumentMath, renderMathElement, serializeDocumentContent } from "../documentMath";
 import { validateDocumentImage } from "../utils";
 
 const route = useRoute(); const router = useRouter(); const editor = ref(null); const imageInput = ref(null);
@@ -19,7 +20,7 @@ async function load() {
   loading.value = true; conflict.value = false; dirty.value = false; savedRange = null;
   if (isNew.value) { title.value = ""; version.value = 0; await nextTick(); editor.value.innerHTML = "<p><br></p>"; setStatus("未创建"); }
   else {
-    try { const document = await api(`/documents/${route.params.id}`); if (route.params.id !== document.id) { await router.replace(`/doc/edit/${document.id}`); return; } title.value = document.title; version.value = document.version; await nextTick(); editor.value.innerHTML = document.content; setStatus("已保存", "saved"); }
+    try { const document = await api(`/documents/${route.params.id}`); if (route.params.id !== document.id) { await router.replace(`/doc/edit/${document.id}`); return; } title.value = document.title; version.value = document.version; await nextTick(); editor.value.innerHTML = document.content; enhanceDocumentMath(editor.value); setStatus("已保存", "saved"); }
     catch (failure) { setStatus(failure.message, "error"); }
   }
   loading.value = false;
@@ -30,7 +31,7 @@ async function save() {
   if (!title.value.trim()) { setStatus("标题不能为空", "error"); return; }
   saving.value = true; dirty.value = false; setStatus("正在保存...", "saving");
   try {
-    const payload = { title: title.value.trim(), content: editor.value.innerHTML, version: version.value };
+    const payload = { title: title.value.trim(), content: serializeDocumentContent(editor.value), version: version.value };
     const document = await api(isNew.value ? "/documents" : `/documents/${route.params.id}`, { method: isNew.value ? "POST" : "PUT", body: jsonBody(payload) });
     if (isNew.value) { setStatus("已创建", "saved"); window.location.replace(`/doc/edit/${document.id}`); return; }
     version.value = document.version; setStatus("已保存", "saved");
@@ -97,7 +98,25 @@ async function handleImageInput(event) {
 }
 async function handlePaste(event) {
   const file = [...(event.clipboardData?.files || [])].find((item) => item.type.startsWith("image/"));
-  if (!file) return; event.preventDefault(); captureSelection(); await insertImageFile(file);
+  if (!file) {
+    window.setTimeout(() => { enhanceDocumentMath(editor.value); captureSelection(); markDirty(); }, 0);
+    return;
+  }
+  event.preventDefault(); captureSelection(); await insertImageFile(file);
+}
+function insertFormula() {
+  captureSelection();
+  const source = window.prompt("输入 LaTeX 公式", "\\frac{a}{b}");
+  if (!source?.trim()) return;
+  const formula = createMathElement(document, source);
+  insertNodes([formula, document.createTextNode("\u00a0")]); renderMathElement(formula); markDirty();
+}
+function editFormula(event) {
+  const target = event.target instanceof Element ? event.target.closest(".math-formula") : null;
+  if (!target || !editor.value.contains(target)) return;
+  const source = window.prompt("修改 LaTeX 公式", target.dataset.latex || "");
+  if (!source?.trim()) return;
+  target.dataset.latex = source.trim(); renderMathElement(target); markDirty();
 }
 function insertTable() {
   captureSelection();
@@ -149,6 +168,7 @@ onBeforeUnmount(() => { window.clearTimeout(timer); document.removeEventListener
         <button type="button" title="插入链接" aria-label="插入链接" @mousedown.prevent @click="insertLink"><Link2 :size="17"/></button>
         <button type="button" title="取消链接" aria-label="取消链接" @mousedown.prevent @click="command('unlink')"><Unlink :size="17"/></button>
         <button type="button" title="插入图片" aria-label="插入图片" @mousedown.prevent @click="chooseImage"><ImagePlus :size="17"/></button>
+        <button type="button" title="插入数学公式" aria-label="插入数学公式" @mousedown.prevent @click="insertFormula"><Sigma :size="17"/></button>
         <button type="button" title="插入表格" aria-label="插入表格" @mousedown.prevent @click="insertTable"><Table2 :size="17"/></button>
         <button type="button" title="插入分隔线" aria-label="插入分隔线" @mousedown.prevent @click="command('insertHorizontalRule')"><Minus :size="17"/></button>
         <span class="toolbar-divider"></span>
@@ -163,7 +183,7 @@ onBeforeUnmount(() => { window.clearTimeout(timer); document.removeEventListener
       <button class="toolbar-save" type="button" @mousedown.prevent @click="saveNow"><Save :size="16"/>{{ isNew ? "创建" : "保存" }}</button>
       <input ref="imageInput" class="editor-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" @change="handleImageInput">
     </div>
-    <div class="editor-shell admin-editor-shell"><div ref="editor" class="document editor-document" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" @input="editorInput" @mouseup="captureSelection" @keyup="captureSelection" @focus="captureSelection" @paste="handlePaste"></div></div>
+    <div class="editor-shell admin-editor-shell"><div ref="editor" class="document editor-document" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" @input="editorInput" @mouseup="captureSelection" @keyup="captureSelection" @focus="captureSelection" @paste="handlePaste" @dblclick="editFormula"></div></div>
     <div v-if="conflict" class="conflict-banner"><span>文档已在其他页面更新</span><button class="button button-primary" type="button" @click="reloadPage">载入最新版本</button></div>
   </AdminLayout>
 </template>

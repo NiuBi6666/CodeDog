@@ -195,6 +195,17 @@ a {
 .document-content p,
 .editor-document p {
   margin: 0 0 1em;
+  white-space: pre-wrap;
+}
+
+.document-content li,
+.editor-document li {
+  white-space: pre-wrap;
+}
+
+.document-content > div,
+.editor-document > div {
+  white-space: pre-wrap;
 }
 
 .document-content blockquote,
@@ -266,6 +277,134 @@ a {
   margin: 1.4em auto;
   border-radius: 6px;
 }
+
+.document-content figure,
+.editor-document figure {
+  max-width: 100%;
+  margin: 1.4em auto;
+}
+
+.document-content figcaption,
+.editor-document figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  text-align: center;
+}
+
+.document-content mark,
+.editor-document mark {
+  padding: 0 2px;
+  background: #fff1a8;
+}
+
+.math-formula {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 0.08em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+}
+
+.math-formula[data-display="true"] {
+  display: block;
+  width: 100%;
+  margin: 1em 0;
+  text-align: center;
+}
+
+.math-formula .katex-display {
+  margin: 0;
+}
+
+.editor-document .math-formula {
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.editor-document .math-formula:hover {
+  border-color: #a7c9c5;
+  background: #f1faf8;
+}
+
+.doc-align-left { text-align: left; }
+.doc-align-center { text-align: center; }
+.doc-align-right { text-align: right; }
+.doc-align-justify { text-align: justify; }
+.doc-bold { font-weight: 700; }
+.doc-italic { font-style: italic; }
+.doc-underline { text-decoration: underline; }
+.doc-strike { text-decoration: line-through; }
+.doc-block { display: block; }
+.doc-inline-block { display: inline-block; }
+.doc-pre-wrap { white-space: pre-wrap; }
+.doc-super { font-size: 0.75em; vertical-align: super; }
+.doc-sub { font-size: 0.75em; vertical-align: sub; }
+.doc-font-12 { font-size: 12px; }
+.doc-font-14 { font-size: 14px; }
+.doc-font-16 { font-size: 16px; }
+.doc-font-18 { font-size: 18px; }
+.doc-font-20 { font-size: 20px; }
+.doc-font-24 { font-size: 24px; }
+.doc-font-28 { font-size: 28px; }
+.doc-font-32 { font-size: 32px; }
+.doc-font-36 { font-size: 36px; }
+.doc-font-48 { font-size: 48px; }
+.doc-font-64 { font-size: 64px; }
+.doc-indent-1 { margin-left: 1.5em; }
+.doc-indent-2 { margin-left: 3em; }
+.doc-indent-3 { margin-left: 4.5em; }
+.doc-indent-4 { margin-left: 6em; }
+.doc-indent-5 { margin-left: 9em; }
+.doc-indent-6 { margin-left: 12em; }
+.doc-line-100 { line-height: 1; }
+.doc-line-125 { line-height: 1.25; }
+.doc-line-150 { line-height: 1.5; }
+.doc-line-175 { line-height: 1.75; }
+.doc-line-200 { line-height: 2; }
+.doc-line-250 { line-height: 2.5; }
+.doc-line-300 { line-height: 3; }
+.doc-list-disc { list-style-type: disc; }
+.doc-list-circle { list-style-type: circle; }
+.doc-list-square { list-style-type: square; }
+.doc-list-decimal { list-style-type: decimal; }
+.doc-list-lower-alpha { list-style-type: lower-alpha; }
+.doc-list-upper-alpha { list-style-type: upper-alpha; }
+.doc-list-lower-roman { list-style-type: lower-roman; }
+.doc-list-upper-roman { list-style-type: upper-roman; }
+.doc-list-none { list-style-type: none; }
+.doc-mt-0 { margin-top: 0; }
+.doc-mt-8 { margin-top: 8px; }
+.doc-mt-16 { margin-top: 16px; }
+.doc-mt-24 { margin-top: 24px; }
+.doc-mt-32 { margin-top: 32px; }
+.doc-mt-48 { margin-top: 48px; }
+.doc-mt-64 { margin-top: 64px; }
+.doc-mb-0 { margin-bottom: 0; }
+.doc-mb-8 { margin-bottom: 8px; }
+.doc-mb-16 { margin-bottom: 16px; }
+.doc-mb-24 { margin-bottom: 24px; }
+.doc-mb-32 { margin-bottom: 32px; }
+.doc-mb-48 { margin-bottom: 48px; }
+.doc-mb-64 { margin-bottom: 64px; }
+.doc-pt-0 { padding-top: 0; }
+.doc-pt-8 { padding-top: 8px; }
+.doc-pt-16 { padding-top: 16px; }
+.doc-pt-24 { padding-top: 24px; }
+.doc-pt-32 { padding-top: 32px; }
+.doc-pt-48 { padding-top: 48px; }
+.doc-pt-64 { padding-top: 64px; }
+.doc-pb-0 { padding-bottom: 0; }
+.doc-pb-8 { padding-bottom: 8px; }
+.doc-pb-16 { padding-bottom: 16px; }
+.doc-pb-24 { padding-bottom: 24px; }
+.doc-pb-32 { padding-bottom: 32px; }
+.doc-pb-48 { padding-bottom: 48px; }
+.doc-pb-64 { padding-bottom: 64px; }
 
 .document-content table,
 .editor-document table {
