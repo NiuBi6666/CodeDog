@@ -57,6 +57,7 @@ public class HtmlSanitizer {
         String cleaned = Jsoup.clean(html == null ? "" : html, "", safelist,
             new Document.OutputSettings().prettyPrint(false));
         Document fragment = Jsoup.parseBodyFragment(cleaned);
+        fragment.outputSettings().prettyPrint(false);
         for (Element image : fragment.select("img")) {
             String source = image.attr("src").trim();
             String lower = source.toLowerCase();

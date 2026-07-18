@@ -200,7 +200,7 @@ a {
 
 .document-content li,
 .editor-document li {
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .document-content > div,

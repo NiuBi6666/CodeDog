@@ -145,6 +145,13 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void sanitizerDoesNotAddVisibleWhitespaceToNestedDingTalkLists() {
+        String clean = sanitizer.clean("<ol><li><div>在 check 函数中：</div><ul><li>先判断长度</li><li>遍历字符</li></ul></li></ol>");
+
+        assertThat(clean).isEqualTo("<ol><li><div>在 check 函数中：</div><ul><li>先判断长度</li><li>遍历字符</li></ul></li></ol>");
+    }
+
+    @Test
     void auditLogsCanBeFilteredAndRemainPrivate() throws Exception {
         String createdBody = mvc.perform(post("/api/documents").session(session).with(csrf())
                 .contentType(APPLICATION_JSON)
