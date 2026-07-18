@@ -50,11 +50,18 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ClassProgressService.NotConfiguredException.class)
     ResponseEntity<?> integrationNotConfigured(ClassProgressService.NotConfiguredException error) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", error.getMessage()));
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(Map.of("error", error.getMessage(), "code", "CODEMAO_AUTH_REQUIRED"));
     }
 
-    @ExceptionHandler({ClassProgressService.UpstreamAuthenticationException.class, ClassProgressService.UpstreamException.class})
-    ResponseEntity<?> upstream(RuntimeException error) {
+    @ExceptionHandler(ClassProgressService.UpstreamAuthenticationException.class)
+    ResponseEntity<?> upstreamAuthentication(ClassProgressService.UpstreamAuthenticationException error) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .body(Map.of("error", error.getMessage(), "code", "CODEMAO_AUTH_REQUIRED"));
+    }
+
+    @ExceptionHandler(ClassProgressService.UpstreamException.class)
+    ResponseEntity<?> upstream(ClassProgressService.UpstreamException error) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", error.getMessage()));
     }
 }

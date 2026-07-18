@@ -1,14 +1,17 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { ClipboardCopy, Download, RefreshCw, Search } from "@lucide/vue";
+import { computed, nextTick, onMounted, ref } from "vue";
+import { ClipboardCopy, Download, KeyRound, RefreshCw, Search } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
-import { api, notify, writeClipboard } from "../api";
+import { api, jsonBody, notify, writeClipboard } from "../api";
 import { buildStudentProgressRows, formatLessonState, progressResult, progressStatusClass } from "../classProgress";
 import { formatDateTime } from "../utils";
 
 const bootstrap = ref(null); const classes = ref([]); const lessons = ref([]); const report = ref(null);
 const campId = ref(""); const classId = ref(""); const lessonId = ref(""); const studentKeyword = ref("");
 const error = ref(""); const loading = ref(false); const querying = ref(false);
+const credentialOpen = ref(false); const credentialRequired = ref(false); const credentialCookie = ref("");
+const credentialError = ref(""); const credentialSaving = ref(false); const credentialInput = ref(null);
+let retryAfterCredential = null;
 
 const selectedLesson = computed(() => lessons.value.find((lesson) => String(lesson.id) === String(lessonId.value)));
 const studentRows = computed(() => buildStudentProgressRows(report.value?.questions || []));
@@ -18,12 +21,43 @@ const filteredStudents = computed(() => {
   return studentRows.value.filter((student) => student.name.toLowerCase().includes(keyword) || student.id.includes(keyword));
 });
 
+function requiresCredential(failure) { return failure.payload?.code === "CODEMAO_AUTH_REQUIRED"; }
+async function requestCredential(retry) {
+  retryAfterCredential = retry; credentialRequired.value = true; credentialError.value = "";
+  error.value = ""; credentialOpen.value = true;
+  await nextTick(); credentialInput.value?.focus();
+}
+function handleFailure(failure, retry) {
+  if (requiresCredential(failure)) { requestCredential(retry); return; }
+  error.value = failure.message;
+}
+function closeCredential() {
+  credentialOpen.value = false; credentialCookie.value = ""; credentialError.value = "";
+  retryAfterCredential = null; error.value = "需要有效的编程猫 Cookie 才能加载课堂数据";
+}
+async function submitCredential() {
+  const cookie = credentialCookie.value.trim();
+  if (!cookie) { credentialError.value = "请输入 Cookie"; credentialInput.value?.focus(); return; }
+  credentialSaving.value = true; credentialError.value = "";
+  try {
+    const verified = await api("/class-progress/credential", { method: "POST", body: jsonBody({ cookie }) });
+    const retry = retryAfterCredential;
+    bootstrap.value = verified; credentialOpen.value = false; credentialRequired.value = false;
+    credentialCookie.value = ""; retryAfterCredential = null; error.value = "";
+    if (retry === loadBootstrap) {
+      campId.value = verified.camps.length ? String(verified.camps[0].id) : "";
+      await loadClasses();
+    } else if (retry) await retry();
+  } catch (failure) { credentialError.value = failure.message; }
+  finally { credentialSaving.value = false; }
+}
+
 async function loadBootstrap() {
   loading.value = true; error.value = "";
   try {
     bootstrap.value = await api("/class-progress/bootstrap");
     if (bootstrap.value.camps.length) { campId.value = String(bootstrap.value.camps[0].id); await loadClasses(); }
-  } catch (failure) { error.value = failure.message; }
+  } catch (failure) { handleFailure(failure, loadBootstrap); }
   finally { loading.value = false; }
 }
 
@@ -33,7 +67,7 @@ async function loadClasses() {
   try {
     classes.value = await api(`/class-progress/camps/${campId.value}/classes`);
     if (classes.value.length) { classId.value = String(classes.value[0].id); await loadLessons(); }
-  } catch (failure) { error.value = failure.message; }
+  } catch (failure) { handleFailure(failure, loadClasses); }
 }
 
 async function loadLessons() {
@@ -42,14 +76,14 @@ async function loadLessons() {
   try {
     lessons.value = await api(`/class-progress/classes/${classId.value}/lessons`);
     if (lessons.value.length) lessonId.value = String(lessons.value[0].id);
-  } catch (failure) { error.value = failure.message; }
+  } catch (failure) { handleFailure(failure, loadLessons); }
 }
 
 async function queryProgress() {
   if (!classId.value || !lessonId.value) { error.value = "请选择班级和课次"; return; }
   querying.value = true; error.value = ""; report.value = null; studentKeyword.value = "";
   try { report.value = await api(`/class-progress/classes/${classId.value}/lessons/${lessonId.value}/report`); }
-  catch (failure) { error.value = failure.message; }
+  catch (failure) { handleFailure(failure, queryProgress); }
   finally { querying.value = false; }
 }
 
@@ -78,7 +112,7 @@ onMounted(loadBootstrap);
 <template>
   <AdminLayout page-title="课堂完成情况" active-page="class-progress">
     <div class="admin-page-heading"><div><h1>课堂完成情况</h1><p>班级课次作业统计</p></div><span v-if="bootstrap" class="teacher-chip">{{ bootstrap.teacher.name }} · {{ bootstrap.teacher.id }}</span></div>
-    <div v-if="error" class="notice notice-error">{{ error }}</div>
+    <div v-if="error" class="notice notice-error progress-error-notice"><span>{{ error }}</span><button v-if="credentialRequired" class="button button-small button-quiet" type="button" @click="requestCredential(loadBootstrap)"><KeyRound :size="14"/>输入 Cookie</button></div>
     <section class="admin-panel progress-filter-panel" :aria-busy="loading || querying">
       <form class="progress-filter-form" @submit.prevent="queryProgress">
         <label><span>营期</span><select v-model="campId" :disabled="loading" @change="loadClasses"><option value="">请选择营期</option><option v-for="camp in bootstrap?.camps || []" :key="camp.id" :value="String(camp.id)">{{ camp.name }} · {{ camp.coursePackageName }}</option></select></label>
@@ -115,5 +149,19 @@ onMounted(loadBootstrap);
         </table></div>
       </section>
     </template>
+
+    <Teleport to="body">
+      <div v-if="credentialOpen" class="progress-credential-backdrop" role="presentation">
+        <section class="progress-credential-dialog" role="dialog" aria-modal="true" aria-labelledby="credential-title">
+          <div class="progress-credential-heading"><span><KeyRound :size="18"/></span><div><h2 id="credential-title">输入编程猫 Cookie</h2><p>验证成功后继续加载课堂数据</p></div></div>
+          <form @submit.prevent="submitCredential">
+            <div v-if="credentialError" class="notice notice-error">{{ credentialError }}</div>
+            <label><span>Cookie</span><input ref="credentialInput" v-model="credentialCookie" type="password" autocomplete="off" spellcheck="false" maxlength="16384" placeholder="请输入当前教师账号的 Cookie" required></label>
+            <small>凭据仅保存在当前后台登录会话，退出后自动清除。</small>
+            <div class="progress-credential-actions"><button class="button button-quiet" type="button" :disabled="credentialSaving" @click="closeCredential">取消</button><button class="button button-primary" type="submit" :disabled="credentialSaving"><RefreshCw v-if="credentialSaving" class="spin-icon" :size="15"/>{{ credentialSaving ? "验证中" : "验证并继续" }}</button></div>
+          </form>
+        </section>
+      </div>
+    </Teleport>
   </AdminLayout>
 </template>

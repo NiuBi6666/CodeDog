@@ -175,7 +175,11 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/class-progress/bootstrap")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/class-progress/bootstrap").session(session))
             .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.error").value("服务器尚未配置编程猫登录凭据"));
+            .andExpect(jsonPath("$.error").value("服务器尚未配置编程猫登录凭据"))
+            .andExpect(jsonPath("$.code").value("CODEMAO_AUTH_REQUIRED"));
+        mvc.perform(post("/api/class-progress/credential").session(session).with(csrf())
+                .contentType(APPLICATION_JSON).content("{\"cookie\":\"   \"}"))
+            .andExpect(status().isBadRequest());
     }
 
     private Student student(String id, String name) {

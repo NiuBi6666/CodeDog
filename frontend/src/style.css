@@ -1636,6 +1636,107 @@ a {
   gap: 6px;
 }
 
+.progress-error-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-error-notice .button {
+  flex: none;
+}
+
+.progress-credential-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20, 33, 38, 0.56);
+}
+
+.progress-credential-dialog {
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid #d7e0e2;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 20px 50px rgba(13, 29, 35, 0.2);
+}
+
+.progress-credential-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #e4e9eb;
+}
+
+.progress-credential-heading > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #0f766e;
+  background: #e9f5f3;
+}
+
+.progress-credential-heading h2 {
+  margin: 0 0 3px;
+  font-size: 17px;
+}
+
+.progress-credential-heading p {
+  margin: 0;
+  color: #718086;
+  font-size: 12px;
+}
+
+.progress-credential-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px 22px;
+}
+
+.progress-credential-dialog label {
+  display: grid;
+  gap: 6px;
+  color: #405057;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progress-credential-dialog input {
+  width: 100%;
+  height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #c9d4d7;
+  border-radius: 6px;
+  outline: none;
+}
+
+.progress-credential-dialog input:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.progress-credential-dialog form > small {
+  color: #718086;
+  font-size: 11px;
+}
+
+.progress-credential-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 2px;
+}
+
 .spin-icon {
   animation: progress-spin 900ms linear infinite;
 }
@@ -2008,6 +2109,21 @@ a {
 
   .teacher-chip {
     display: none;
+  }
+
+  .progress-error-notice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .progress-credential-backdrop {
+    padding: 14px;
+  }
+
+  .progress-credential-heading,
+  .progress-credential-dialog form {
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
   .progress-filter-form {

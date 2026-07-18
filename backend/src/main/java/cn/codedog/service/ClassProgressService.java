@@ -49,8 +49,13 @@ public class ClassProgressService {
     }
 
     public Bootstrap bootstrap() {
-        Teacher teacher = teacher();
-        JsonNode response = get(classroomClient, "/live/camp/getCampInfo", builder -> builder
+        return bootstrap(null);
+    }
+
+    public Bootstrap bootstrap(String sessionCookie) {
+        UpstreamClients clients = clients(sessionCookie);
+        Teacher teacher = teacher(clients.account());
+        JsonNode response = get(clients.classroom(), "/live/camp/getCampInfo", builder -> builder
             .queryParam("internalTeacherId", teacher.id()).build(), "获取营期");
         List<Camp> camps = new ArrayList<>();
         for (JsonNode item : data(response)) {
@@ -62,9 +67,14 @@ public class ClassProgressService {
     }
 
     public List<LiveClass> classes(long campId) {
+        return classes(campId, null);
+    }
+
+    public List<LiveClass> classes(long campId, String sessionCookie) {
         positive(campId, "营期 ID");
-        Teacher teacher = teacher();
-        JsonNode response = get(classroomClient, "/live/course/getCampInfo", builder -> builder
+        UpstreamClients clients = clients(sessionCookie);
+        Teacher teacher = teacher(clients.account());
+        JsonNode response = get(clients.classroom(), "/live/course/getCampInfo", builder -> builder
             .queryParam("campId", campId).queryParam("internalTeacherId", teacher.id()).build(), "获取班级");
         List<LiveClass> result = new ArrayList<>();
         for (JsonNode item : response.path("data").path("liveClassInfoBaseRespList")) {
@@ -76,8 +86,12 @@ public class ClassProgressService {
     }
 
     public List<Lesson> lessons(long classId) {
+        return lessons(classId, null);
+    }
+
+    public List<Lesson> lessons(long classId, String sessionCookie) {
         positive(classId, "班级 ID");
-        JsonNode response = get(classroomClient, "/live/teacher/class-board/lessons/all", builder -> builder
+        JsonNode response = get(clients(sessionCookie).classroom(), "/live/teacher/class-board/lessons/all", builder -> builder
             .queryParam("classId", classId).queryParam("limitLocked", true).build(), "获取课次");
         List<Lesson> result = new ArrayList<>();
         for (JsonNode item : data(response)) {
@@ -89,8 +103,13 @@ public class ClassProgressService {
     }
 
     public Report report(long lessonId) {
+        return report(lessonId, null);
+    }
+
+    public Report report(long lessonId, String sessionCookie) {
         positive(lessonId, "课次 ID");
-        JsonNode response = get(classroomClient, "/live/teacher/class-board/courses/overall/static", builder -> builder
+        RestClient client = clients(sessionCookie).classroom();
+        JsonNode response = get(client, "/live/teacher/class-board/courses/overall/static", builder -> builder
             .queryParam("lessonId", lessonId).build(), "获取课次题目");
         List<QuestionSource> sources = questionSources(response);
         if (sources.size() > MAX_QUESTIONS) throw new UpstreamException("当前课次题目数量异常，已停止查询");
@@ -99,7 +118,7 @@ public class ClassProgressService {
         List<QuestionProgress> questions;
         try (ExecutorService executor = Executors.newFixedThreadPool(Math.min(6, sources.size()))) {
             List<CompletableFuture<QuestionProgress>> futures = sources.stream()
-                .map(source -> CompletableFuture.supplyAsync(() -> questionProgress(lessonId, source), executor))
+                .map(source -> CompletableFuture.supplyAsync(() -> questionProgress(client, lessonId, source), executor))
                 .toList();
             questions = futures.stream().map(future -> {
                 try {
@@ -119,10 +138,10 @@ public class ClassProgressService {
             new ReportSummary(questions.size(), totalStudents, submitted, accepted, unsubmitted));
     }
 
-    private Teacher teacher() {
-        JsonNode response = get(accountClient, "/auth/info", builder -> builder.build(), "获取老师信息");
+    private Teacher teacher(RestClient client) {
+        JsonNode response = get(client, "/auth/info", builder -> builder.build(), "获取老师信息");
         long id = response.path("id").asLong();
-        if (id <= 0) throw new UpstreamException("编程猫账号未返回有效老师 ID");
+        if (id <= 0) throw new UpstreamAuthenticationException("编程猫登录凭据已过期或没有接口权限");
         return new Teacher(id, response.path("fullname").asText());
     }
 
@@ -143,8 +162,8 @@ public class ClassProgressService {
         return List.copyOf(result.values());
     }
 
-    private QuestionProgress questionProgress(long lessonId, QuestionSource source) {
-        JsonNode first = statisticsPage(lessonId, source, 1);
+    private QuestionProgress questionProgress(RestClient client, long lessonId, QuestionSource source) {
+        JsonNode first = statisticsPage(client, lessonId, source, 1);
         JsonNode firstData = first.path("data");
         int totalRows = firstData.path("total").asInt();
         int pageSize = firstData.path("pageSize").asInt();
@@ -155,7 +174,7 @@ public class ClassProgressService {
         LinkedHashMap<String, StudentResult> students = new LinkedHashMap<>();
         collectStudents(firstData.path("records"), students);
         for (int page = 2; page <= pages; page++)
-            collectStudents(statisticsPage(lessonId, source, page).path("data").path("records"), students);
+            collectStudents(statisticsPage(client, lessonId, source, page).path("data").path("records"), students);
 
         JsonNode statistics = firstData.path("statistics");
         int totalStudents = statistics.path("totalStudents").asInt(totalRows);
@@ -168,8 +187,8 @@ public class ClassProgressService {
             unsubmitted, List.copyOf(students.values()));
     }
 
-    private JsonNode statisticsPage(long lessonId, QuestionSource source, int page) {
-        return get(classroomClient, "/live/teacher/class-board/steps/statistics/oj/page", builder -> builder
+    private JsonNode statisticsPage(RestClient client, long lessonId, QuestionSource source, int page) {
+        return get(client, "/live/teacher/class-board/steps/statistics/oj/page", builder -> builder
             .queryParam("lessonId", lessonId).queryParam("stepId", source.stepId())
             .queryParam("sort", "submitTime").queryParam("questionId", source.questionId())
             .queryParam("page", page).queryParam("limit", REQUESTED_PAGE_SIZE).build(), "获取题目完成情况");
@@ -203,7 +222,6 @@ public class ClassProgressService {
     private JsonNode get(RestClient client, String path,
                          java.util.function.Function<org.springframework.web.util.UriBuilder, java.net.URI> query,
                          String operation) {
-        requireConfigured();
         try {
             JsonNode response = client.get().uri(builder -> query.apply(builder.path(path)))
                 .retrieve().body(JsonNode.class);
@@ -241,6 +259,16 @@ public class ClassProgressService {
         if (!configured) throw new NotConfiguredException("服务器尚未配置编程猫登录凭据");
     }
 
+    private UpstreamClients clients(String sessionCookie) {
+        if (sessionCookie == null) {
+            requireConfigured();
+            return new UpstreamClients(accountClient, classroomClient);
+        }
+        String cookie = normalizeCookie(sessionCookie);
+        if (cookie.isEmpty()) throw new DocumentService.ValidationException("请输入有效的编程猫 Cookie");
+        return new UpstreamClients(client(ACCOUNT_BASE_URL, cookie), client(CLASSROOM_BASE_URL, cookie));
+    }
+
     private static RestClient client(String baseUrl, String cookie) {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(6)).build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
@@ -255,13 +283,16 @@ public class ClassProgressService {
     }
 
     static String normalizeCookie(String value) {
-        String cookie = value == null ? "" : value.trim();
+        String raw = value == null ? "" : value;
+        if (raw.indexOf('\r') >= 0 || raw.indexOf('\n') >= 0) return "";
+        String cookie = raw.trim();
         if (cookie.regionMatches(true, 0, "Cookie:", 0, 7)) cookie = cookie.substring(7).trim();
-        if (cookie.length() > 16 * 1024 || cookie.indexOf('\r') >= 0 || cookie.indexOf('\n') >= 0) return "";
+        if (cookie.length() > 16 * 1024) return "";
         return cookie;
     }
 
     private record QuestionSource(String stepId, long questionId, String name, String group) {}
+    private record UpstreamClients(RestClient account, RestClient classroom) {}
 
     public record Teacher(long id, String name) {}
     public record Camp(long id, String name, String coursePackageName, List<String> courseNames) {}

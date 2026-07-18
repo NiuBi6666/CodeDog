@@ -101,6 +101,9 @@ class ClassProgressServiceTest {
         ClassProgressService service = new ClassProgressService(RestClient.create(), RestClient.create(), false);
         assertThatThrownBy(service::bootstrap).isInstanceOf(ClassProgressService.NotConfiguredException.class)
             .hasMessageContaining("尚未配置");
+        assertThatThrownBy(() -> service.bootstrap("Cookie: \r\nInjected: value"))
+            .isInstanceOf(DocumentService.ValidationException.class)
+            .hasMessageContaining("有效的编程猫 Cookie");
     }
 
     private void statisticsPage(MockRestServiceServer server, int page, String result, String id, String name) {
