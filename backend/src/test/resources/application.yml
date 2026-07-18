@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:publicdoc;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  flyway:
+    enabled: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+codedog:
+  admin-username: admin
+  admin-password: "test-only-password"
+  legacy-import-enabled: false
+  legacy-public-doc-db: /missing/public_doc.sqlite3
+  legacy-codemao-db: /missing/codemao.sqlite3
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false

@@ -1,0 +1,72 @@
+name: codedog
+
+services:
+  acme:
+    image: nginx:1.27-alpine
+    container_name: codedog-acme
+    restart: unless-stopped
+    volumes:
+      - ./acme:/usr/share/nginx/html:ro
+    networks:
+      - codemao-gateway
+
+  mysql:
+    image: mysql:8.4
+    container_name: codedog-mysql
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build: ./backend
+    container_name: codedog-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-public_doc}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-public_doc}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      LEGACY_IMPORT_ENABLED: ${LEGACY_IMPORT_ENABLED:-false}
+    volumes:
+      - ./migration:/migration:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build: ./frontend
+    container_name: codedog-nginx
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  codemao-gateway:
+    external: true
+    name: codemao_default

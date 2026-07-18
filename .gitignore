@@ -1,0 +1,16 @@
+.env
+data/*
+!data/.gitkeep
+mysql-data/
+migration/*
+!migration/.gitkeep
+frontend/node_modules/
+frontend/dist/
+backend/target/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+acme/*
+!acme/.gitkeep
+*.initial-password

@@ -1,0 +1,50 @@
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      timeout: 12h
+      cookie:
+        http-only: true
+        secure: ${COOKIE_SECURE:true}
+        same-site: strict
+  max-http-request-header-size: 32KB
+
+spring:
+  application:
+    name: codedog
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/public_doc?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:public_doc}
+    password: ${SPRING_DATASOURCE_PASSWORD:public_doc}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-request-size: 12MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+codedog:
+  admin-username: ${ADMIN_USERNAME:admin}
+  admin-password: ${ADMIN_PASSWORD:}
+  legacy-import-enabled: ${LEGACY_IMPORT_ENABLED:false}
+  legacy-public-doc-db: ${LEGACY_PUBLIC_DOC_DB:/migration/public_doc.sqlite3}
+  legacy-codemao-db: ${LEGACY_CODEMAO_DB:/migration/codemao.sqlite3}
