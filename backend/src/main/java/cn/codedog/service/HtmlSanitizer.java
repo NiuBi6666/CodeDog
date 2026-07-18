@@ -13,12 +13,23 @@ public class HtmlSanitizer {
     private static final Set<String> IMAGE_PREFIXES = Set.of(
         "data:image/gif;base64,", "data:image/jpeg;base64,",
         "data:image/png;base64,", "data:image/webp;base64,");
+    private static final Set<String> ALIGNMENTS = Set.of("left", "center", "right", "justify");
     private final Safelist safelist = Safelist.none()
         .addTags("a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4",
             "hr", "i", "img", "li", "ol", "p", "pre", "s", "span", "strong", "table", "tbody",
             "td", "tfoot", "th", "thead", "tr", "u", "ul")
         .addAttributes("a", "href", "title")
         .addAttributes("img", "src", "alt", "title")
+        .addAttributes("p", "align")
+        .addAttributes("div", "align")
+        .addAttributes("h1", "align")
+        .addAttributes("h2", "align")
+        .addAttributes("h3", "align")
+        .addAttributes("h4", "align")
+        .addAttributes("blockquote", "align")
+        .addAttributes("pre", "align")
+        .addAttributes("td", "align")
+        .addAttributes("th", "align")
         .addAttributes("td", "colspan", "rowspan")
         .addAttributes("th", "colspan", "rowspan")
         .addProtocols("a", "href", "http", "https", "mailto")
@@ -34,6 +45,9 @@ public class HtmlSanitizer {
             String source = image.attr("src").trim();
             String lower = source.toLowerCase();
             if (IMAGE_PREFIXES.stream().noneMatch(lower::startsWith)) image.remove();
+        }
+        for (Element aligned : fragment.select("[align]")) {
+            if (!ALIGNMENTS.contains(aligned.attr("align").toLowerCase())) aligned.removeAttr("align");
         }
         for (Element cell : fragment.select("td[colspan],td[rowspan],th[colspan],th[rowspan]")) {
             for (String attribute : new String[]{"colspan", "rowspan"}) {

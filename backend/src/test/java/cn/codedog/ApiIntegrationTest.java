@@ -124,9 +124,10 @@ class ApiIntegrationTest {
 
     @Test
     void sanitizerKeepsSafeRasterImagesAndDropsSvg() {
-        String clean = sanitizer.clean("<img src=\"data:image/png;base64,AAAA\" alt=\"示例\"><img src=\"data:image/svg+xml;base64,AAAA\"><script>bad()</script>");
+        String clean = sanitizer.clean("<img src=\"data:image/png;base64,AAAA\" alt=\"示例\"><img src=\"data:image/svg+xml;base64,AAAA\"><p align=\"center\">居中</p><p align=\"sideways\">无效</p><script>bad()</script>");
         assertThat(clean).contains("data:image/png;base64,AAAA").contains("示例");
-        assertThat(clean).doesNotContain("image/svg+xml", "bad()");
+        assertThat(clean).contains("align=\"center\"");
+        assertThat(clean).doesNotContain("image/svg+xml", "bad()", "sideways");
     }
 
     private Student student(String id, String name) {

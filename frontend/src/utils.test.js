@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { documentShareUrl, splitQueryValues, statusLabel } from "./utils";
+import { documentShareUrl, splitQueryValues, statusLabel, validateDocumentImage } from "./utils";
 
 describe("frontend utilities", () => {
   it("deduplicates mixed student query input", () => {
@@ -12,5 +12,10 @@ describe("frontend utilities", () => {
   it("builds a public document share URL", () => {
     expect(documentShareUrl("a1b2c3d4", "https://codedog.online"))
       .toBe("https://codedog.online/doc/show/a1b2c3d4");
+  });
+  it("validates embedded document images", () => {
+    expect(validateDocumentImage({ type: "image/png", size: 1024 })).toBe("");
+    expect(validateDocumentImage({ type: "image/svg+xml", size: 1024 })).toContain("PNG");
+    expect(validateDocumentImage({ type: "image/jpeg", size: 5 * 1024 * 1024 })).toContain("4 MB");
   });
 });
