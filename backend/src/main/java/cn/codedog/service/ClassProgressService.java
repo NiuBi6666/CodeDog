@@ -26,6 +26,9 @@ import java.util.concurrent.Executors;
 public class ClassProgressService {
     private static final String ACCOUNT_BASE_URL = "https://internal-account-api.codemao.cn";
     private static final String CLASSROOM_BASE_URL = "https://api-live-class-crm.codemao.cn";
+    private static final String CRM_ORIGIN = "https://sk-crm.codemao.cn";
+    private static final String BROWSER_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
     private static final int MAX_QUESTIONS = 80;
     private static final int MAX_PAGES = 50;
     private static final int REQUESTED_PAGE_SIZE = 200;
@@ -141,7 +144,7 @@ public class ClassProgressService {
     private Teacher teacher(RestClient client) {
         JsonNode response = get(client, "/auth/info", builder -> builder.build(), "获取老师信息");
         long id = response.path("id").asLong();
-        if (id <= 0) throw new UpstreamAuthenticationException("编程猫登录凭据已过期或没有接口权限");
+        if (id <= 0) throw new UpstreamAuthenticationException("获取老师信息失败：编程猫登录凭据已过期或没有接口权限");
         return new Teacher(id, response.path("fullname").asText());
     }
 
@@ -233,7 +236,7 @@ public class ClassProgressService {
             return response;
         } catch (RestClientResponseException error) {
             if (error.getStatusCode().value() == 401 || error.getStatusCode().value() == 403)
-                throw new UpstreamAuthenticationException("编程猫登录凭据已过期或没有接口权限");
+                throw new UpstreamAuthenticationException(operation + "失败：编程猫登录凭据已过期或没有接口权限");
             throw new UpstreamException(operation + "失败，上游状态码 " + error.getStatusCode().value());
         } catch (ResourceAccessException error) {
             throw new UpstreamException(operation + "失败，请稍后重试");
@@ -270,16 +273,20 @@ public class ClassProgressService {
     }
 
     private static RestClient client(String baseUrl, String cookie) {
+        return clientBuilder(baseUrl, cookie).build();
+    }
+
+    static RestClient.Builder clientBuilder(String baseUrl, String cookie) {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(6)).build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(Duration.ofSeconds(20));
         RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory)
-            .defaultHeader(HttpHeaders.ACCEPT, "application/json")
-            .defaultHeader(HttpHeaders.USER_AGENT, "CodeDog/1.0")
-            .defaultHeader(HttpHeaders.ORIGIN, "https://space-teacher.codemao.cn")
-            .defaultHeader(HttpHeaders.REFERER, "https://space-teacher.codemao.cn/");
+            .defaultHeader(HttpHeaders.ACCEPT, "application/json, text/plain, */*")
+            .defaultHeader(HttpHeaders.USER_AGENT, BROWSER_USER_AGENT)
+            .defaultHeader(HttpHeaders.ORIGIN, CRM_ORIGIN)
+            .defaultHeader(HttpHeaders.REFERER, CRM_ORIGIN + "/");
         if (!cookie.isEmpty()) builder.defaultHeader(HttpHeaders.COOKIE, cookie);
-        return builder.build();
+        return builder;
     }
 
     static String normalizeCookie(String value) {

@@ -2,6 +2,7 @@ package cn.codedog.service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -11,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class ClassProgressServiceTest {
@@ -18,16 +20,17 @@ class ClassProgressServiceTest {
 
     @Test
     void loadsTeacherCampsClassesAndLessons() {
-        RestClient.Builder accountBuilder = RestClient.builder().baseUrl("https://account.test")
-            .defaultHeader(HttpHeaders.COOKIE, COOKIE);
-        RestClient.Builder classroomBuilder = RestClient.builder().baseUrl("https://classroom.test")
-            .defaultHeader(HttpHeaders.COOKIE, COOKIE);
+        RestClient.Builder accountBuilder = ClassProgressService.clientBuilder("https://account.test", COOKIE);
+        RestClient.Builder classroomBuilder = ClassProgressService.clientBuilder("https://classroom.test", COOKIE);
         MockRestServiceServer account = MockRestServiceServer.bindTo(accountBuilder).build();
         MockRestServiceServer classroom = MockRestServiceServer.bindTo(classroomBuilder).build();
         ClassProgressService service = new ClassProgressService(accountBuilder.build(), classroomBuilder.build(), true);
 
         account.expect(once(), requestTo("https://account.test/auth/info"))
             .andExpect(header(HttpHeaders.COOKIE, COOKIE))
+            .andExpect(header(HttpHeaders.ORIGIN, "https://sk-crm.codemao.cn"))
+            .andExpect(header(HttpHeaders.REFERER, "https://sk-crm.codemao.cn/"))
+            .andExpect(header(HttpHeaders.ACCEPT, "application/json, text/plain, */*"))
             .andRespond(withSuccess("{\"id\":29413,\"fullname\":\"李老师\"}", MediaType.APPLICATION_JSON));
         classroom.expect(once(), requestTo("https://classroom.test/live/camp/getCampInfo?internalTeacherId=29413"))
             .andRespond(withSuccess("""
@@ -104,6 +107,21 @@ class ClassProgressServiceTest {
         assertThatThrownBy(() -> service.bootstrap("Cookie: \r\nInjected: value"))
             .isInstanceOf(DocumentService.ValidationException.class)
             .hasMessageContaining("有效的编程猫 Cookie");
+    }
+
+    @Test
+    void identifiesWhichUpstreamOperationRejectedTheCredential() {
+        RestClient.Builder accountBuilder = RestClient.builder().baseUrl("https://account.test");
+        MockRestServiceServer account = MockRestServiceServer.bindTo(accountBuilder).build();
+        ClassProgressService service = new ClassProgressService(accountBuilder.build(), RestClient.create(), true);
+
+        account.expect(once(), requestTo("https://account.test/auth/info"))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(service::bootstrap)
+            .isInstanceOf(ClassProgressService.UpstreamAuthenticationException.class)
+            .hasMessageContaining("获取老师信息失败");
+        account.verify();
     }
 
     private void statisticsPage(MockRestServiceServer server, int page, String result, String id, String name) {
