@@ -17,6 +17,7 @@
 - `/doc/create`：新建文档
 - `/doc/show/:id`：公开只读文档
 - `/doc/edit/:id`：编辑文档
+- `/logs`：查询登录、文档、学生查询和账户安全操作日志
 - `/password`：修改管理员密码
 
 旧的 `/documents/:id`、`/admin/documents` 和 `/admin/documents/:id/edit` 地址继续兼容。

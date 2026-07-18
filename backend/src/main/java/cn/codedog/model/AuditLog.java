@@ -4,8 +4,10 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "audit_log", indexes = @Index(
-    name = "idx_audit_action_ip_created", columnList = "action,ip_address,created_at"))
+@Table(name = "audit_log", indexes = {
+    @Index(name = "idx_audit_action_ip_created", columnList = "action,ip_address,created_at"),
+    @Index(name = "idx_audit_created", columnList = "created_at")
+})
 public class AuditLog {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

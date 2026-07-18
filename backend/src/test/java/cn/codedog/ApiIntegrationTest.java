@@ -130,6 +130,25 @@ class ApiIntegrationTest {
         assertThat(clean).doesNotContain("image/svg+xml", "bad()", "sideways");
     }
 
+    @Test
+    void auditLogsCanBeFilteredAndRemainPrivate() throws Exception {
+        String createdBody = mvc.perform(post("/api/documents").session(session).with(csrf())
+                .contentType(APPLICATION_JSON)
+                .content("{\"title\":\"日志测试文档\",\"content\":\"<p>内容</p>\",\"version\":0}"))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String documentId = json.readTree(createdBody).get("id").asText();
+
+        mvc.perform(get("/api/logs").session(session)
+                .param("module", "documents").param("result", "success").param("keyword", documentId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.total").value(1))
+            .andExpect(jsonPath("$.logs[0].operation").value("新建文档"))
+            .andExpect(jsonPath("$.logs[0].detail").value("文档 #" + documentId));
+        mvc.perform(get("/api/logs").session(session).param("module", "unknown"))
+            .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/logs")).andExpect(status().isUnauthorized());
+    }
+
     private Student student(String id, String name) {
         Student student = new Student(); student.setUserId(id); student.setName(name);
         student.setGender("男"); student.setAge("13"); student.setGrade("七年级"); student.setClassName("一班");

@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import { FilePlus2, FileText, Search, UserRound } from "@lucide/vue";
+import { FilePlus2, FileText, ScrollText, Search, UserRound } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api } from "../api";
 import { formatDateTime } from "../utils";
@@ -11,7 +11,7 @@ onMounted(async () => { try { data.value = await api("/dashboard"); } catch (fai
 
 <template>
   <AdminLayout page-title="首页" active-page="dashboard">
-    <div class="admin-page-heading"><div><h1>首页</h1><p>内容发布与学生信息查询</p></div></div>
+    <div class="admin-page-heading"><div><h1>首页</h1><p>内容发布、学生信息查询与操作审计</p></div></div>
     <div v-if="error" class="notice notice-error">{{ error }}</div>
     <template v-if="data">
       <section class="metric-grid" aria-label="数据概览">
@@ -27,6 +27,7 @@ onMounted(async () => { try { data.value = await api("/dashboard"); } catch (fai
             <RouterLink to="/student/query"><span><Search :size="18"/></span><div><strong>查询学生</strong><small>按姓名查询 ID，或按 ID 查询姓名</small></div><b>›</b></RouterLink>
             <RouterLink to="/doc/list"><span><FileText :size="18"/></span><div><strong>文档管理</strong><small>搜索、编辑、下线和恢复文档</small></div><b>›</b></RouterLink>
             <RouterLink to="/doc/create"><span><FilePlus2 :size="18"/></span><div><strong>新建文档</strong><small>创建一篇新的公开文档</small></div><b>›</b></RouterLink>
+            <RouterLink to="/logs"><span><ScrollText :size="18"/></span><div><strong>操作日志</strong><small>查看登录和后台功能的操作记录</small></div><b>›</b></RouterLink>
           </div>
         </section>
         <section class="admin-panel">

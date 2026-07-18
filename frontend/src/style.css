@@ -382,6 +382,7 @@ a {
 
 .filter-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 12px;
   margin-bottom: 20px;
@@ -488,6 +489,74 @@ a {
 .status-offline {
   color: #705d56;
   background: #eeeceb;
+}
+
+.status-success {
+  color: #17643f;
+  background: #e8f7ef;
+}
+
+.status-failed {
+  color: #8a1c13;
+  background: #fff0ee;
+}
+
+.log-filter-keyword {
+  flex: 1 1 220px;
+}
+
+.log-filter-bar .filter-actions {
+  flex: 0 0 auto;
+}
+
+.log-table {
+  min-width: 900px;
+}
+
+.log-table th:first-child {
+  width: 172px;
+}
+
+.log-table th:nth-child(2) {
+  width: 120px;
+}
+
+.log-table th:nth-child(4) {
+  width: 92px;
+}
+
+.log-table th:last-child {
+  width: 148px;
+}
+
+.log-time,
+.log-ip {
+  color: #59686d;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.log-module {
+  color: #33444a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.log-operation,
+.log-detail {
+  display: block;
+}
+
+.log-operation {
+  color: #26373d;
+  font-size: 14px;
+}
+
+.log-detail {
+  margin-top: 4px;
+  color: #758388;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .actions-column {

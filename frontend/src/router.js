@@ -4,6 +4,7 @@ import DashboardView from "./views/DashboardView.vue";
 import DocumentEditView from "./views/DocumentEditView.vue";
 import DocumentListView from "./views/DocumentListView.vue";
 import LoginView from "./views/LoginView.vue";
+import LogListView from "./views/LogListView.vue";
 import PasswordView from "./views/PasswordView.vue";
 import PublicDocumentView from "./views/PublicDocumentView.vue";
 import StudentQueryView from "./views/StudentQueryView.vue";
@@ -16,6 +17,8 @@ const routes = [
   { path: "/index", component: DashboardView, meta: { auth: true, bodyClass: "admin-layout", title: "首页 - CodeDog" } },
   { path: "/student/query", component: StudentQueryView, meta: { auth: true, bodyClass: "admin-layout", title: "查询学生 - CodeDog" } },
   { path: "/doc/list", component: DocumentListView, meta: { auth: true, bodyClass: "admin-layout", title: "文档管理 - CodeDog" } },
+  { path: "/logs", component: LogListView, meta: { auth: true, bodyClass: "admin-layout", title: "操作日志 - CodeDog" } },
+  { path: "/system/logs", redirect: "/logs" },
   { path: "/admin/documents", redirect: "/doc/list" },
   { path: "/doc/create", component: DocumentEditView, meta: { auth: true, bodyClass: "admin-layout", title: "新建文档 - CodeDog" } },
   { path: "/admin/documents/new", redirect: "/doc/create" },
