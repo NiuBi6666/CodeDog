@@ -8,6 +8,7 @@ import LogListView from "./views/LogListView.vue";
 import PasswordView from "./views/PasswordView.vue";
 import PublicDocumentView from "./views/PublicDocumentView.vue";
 import StudentQueryView from "./views/StudentQueryView.vue";
+import ClassProgressView from "./views/ClassProgressView.vue";
 
 const routes = [
   { path: "/", redirect: "/index" },
@@ -16,6 +17,7 @@ const routes = [
   { path: "/login", component: LoginView, meta: { bodyClass: "auth-page", title: "登录 - CodeDog" } },
   { path: "/index", component: DashboardView, meta: { auth: true, bodyClass: "admin-layout", title: "首页 - CodeDog" } },
   { path: "/student/query", component: StudentQueryView, meta: { auth: true, bodyClass: "admin-layout", title: "查询学生 - CodeDog" } },
+  { path: "/class/progress", component: ClassProgressView, meta: { auth: true, bodyClass: "admin-layout", title: "课堂完成情况 - CodeDog" } },
   { path: "/doc/list", component: DocumentListView, meta: { auth: true, bodyClass: "admin-layout", title: "文档管理 - CodeDog" } },
   { path: "/logs", component: LogListView, meta: { auth: true, bodyClass: "admin-layout", title: "操作日志 - CodeDog" } },
   { path: "/system/logs", redirect: "/logs" },

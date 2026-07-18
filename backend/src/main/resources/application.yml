@@ -48,3 +48,5 @@ codedog:
   legacy-import-enabled: ${LEGACY_IMPORT_ENABLED:false}
   legacy-public-doc-db: ${LEGACY_PUBLIC_DOC_DB:/migration/public_doc.sqlite3}
   legacy-codemao-db: ${LEGACY_CODEMAO_DB:/migration/codemao.sqlite3}
+  codemao:
+    session-cookie: ${CODEMAO_SESSION_COOKIE:}

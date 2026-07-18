@@ -44,7 +44,7 @@ onMounted(() => { syncFilters(); load(); });
     <form class="filter-bar log-filter-bar" @submit.prevent="search">
       <label><span>开始日期</span><input v-model="filters.startDate" type="date"></label>
       <label><span>结束日期</span><input v-model="filters.endDate" type="date"></label>
-      <label><span>功能模块</span><select v-model="filters.module"><option value="">全部</option><option value="auth">登录认证</option><option value="account">账户安全</option><option value="documents">文档管理</option><option value="students">学生查询</option></select></label>
+      <label><span>功能模块</span><select v-model="filters.module"><option value="">全部</option><option value="auth">登录认证</option><option value="account">账户安全</option><option value="documents">文档管理</option><option value="students">学生查询</option><option value="classes">课堂完成情况</option></select></label>
       <label><span>执行结果</span><select v-model="filters.result"><option value="">全部</option><option value="success">成功</option><option value="failed">失败</option></select></label>
       <label class="log-filter-keyword"><span>关键词</span><input v-model.trim="filters.keyword" type="search" placeholder="文档 ID 或 IP 地址"></label>
       <div class="filter-actions"><button class="button button-quiet" type="submit">查询</button><RouterLink class="button button-quiet" to="/logs">重置</RouterLink></div>

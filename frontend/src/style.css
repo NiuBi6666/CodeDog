@@ -1576,6 +1576,266 @@ a {
   border-radius: 0 0 7px 7px;
 }
 
+.teacher-chip {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid #d7e2e0;
+  border-radius: 5px;
+  color: #49605e;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.progress-filter-panel {
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.progress-filter-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 1fr) minmax(240px, 1.35fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.progress-filter-form label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: #405057;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progress-filter-form select {
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #c9d4d7;
+  border-radius: 6px;
+  color: #25363c;
+  background: #ffffff;
+  outline: none;
+}
+
+.progress-filter-form select:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.progress-query-button {
+  display: inline-flex;
+  width: 92px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.spin-icon {
+  animation: progress-spin 900ms linear infinite;
+}
+
+@keyframes progress-spin {
+  to { transform: rotate(360deg); }
+}
+
+.progress-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 16px;
+  border: 1px solid #dce3e5;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.progress-summary div {
+  padding: 15px 12px;
+  border-right: 1px solid #e4e9eb;
+  text-align: center;
+}
+
+.progress-summary div:last-child {
+  border-right: 0;
+}
+
+.progress-summary strong,
+.progress-summary span {
+  display: block;
+}
+
+.progress-summary strong {
+  margin-bottom: 3px;
+  font-size: 23px;
+}
+
+.progress-summary span {
+  color: #718086;
+  font-size: 12px;
+}
+
+.progress-summary .success strong,
+.progress-count-success {
+  color: #18794e;
+}
+
+.progress-summary .warn strong,
+.progress-count-warn {
+  color: #9a6700;
+}
+
+.progress-question-panel {
+  margin-bottom: 16px;
+}
+
+.progress-question-panel .panel-heading > div,
+.progress-matrix-panel .panel-heading > div {
+  min-width: 0;
+}
+
+.progress-question-panel .panel-heading small,
+.progress-matrix-panel .panel-heading small {
+  display: block;
+  margin-top: 3px;
+  color: #758388;
+  font-size: 12px;
+}
+
+.progress-question-panel .document-table-wrap {
+  border: 0;
+  border-radius: 0 0 7px 7px;
+}
+
+.progress-question-table th,
+.progress-question-table td {
+  white-space: nowrap;
+}
+
+.progress-question-table td:nth-child(3) {
+  min-width: 220px;
+  white-space: normal;
+}
+
+.question-id {
+  display: block;
+  margin-top: 3px;
+  color: #87959a;
+  font-size: 11px;
+}
+
+.progress-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-student-search {
+  display: flex;
+  width: 210px;
+  height: 34px;
+  align-items: center;
+  padding: 0 9px;
+  gap: 6px;
+  border: 1px solid #cbd5d8;
+  border-radius: 6px;
+  color: #738187;
+  background: #ffffff;
+}
+
+.progress-student-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #26383e;
+  background: transparent;
+  font-size: 13px;
+}
+
+.progress-matrix-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 0 0 7px 7px;
+}
+
+.progress-matrix-table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.progress-matrix-table th,
+.progress-matrix-table td {
+  min-width: 126px;
+  height: 54px;
+  padding: 9px 11px;
+  border-right: 1px solid #e5eaec;
+  border-bottom: 1px solid #e5eaec;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.progress-matrix-table th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  height: 62px;
+  color: #4e5f65;
+  background: #f6f8f9;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progress-matrix-table th span {
+  display: block;
+  margin-bottom: 2px;
+  color: #8b989c;
+  font-size: 10px;
+}
+
+.progress-matrix-table th:first-child,
+.progress-matrix-table td:first-child {
+  position: sticky;
+  z-index: 3;
+  left: 0;
+  min-width: 132px;
+  text-align: left;
+  background: #ffffff;
+}
+
+.progress-matrix-table th:nth-child(2),
+.progress-matrix-table td:nth-child(2) {
+  position: sticky;
+  z-index: 3;
+  left: 132px;
+  min-width: 116px;
+  color: #69787e;
+  text-align: left;
+  background: #ffffff;
+  box-shadow: 5px 0 8px rgba(31, 48, 54, 0.05);
+}
+
+.progress-matrix-table th:first-child,
+.progress-matrix-table th:nth-child(2) {
+  z-index: 4;
+  background: #f6f8f9;
+}
+
+.progress-matrix-table tbody tr:hover td {
+  background: #f9fbfb;
+}
+
+.progress-matrix-table tbody tr:hover td:first-child,
+.progress-matrix-table tbody tr:hover td:nth-child(2) {
+  background: #f9fbfb;
+}
+
 .editor-titlebar {
   display: flex;
   align-items: center;
@@ -1744,6 +2004,67 @@ a {
 
   .query-summary div:nth-child(-n+2) {
     border-bottom: 1px solid #e4e9eb;
+  }
+
+  .teacher-chip {
+    display: none;
+  }
+
+  .progress-filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-query-button {
+    justify-self: end;
+  }
+
+  .progress-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .progress-summary div {
+    border-bottom: 1px solid #e4e9eb;
+  }
+
+  .progress-summary div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .progress-summary div:last-child {
+    grid-column: 1 / -1;
+    border-bottom: 0;
+  }
+
+  .progress-question-panel,
+  .progress-matrix-panel {
+    margin-right: -14px;
+    margin-left: -14px;
+    border-radius: 0;
+  }
+
+  .progress-matrix-panel .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .progress-result-actions {
+    flex-wrap: wrap;
+  }
+
+  .progress-student-search {
+    width: 100%;
+  }
+
+  .progress-matrix-table th:first-child,
+  .progress-matrix-table td:first-child {
+    min-width: 112px;
+  }
+
+  .progress-matrix-table th:nth-child(2),
+  .progress-matrix-table td:nth-child(2) {
+    left: 112px;
+    min-width: 108px;
   }
 
   .results-panel {

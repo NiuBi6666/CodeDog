@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
-import { ExternalLink, FileText, Home, Menu, ScrollText, Search } from "@lucide/vue";
+import { ClipboardCheck, ExternalLink, FileText, Home, Menu, ScrollText, Search } from "@lucide/vue";
 import { auth, logout } from "../auth";
 
 defineProps({ pageTitle: { type: String, required: true }, activePage: { type: String, required: true } });
@@ -19,6 +19,7 @@ async function signOut() { await logout(); await router.push("/"); }
         <p>功能导航</p>
         <RouterLink :class="{ active: activePage === 'dashboard' }" to="/index"><Home class="nav-icon" :size="17"/><span>首页</span></RouterLink>
         <RouterLink :class="{ active: activePage === 'students' }" to="/student/query"><Search class="nav-icon" :size="17"/><span>查询学生</span></RouterLink>
+        <RouterLink :class="{ active: activePage === 'class-progress' }" to="/class/progress"><ClipboardCheck class="nav-icon" :size="17"/><span>课堂完成情况</span></RouterLink>
         <RouterLink :class="{ active: activePage === 'documents' }" to="/doc/list"><FileText class="nav-icon" :size="17"/><span>文档管理</span></RouterLink>
         <RouterLink :class="{ active: activePage === 'logs' }" to="/logs"><ScrollText class="nav-icon" :size="17"/><span>操作日志</span></RouterLink>
       </nav>

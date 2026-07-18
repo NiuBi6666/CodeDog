@@ -29,7 +29,8 @@ public class AuditService {
         "auth", "login_%",
         "account", "password_%",
         "documents", "document_%",
-        "students", "student_%"
+        "students", "student_%",
+        "classes", "class_progress_%"
     );
     private final JdbcTemplate jdbc;
     private final AuditLogRepository repository;

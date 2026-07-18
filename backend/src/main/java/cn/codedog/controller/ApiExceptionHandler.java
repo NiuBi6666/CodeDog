@@ -1,6 +1,7 @@
 package cn.codedog.controller;
 
 import cn.codedog.service.DocumentService;
+import cn.codedog.service.ClassProgressService;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,5 +46,15 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<?> status(ResponseStatusException error) {
         return ResponseEntity.status(error.getStatusCode()).body(Map.of("error", error.getReason() == null ? "请求失败" : error.getReason()));
+    }
+
+    @ExceptionHandler(ClassProgressService.NotConfiguredException.class)
+    ResponseEntity<?> integrationNotConfigured(ClassProgressService.NotConfiguredException error) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", error.getMessage()));
+    }
+
+    @ExceptionHandler({ClassProgressService.UpstreamAuthenticationException.class, ClassProgressService.UpstreamException.class})
+    ResponseEntity<?> upstream(RuntimeException error) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", error.getMessage()));
     }
 }

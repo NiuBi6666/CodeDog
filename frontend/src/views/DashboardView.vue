@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import { FilePlus2, FileText, ScrollText, Search, UserRound } from "@lucide/vue";
+import { ClipboardCheck, FilePlus2, FileText, ScrollText, Search, UserRound } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api } from "../api";
 import { formatDateTime } from "../utils";
@@ -25,6 +25,7 @@ onMounted(async () => { try { data.value = await api("/dashboard"); } catch (fai
           <div class="panel-heading"><h2>快捷入口</h2></div>
           <div class="quick-actions">
             <RouterLink to="/student/query"><span><Search :size="18"/></span><div><strong>查询学生</strong><small>按姓名查询 ID，或按 ID 查询姓名</small></div><b>›</b></RouterLink>
+            <RouterLink to="/class/progress"><span><ClipboardCheck :size="18"/></span><div><strong>课堂完成情况</strong><small>按班级和课次查看每道题完成情况</small></div><b>›</b></RouterLink>
             <RouterLink to="/doc/list"><span><FileText :size="18"/></span><div><strong>文档管理</strong><small>搜索、编辑、下线和恢复文档</small></div><b>›</b></RouterLink>
             <RouterLink to="/doc/create"><span><FilePlus2 :size="18"/></span><div><strong>新建文档</strong><small>创建一篇新的公开文档</small></div><b>›</b></RouterLink>
             <RouterLink to="/logs"><span><ScrollText :size="18"/></span><div><strong>操作日志</strong><small>查看登录和后台功能的操作记录</small></div><b>›</b></RouterLink>

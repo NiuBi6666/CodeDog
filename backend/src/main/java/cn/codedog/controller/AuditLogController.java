@@ -50,6 +50,7 @@ public class AuditLogController {
             if (action.startsWith("password_")) return "account";
             if (action.startsWith("document_")) return "documents";
             if (action.startsWith("student_")) return "students";
+            if (action.startsWith("class_progress")) return "classes";
             return "system";
         }
 
@@ -59,6 +60,7 @@ public class AuditLogController {
                 case "account" -> "账户安全";
                 case "documents" -> "文档管理";
                 case "students" -> "学生查询";
+                case "classes" -> "课堂完成情况";
                 default -> "系统";
             };
         }
@@ -73,6 +75,7 @@ public class AuditLogController {
                 case "document_offline" -> "下线文档";
                 case "document_normal" -> "上线文档";
                 case "student_query" -> "查询学生";
+                case "class_progress" -> "查询课堂完成情况";
                 default -> action;
             };
         }
@@ -83,6 +86,8 @@ public class AuditLogController {
                 String mode = parts[1].equals("name") ? "姓名" : "ID";
                 return "按" + mode + "查询，处理 " + parts[2] + " 项";
             }
+            if (action.equals("class_progress") && parts.length > 3)
+                return "班级 #" + parts[1] + "，课次 #" + parts[2] + "，共 " + parts[3] + " 题";
             return "";
         }
     }

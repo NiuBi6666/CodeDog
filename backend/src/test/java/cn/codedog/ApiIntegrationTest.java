@@ -170,6 +170,14 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/logs")).andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void classProgressEndpointsRemainPrivateAndReportMissingUpstreamConfiguration() throws Exception {
+        mvc.perform(get("/api/class-progress/bootstrap")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/class-progress/bootstrap").session(session))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.error").value("服务器尚未配置编程猫登录凭据"));
+    }
+
     private Student student(String id, String name) {
         Student student = new Student(); student.setUserId(id); student.setName(name);
         student.setGender("男"); student.setAge("13"); student.setGrade("七年级"); student.setClassName("一班");
