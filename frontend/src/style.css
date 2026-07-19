@@ -2434,3 +2434,56 @@ a {
     transition: none;
   }
 }
+
+.questionnaire-page {
+  display: flex;
+  min-height: calc(100vh - 116px);
+  flex-direction: column;
+}
+
+.questionnaire-heading {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.questionnaire-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.questionnaire-frame-shell {
+  min-height: 720px;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid #dce3e5;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(30, 47, 53, 0.05);
+}
+
+.questionnaire-frame {
+  display: block;
+  width: 100%;
+  height: max(720px, calc(100vh - 166px));
+  border: 0;
+  background: #ffffff;
+}
+
+@media (max-width: 760px) {
+  .questionnaire-page {
+    min-height: calc(100dvh - 94px);
+  }
+
+  .questionnaire-frame-shell {
+    min-height: 680px;
+    margin-right: -14px;
+    margin-left: -14px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .questionnaire-frame {
+    height: max(680px, calc(100dvh - 138px));
+  }
+}
