@@ -33,7 +33,7 @@ public class QuestionnaireSsoController {
 
     public QuestionnaireSsoController(ObjectMapper objectMapper, AuditService audit,
                                       @Value("${codedog.questionnaire.sso-secret:}") String secret,
-                                      @Value("${codedog.questionnaire.sso-url:https://www.codedog.online/sso/codedog}") String ssoUrl) {
+                                      @Value("${codedog.questionnaire.sso-url:https://www.codedog.online/tduck-api/codedog/sso}") String ssoUrl) {
         this.objectMapper = objectMapper;
         this.audit = audit;
         this.secret = secret;
@@ -53,7 +53,7 @@ public class QuestionnaireSsoController {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("iss", "codedog");
-        payload.put("aud", "heyform");
+        payload.put("aud", "tduck");
         payload.put("sub", username);
         payload.put("email", localPart + "@codedog.local");
         payload.put("iat", now);

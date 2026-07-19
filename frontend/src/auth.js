@@ -22,6 +22,14 @@ export async function login(username, password) {
 }
 
 export async function logout() {
+  try {
+    await fetch("https://www.codedog.online/tduck-api/codedog/logout", {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch (_error) {
+    // CodeDog logout must still complete if the questionnaire service is unavailable.
+  }
   await api("/auth/logout", { method: "POST" });
   auth.user = null;
   auth.checked = true;

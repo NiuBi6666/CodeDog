@@ -59,6 +59,9 @@ services:
       - "443:443"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - default
+      - questionnaire
     healthcheck:
       test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1/healthz"]
       interval: 30s
@@ -67,6 +70,9 @@ services:
       start_period: 10s
 
 networks:
+  questionnaire:
+    external: true
+    name: codedog_questionnaire
   codemao-gateway:
     external: true
     name: codemao_default

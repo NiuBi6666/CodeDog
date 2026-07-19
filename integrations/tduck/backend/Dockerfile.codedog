@@ -1,0 +1,15 @@
+FROM maven:3.9.9-eclipse-temurin-8 AS build
+WORKDIR /build
+COPY . .
+RUN mvn -B -DskipTests package
+
+FROM eclipse-temurin:8-jre-alpine
+RUN apk add --no-cache fontconfig ttf-dejavu wget
+WORKDIR /application
+COPY --from=build /build/tduck-api/target/tduck-api.jar application.jar
+RUN addgroup -g 1000 app && adduser -D -u 1000 -G app app \
+    && mkdir -p /application/upload \
+    && chown -R app:app /application
+USER app
+EXPOSE 8999
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70.0", "-jar", "application.jar"]

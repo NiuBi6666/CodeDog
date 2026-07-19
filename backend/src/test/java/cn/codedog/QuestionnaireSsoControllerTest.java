@@ -28,7 +28,7 @@ class QuestionnaireSsoControllerTest {
     void authenticatedUserReceivesShortLivedSignedRedirect() throws Exception {
         mvc.perform(get("/api/questionnaire/sso").with(user("admin")))
             .andExpect(status().isFound())
-            .andExpect(header().string("Location", startsWith("https://forms.test/sso/codedog?token=")))
+            .andExpect(header().string("Location", startsWith("https://tduck.test/tduck-api/codedog/sso?token=")))
             .andExpect(header().string("Location", containsString(".")))
             .andExpect(header().string("Cache-Control", containsString("no-store")));
     }

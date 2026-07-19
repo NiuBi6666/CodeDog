@@ -17,7 +17,7 @@ codedog:
   legacy-codemao-db: /missing/codemao.sqlite3
   questionnaire:
     sso-secret: "test-questionnaire-sso-secret-1234567890"
-    sso-url: https://forms.test/sso/codedog
+    sso-url: https://tduck.test/tduck-api/codedog/sso
   codemao:
     session-cookie: ""
 server:

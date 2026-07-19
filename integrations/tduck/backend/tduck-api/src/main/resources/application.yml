@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: tduck-api
+  profiles:
+    active: prod
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    #设置空如何序列化
+    defaultPropertyInclusion: always
+    serialization:
+      # 格式化输出
+      indent_output: false
+      # 忽略无法转换的对象
+      fail_on_empty_beans: false
+    deserialization:
+      #允许对象忽略json中不存在的属性
+      fail_on_unknown_properties: false
+  mail:
+    host: smtp.88.com
+    port: 465
+    protocol: smtps
+  servlet:
+    multipart:
+      max-file-size: 1000MB
+      max-request-size: 1000MB
+  cache:
+    ehcache:
+      config: classpath:ehcache.xml
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration, org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+
+server:
+  port: 8999
+  compression:
+    enabled: true
+    mime-types: application/javascript,text/css,application/json,application/xml,text/html,text/xml,text/plain
+
+# 日志级别
+logging:
+  level:
+#    org.springframework.web: debug
+    com.tduck.cloud: info
+mybatis-plus:
+  type-aliases-package: com.tduck.cloud.*.entity
+  mapper-locations: classpath*:mapper/**/*.xml
+  #实体扫描，多个package用逗号或者分号分隔
+  global-config:
+    # 数据库相关配置
+    db-config:
+      #主键类型  AUTO:"数据库ID自增", INPUT:"用户输入ID",ID_WORKER:"全局唯一ID (数字类型唯一ID)", UUID:"全局唯一ID UUID";
+      id-type: AUTO
+  # 原生配置
+  configuration:
+    default-enum-type-handler: org.apache.ibatis.type.EnumOrdinalTypeHandler
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+
+#  请求日志是否打印
+platform:
+  request:
+    trace-log: false
+  jwt:
+    # 加密秘钥
+    secret: ${PLATFORM_JWT_SECRET:}
+    # token有效时长，7天，单位秒
+    expire: 604800
+    header: token
+
+springdoc:
+  swagger-ui:
+    # 修改Swagger UI路径
+    path: /swagger-ui.html
+    # 开启Swagger UI界面
+    enabled: false
+  api-docs:
+    # 修改api-docs路径
+    path: /v3/api-docs
+    # 开启api-docs
+    enabled: false
+  # 配置需要生成接口文档的扫描包
+  packages-to-scan: com.tduck.cloud.api.web.controller
+#  # 配置需要生成接口文档的接口路径
+#  paths-to-match:
+
+aj:
+  captcha:
+    enable: false
+    water-mark: tduck
+    cache-type: local
+
+codedog:
+  sso-only: ${CODEDOG_SSO_ONLY:true}
+  sso:
+    secret: ${CODEDOG_SSO_SECRET:}
+    session-seconds: ${CODEDOG_SESSION_SECONDS:28800}
+    success-path: ${CODEDOG_SSO_SUCCESS_PATH:/codedog/sso/complete}

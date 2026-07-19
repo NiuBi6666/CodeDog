@@ -1,0 +1,91 @@
+name: codedog-questionnaire
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: tduck-mysql
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_DATABASE: ${TDUCK_MYSQL_DATABASE}
+      MYSQL_USER: ${TDUCK_MYSQL_USER}
+      MYSQL_PASSWORD: ${TDUCK_MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${TDUCK_MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - tduck_mysql:/var/lib/mysql
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$TDUCK_MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend:
+    build:
+      context: ../tduck-backend
+      dockerfile: Dockerfile.codedog
+    container_name: tduck-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${TDUCK_MYSQL_DATABASE}?useSSL=false&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&tinyInt1isBit=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${TDUCK_MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${TDUCK_MYSQL_PASSWORD}
+      CODEDOG_SSO_SECRET: ${CODEDOG_SSO_SECRET}
+      CODEDOG_SSO_ONLY: "true"
+      CODEDOG_SESSION_SECONDS: "28800"
+      PLATFORM_JWT_SECRET: ${TDUCK_JWT_SECRET}
+      LOGGING_LEVEL_COM_TDUCK_CLOUD: INFO
+      TZ: Asia/Shanghai
+    volumes:
+      - tduck_uploads:/application/upload
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8999/codedog/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ../tduck-front
+      dockerfile: Dockerfile.codedog
+    container_name: tduck-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:9551:80"
+    networks:
+      - internal
+      - gateway
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  internal:
+    internal: true
+  gateway:
+    name: codedog_questionnaire
+    driver: bridge
+
+volumes:
+  tduck_mysql:
+  tduck_uploads:
