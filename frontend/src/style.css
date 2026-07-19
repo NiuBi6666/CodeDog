@@ -2218,3 +2218,219 @@ a {
     margin-left: -14px;
   }
 }
+
+/* CodeDog image login
+ * Background photo: https://unsplash.com/photos/2429e8be8625
+ */
+.login-topbar {
+  position: absolute;
+  z-index: 20;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 21, 23, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 750;
+  text-decoration: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.22);
+}
+
+.login-brand-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 11px;
+  font-weight: 800;
+  backdrop-filter: blur(8px);
+}
+
+.login-shell {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  overflow: hidden;
+  padding: 104px 24px 48px;
+  background: #202827;
+}
+
+.login-shell::before {
+  position: absolute;
+  z-index: -2;
+  inset: -18px;
+  background-image: url("/login-background.jpg");
+  background-position: center;
+  background-size: cover;
+  content: "";
+  filter: blur(8px);
+  transform: scale(1.035);
+}
+
+.login-shell::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: rgba(11, 18, 20, 0.5);
+  box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.2);
+  content: "";
+}
+
+.login-panel {
+  width: min(100%, 420px);
+  padding: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: #ffffff;
+  background: rgba(20, 27, 29, 0.62);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(20px) saturate(115%);
+}
+
+.login-heading {
+  margin-bottom: 26px;
+  text-align: left;
+}
+
+.login-heading h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.login-heading p {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 14px;
+}
+
+.login-form {
+  display: grid;
+  gap: 17px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 50px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.login-form input::placeholder {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.login-form input:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.login-form input:focus {
+  border-color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+}
+
+.login-submit {
+  display: inline-flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 3px;
+  padding: 10px 18px;
+  border: 1px solid #ffffff;
+  border-radius: 8px;
+  color: #17201f;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.login-submit:hover:not(:disabled) {
+  background: #eef3f2;
+}
+
+.login-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.login-submit:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.login-submit-arrow {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.login-notice {
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 195, 188, 0.28);
+  color: #ffe5e1;
+  background: rgba(126, 32, 23, 0.46);
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .login-topbar {
+    min-height: 58px;
+    padding: 10px 16px;
+  }
+
+  .login-shell {
+    min-height: 100dvh;
+    padding: 88px 18px 30px;
+  }
+
+  .login-panel {
+    padding: 26px 20px;
+  }
+
+  .login-heading {
+    margin-bottom: 22px;
+  }
+
+  .login-heading h1 {
+    font-size: 27px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-form input,
+  .login-submit {
+    transition: none;
+  }
+}

@@ -20,15 +20,32 @@ async function submit() {
 </script>
 
 <template>
-  <header class="topbar"><a class="brand" href="/">CodeDog</a><a class="button button-quiet" href="/">返回文档</a></header>
-  <main class="auth-shell">
-    <section class="auth-panel" aria-labelledby="login-title">
-      <h1 id="login-title">管理员登录</h1>
-      <div v-if="error" class="notice notice-error">{{ error }}</div>
-      <form class="form-stack" @submit.prevent="submit">
-        <label><span>用户名</span><input v-model.trim="username" autocomplete="username" required autofocus></label>
-        <label><span>密码</span><input v-model="password" type="password" autocomplete="current-password" required></label>
-        <button class="button button-primary button-full" type="submit" :disabled="busy">{{ busy ? "登录中..." : "登录" }}</button>
+  <header class="login-topbar">
+    <a class="login-brand" href="/index" aria-label="CodeDog 首页">
+      <span class="login-brand-mark" aria-hidden="true">CD</span>
+      <span>CodeDog</span>
+    </a>
+  </header>
+  <main class="login-shell">
+    <section class="login-panel" aria-labelledby="login-title">
+      <div class="login-heading">
+        <h1 id="login-title">登录 CodeDog</h1>
+        <p>进入管理后台</p>
+      </div>
+      <div v-if="error" class="notice notice-error login-notice">{{ error }}</div>
+      <form class="login-form" @submit.prevent="submit">
+        <label>
+          <span>用户名</span>
+          <input v-model.trim="username" autocomplete="username" placeholder="请输入用户名" required>
+        </label>
+        <label>
+          <span>密码</span>
+          <input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" required>
+        </label>
+        <button class="login-submit" type="submit" :disabled="busy">
+          <span>{{ busy ? "登录中..." : "登录" }}</span>
+          <span v-if="!busy" class="login-submit-arrow" aria-hidden="true">→</span>
+        </button>
       </form>
     </section>
   </main>
