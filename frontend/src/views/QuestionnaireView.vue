@@ -4,7 +4,7 @@ import { ExternalLink, RefreshCw } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 
 const frameKey = ref(0);
-const formUrl = "https://www.codedog.online/login";
+const formUrl = "/api/questionnaire/sso";
 function reloadFrame() { frameKey.value += 1; }
 </script>
 

@@ -14,6 +14,7 @@
 - `/index`：管理首页
 - `/student/query`：按姓名查询学生 ID，或按 ID 查询姓名
 - `/class/progress`：按营期、班级和课次查询每道编程题的完成情况
+- `/questionnaire`：问卷与作业管理（CodeDog 登录后通过单点登录直接进入）
 - `/doc/list`：文档搜索与管理
 - `/doc/create`：新建文档
 - `/doc/show/:id`：公开只读文档

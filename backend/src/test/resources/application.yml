@@ -15,6 +15,9 @@ codedog:
   legacy-import-enabled: false
   legacy-public-doc-db: /missing/public_doc.sqlite3
   legacy-codemao-db: /missing/codemao.sqlite3
+  questionnaire:
+    sso-secret: "test-questionnaire-sso-secret-1234567890"
+    sso-url: https://forms.test/sso/codedog
   codemao:
     session-cookie: ""
 server:

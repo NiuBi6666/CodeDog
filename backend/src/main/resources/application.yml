@@ -48,5 +48,8 @@ codedog:
   legacy-import-enabled: ${LEGACY_IMPORT_ENABLED:false}
   legacy-public-doc-db: ${LEGACY_PUBLIC_DOC_DB:/migration/public_doc.sqlite3}
   legacy-codemao-db: ${LEGACY_CODEMAO_DB:/migration/codemao.sqlite3}
+  questionnaire:
+    sso-secret: ${QUESTIONNAIRE_SSO_SECRET:}
+    sso-url: ${QUESTIONNAIRE_SSO_URL:https://www.codedog.online/sso/codedog}
   codemao:
     session-cookie: ${CODEMAO_SESSION_COOKIE:}
