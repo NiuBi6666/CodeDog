@@ -76,7 +76,8 @@ public class CodeDogSsoController {
             setSessionCookie(response, login.getToken(), sessionSeconds);
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Referrer-Policy", "no-referrer");
-            response.sendRedirect(successPath);
+            response.setStatus(HttpServletResponse.SC_FOUND);
+            response.setHeader("Location", successPath);
         } catch (SsoException exception) {
             response.sendError(exception.status, exception.getMessage());
         }

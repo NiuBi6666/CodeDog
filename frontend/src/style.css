@@ -2452,6 +2452,7 @@ a {
 }
 
 .questionnaire-frame-shell {
+  position: relative;
   min-height: 720px;
   flex: 1;
   overflow: hidden;
@@ -2459,6 +2460,28 @@ a {
   border-radius: 7px;
   background: #ffffff;
   box-shadow: 0 4px 14px rgba(30, 47, 53, 0.05);
+}
+
+.questionnaire-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: #52636a;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.questionnaire-loading-icon {
+  color: #16877f;
+  animation: questionnaire-spin 0.9s linear infinite;
+}
+
+@keyframes questionnaire-spin {
+  to { transform: rotate(360deg); }
 }
 
 .questionnaire-frame {

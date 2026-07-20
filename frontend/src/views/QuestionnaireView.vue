@@ -4,8 +4,10 @@ import { ExternalLink, RefreshCw } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 
 const frameKey = ref(0);
+const loading = ref(true);
 const formUrl = "/api/questionnaire/sso";
-function reloadFrame() { frameKey.value += 1; }
+function reloadFrame() { loading.value = true; frameKey.value += 1; }
+function handleFrameLoad() { loading.value = false; }
 </script>
 
 <template>
@@ -19,7 +21,11 @@ function reloadFrame() { frameKey.value += 1; }
         </div>
       </header>
       <div class="questionnaire-frame-shell">
-        <iframe :key="frameKey" class="questionnaire-frame" :src="formUrl" title="问卷与作业管理"></iframe>
+        <div v-if="loading" class="questionnaire-loading" role="status">
+          <RefreshCw :size="22" class="questionnaire-loading-icon"/>
+          <span>正在进入问卷与作业...</span>
+        </div>
+        <iframe :key="frameKey" class="questionnaire-frame" :src="formUrl" title="问卷与作业管理" @load="handleFrameLoad"></iframe>
       </div>
     </section>
   </AdminLayout>
