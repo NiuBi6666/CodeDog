@@ -52,15 +52,8 @@
           </div>
         </div>
 
-        <!-- 侧边栏底部：登出和版权 -->
+        <!-- 侧边栏底部版权 -->
         <div class="menu-footer">
-          <div class="logout-btn-wrapper">
-            <button class="logout-action-btn" @click="returnToCodeDog">
-              <i class="el-icon-back" />
-              <span>返回 CodeDog</span>
-            </button>
-          </div>
-
           <div class="about-container">
             <span class="desc-text">
               <span>CodeDog · 问卷与作业</span>

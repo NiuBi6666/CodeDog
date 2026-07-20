@@ -11,7 +11,13 @@ defineProps({
 });
 const sidebarOpen = ref(false);
 const router = useRouter();
-async function signOut() { await logout(); await router.push("/"); }
+async function signOut() {
+  try {
+    await logout();
+  } finally {
+    await router.replace("/login");
+  }
+}
 </script>
 
 <template>

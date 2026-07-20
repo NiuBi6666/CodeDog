@@ -91,37 +91,9 @@ $muted: #66777d;
     }
 
     .menu-footer {
-      margin-top: 10px;
+      margin-top: auto;
       padding-top: 12px;
       border-top: 1px solid $border !important;
-
-      .logout-btn-wrapper {
-        margin-bottom: 12px;
-        padding: 0 4px;
-
-        .logout-action-btn {
-          min-height: 36px;
-          padding: 7px 10px;
-          color: #52636a;
-          background: $surface;
-          border: 1px solid $border;
-          border-radius: 6px;
-          font-size: 13px;
-          transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-
-          &:hover {
-            color: $primary-dark;
-            background: $primary-soft;
-            border-color: #a9cdc9;
-            box-shadow: none;
-            transform: none;
-
-            i {
-              color: $primary;
-            }
-          }
-        }
-      }
 
       .about-container {
         color: #7a8b90;
