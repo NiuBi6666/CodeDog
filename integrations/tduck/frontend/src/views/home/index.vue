@@ -604,3 +604,4 @@ export default {
   height: 100vh;
 }
 </style>
+<style lang="scss" src="@/assets/styles/codedog-theme.scss"></style>
