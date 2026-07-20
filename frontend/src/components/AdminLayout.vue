@@ -4,7 +4,11 @@ import { RouterLink, useRouter } from "vue-router";
 import { ClipboardCheck, ExternalLink, FileText, Home, ListChecks, Menu, ScrollText, Search } from "@lucide/vue";
 import { auth, logout } from "../auth";
 
-defineProps({ pageTitle: { type: String, required: true }, activePage: { type: String, required: true } });
+defineProps({
+  pageTitle: { type: String, required: true },
+  activePage: { type: String, required: true },
+  contentClass: { type: String, default: "" }
+});
 const sidebarOpen = ref(false);
 const router = useRouter();
 async function signOut() { await logout(); await router.push("/"); }
@@ -37,7 +41,7 @@ async function signOut() { await logout(); await router.push("/"); }
           <button class="header-action" type="button" @click="signOut">退出</button>
         </nav>
       </header>
-      <main class="admin-main"><slot /></main>
+      <main class="admin-main" :class="contentClass"><slot /></main>
     </section>
   </div>
 </template>

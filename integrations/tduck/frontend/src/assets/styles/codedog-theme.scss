@@ -30,16 +30,29 @@ $muted: #66777d;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 
+    .menu-view {
+      flex: 0 0 auto;
+      padding: 3px;
+      overflow: visible;
+      background: #e8edef;
+      border: 1px solid #d6dfe2;
+      border-radius: 7px;
+    }
+
     .menu-item {
       min-height: 40px;
       justify-content: flex-start;
       margin: 0 0 3px;
       padding: 9px 12px;
-      color: #52636a;
+      color: #53636a;
       font-size: 14px;
-      font-weight: 500;
-      border-radius: 6px;
+      font-weight: 700;
+      border-radius: 5px;
       transition: background-color 0.16s ease, color 0.16s ease;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
 
       .menu-icon {
         width: 18px;
@@ -57,7 +70,7 @@ $muted: #66777d;
 
       &:hover {
         color: $text;
-        background: #eaf0f2;
+        background: #f4f7f8;
 
         .menu-icon,
         .menu-label {
@@ -67,13 +80,12 @@ $muted: #66777d;
       }
 
       &.menu-item-active {
-        color: $primary-dark !important;
-        background: $primary-soft !important;
-        box-shadow: inset 3px 0 0 $primary;
-        font-weight: 650;
+        color: #0f766e !important;
+        background: $surface !important;
+        box-shadow: 0 1px 4px rgba(32, 48, 54, 0.1);
 
         .menu-icon {
-          color: $primary !important;
+          color: #0f766e !important;
         }
       }
     }
