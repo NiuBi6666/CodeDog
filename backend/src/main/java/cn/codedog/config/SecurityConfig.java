@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -26,7 +27,9 @@ public class SecurityConfig {
         CookieCsrfTokenRepository csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrf.setCookiePath("/");
         http
-            .csrf(configurer -> configurer.csrfTokenRepository(csrf))
+            .csrf(configurer -> configurer.csrfTokenRepository(csrf)
+                .ignoringRequestMatchers("/api/public/rankings/extension/**"))
+            .cors(Customizer.withDefaults())
             .authorizeHttpRequests(requests -> requests
                 .requestMatchers("/api/public/**", "/api/auth/csrf", "/api/auth/login", "/actuator/health/**").permitAll()
                 .anyRequest().authenticated())

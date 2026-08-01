@@ -1,0 +1,78 @@
+:root{font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;color:#17212b;background:#f4f6f8;font-synthesis:none;letter-spacing:0}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:linear-gradient(180deg,#fff 0,#f4f6f8 42%,#eef2f3 100%)}
+button,select,input{font:inherit;letter-spacing:0}
+button{cursor:pointer}
+.ranking-header{min-height:88px;padding:16px 32px;display:grid;grid-template-columns:180px 1fr 44px;align-items:center;border-bottom:1px solid #dfe5e8;background:#fff}
+.brand{display:flex;align-items:center;gap:10px;color:#17212b;text-decoration:none;font-weight:800}
+.brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:6px;background:#e53935;color:#fff}
+.title-block{text-align:center}
+.title-block h1{margin:0;font-size:28px;line-height:1.2}
+.title-block p{margin:5px 0 0;color:#65727d;font-size:13px}
+.icon-button{width:42px;height:42px;border:1px solid #ced7dc;border-radius:6px;background:#fff;color:#24313a;font-size:24px;line-height:1}
+.icon-button svg{width:20px;height:20px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.icon-button:hover,.command-button:hover{border-color:#2b6972;background:#f0f8f8}
+.ranking-toolbar{display:flex;align-items:end;justify-content:center;gap:12px;padding:16px 24px;border-bottom:1px solid #dfe5e8;background:#fff}
+.ranking-toolbar label{display:grid;gap:5px;color:#53616b;font-size:12px}
+.ranking-toolbar select{min-width:190px;height:40px;border:1px solid #cbd5da;border-radius:6px;background:#fff;padding:0 34px 0 11px;color:#17212b}
+.segments{height:40px;display:flex;border:1px solid #cbd5da;border-radius:6px;overflow:hidden}
+.segments button{min-width:86px;border:0;border-right:1px solid #cbd5da;background:#fff;color:#46545e}
+.segments button:last-child{border-right:0}
+.segments button.active{background:#1e5c63;color:#fff}
+.command-button{height:40px;padding:0 16px;border:1px solid #cbd5da;border-radius:6px;background:#fff;color:#24313a;font-weight:700}
+main{width:min(1440px,100%);margin:0 auto;padding:30px 28px 48px}
+.status{min-height:52px;display:grid;place-items:center;color:#65727d}
+.status.error{color:#b42318}
+.podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;gap:18px;max-width:1040px;margin:18px auto 42px}
+.podium-card{position:relative;display:grid;place-items:center;align-content:center;min-height:210px;padding:30px 18px 22px;border:1px solid #d8e0e4;border-radius:8px;background:#fff;box-shadow:0 10px 24px rgba(26,42,52,.07);text-align:center;overflow:hidden}
+.podium-card[data-rank="1"]{min-height:260px;border-top:6px solid #e2b23c;order:2}
+.podium-card[data-rank="2"]{min-height:228px;border-top:6px solid #aeb8c5;order:1}
+.podium-card[data-rank="3"]{min-height:216px;border-top:6px solid #b66a3c;order:3}
+.rank-number{font-weight:900;color:#73808a;font-size:24px}
+.podium-card[data-rank="1"] .rank-number{font-size:34px;color:#9b7010}
+.student-name{max-width:100%;margin:12px 0 8px;overflow-wrap:anywhere;font-weight:900;line-height:1.14}
+.podium-card[data-rank="1"] .student-name{font-size:52px}
+.podium-card[data-rank="2"] .student-name{font-size:44px}
+.podium-card[data-rank="3"] .student-name{font-size:40px}
+.score{font-variant-numeric:tabular-nums;color:#4e5c66;font-weight:700}
+.level-label{margin-top:10px;padding:4px 8px;border:1px solid currentColor;border-radius:999px;font-size:12px;font-weight:800}
+.name-wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.name-tile{position:relative;min-height:110px;padding:16px;display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;border:1px solid #dce3e6;border-radius:7px;background:#fff;overflow:hidden}
+.name-tile .rank-number{font-size:16px}
+.name-tile .student-name{margin:0;font-size:20px}
+.name-tile.rank-4-10 .student-name{font-size:32px}
+.name-tile.rank-11-30 .student-name{font-size:26px}
+.name-tile .meta{grid-column:2;color:#697680;font-size:12px;margin-top:5px}
+.level-1 .student-name{color:#59636d;text-shadow:0 1px 0 #fff}
+.level-2 .student-name{color:#a45f37;text-shadow:0 1px 0 #f7d3bf}
+.level-3 .student-name{color:#687583;text-shadow:0 1px 0 #fff,0 0 1px #aeb8c5}
+.level-4 .student-name{color:#9b7010;text-shadow:0 1px 0 #fff2ba,0 0 8px rgba(226,178,60,.22)}
+.level-5 .student-name{color:#205fae;text-shadow:0 1px 0 #d8ebff,0 0 10px rgba(46,107,203,.24)}
+.level-6 .student-name{color:#126d78;text-shadow:0 1px 0 #fff,1px 0 #e55c74,-1px 0 #3a82d3,0 0 12px rgba(31,151,166,.25)}
+.level-4,.level-5,.level-6{border-color:color-mix(in srgb,currentColor 34%,#dce3e6)}
+.level-6::after{content:"";position:absolute;inset:-70% -20%;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.65) 49%,transparent 60%);transform:translateX(-75%);animation:sheen 5s ease-in-out infinite;pointer-events:none}
+@keyframes sheen{0%,68%{transform:translateX(-75%)}88%,100%{transform:translateX(75%)}}
+.admin-panel{max-width:1100px;margin:0 auto 36px;border-top:1px solid #d7dfe3;padding:20px 28px}
+.admin-panel summary{cursor:pointer;font-weight:800;color:#43515b}
+.admin-tools{display:grid;grid-template-columns:1fr 1fr;gap:32px;padding-top:18px}
+.admin-tools h2{font-size:16px;margin:0 0 12px}
+.inline-action{display:flex;align-items:center;gap:14px}
+#pairingCode{font-size:24px;font-weight:900;letter-spacing:2px;color:#1e5c63}
+#importForm{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#importForm input{height:40px;min-width:0;border:1px solid #cbd5da;border-radius:6px;padding:0 10px;background:#fff}
+#importForm input[type="file"]{grid-column:1/-1;padding:7px}
+#importResult{display:block;margin-top:10px;color:#43515b;font-size:13px}
+footer{display:flex;justify-content:center;gap:24px;padding:18px;border-top:1px solid #dfe5e8;color:#71808a;font-size:12px;background:#fff}
+[hidden]{display:none!important}
+body.is-fullscreen .ranking-header{min-height:68px;padding-block:10px}
+body.is-fullscreen .admin-panel,body.is-fullscreen footer{display:none}
+@media(max-width:760px){
+  .ranking-header{grid-template-columns:44px 1fr 44px;padding:12px 14px}.brand>span:last-child{display:none}.title-block h1{font-size:22px}
+  .ranking-toolbar{align-items:stretch;flex-wrap:wrap;padding:12px}.ranking-toolbar label{flex:1 1 150px}.ranking-toolbar select{width:100%;min-width:0}.segments{flex:1 1 180px}.segments button{flex:1}.command-button{flex:0 0 auto}
+  main{padding:20px 12px 36px}.podium{grid-template-columns:1fr;gap:10px;margin-bottom:26px}.podium-card,.podium-card[data-rank]{min-height:145px;order:initial;padding:18px}.podium-card[data-rank="1"]{order:1}.podium-card[data-rank="2"]{order:2}.podium-card[data-rank="3"]{order:3}
+  .podium-card[data-rank="1"] .student-name{font-size:36px}.podium-card[data-rank="2"] .student-name{font-size:32px}.podium-card[data-rank="3"] .student-name{font-size:28px}
+  .name-wall{grid-template-columns:repeat(2,minmax(0,1fr))}.name-tile{min-height:100px;grid-template-columns:30px minmax(0,1fr);padding:12px}.name-tile.rank-4-10 .student-name{font-size:25px}.name-tile.rank-11-30 .student-name{font-size:22px}.name-tile .student-name{font-size:18px}
+  .admin-tools{grid-template-columns:1fr}.admin-panel{padding-inline:16px}#importForm{grid-template-columns:1fr}#importForm input[type="file"]{grid-column:auto}
+}
+@media(max-width:420px){.name-wall{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.level-6::after{animation:none;display:none}}

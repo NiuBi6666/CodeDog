@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>学员积分榜 - CodeDog</title>
+  <link rel="stylesheet" href="/rankings.css">
+</head>
+<body>
+  <header class="ranking-header">
+    <a class="brand" href="/index" aria-label="返回 CodeDog"><span class="brand-mark">C</span><span>CodeDog</span></a>
+    <div class="title-block"><h1>学员积分榜</h1><p id="boardSubtitle">等待学情数据</p></div>
+    <button id="fullscreenButton" class="icon-button" type="button" title="全屏显示" aria-label="全屏显示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="m3 3 5 5"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="m21 3-5 5"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="m3 21 5-5"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="m21 21-5-5"/></svg></button>
+  </header>
+
+  <nav class="ranking-toolbar" aria-label="排行榜筛选">
+    <label><span>训练营</span><select id="campSelect" aria-label="选择训练营"></select></label>
+    <label id="classField"><span>班级</span><select id="classSelect" aria-label="选择班级"></select></label>
+    <div class="segments" role="group" aria-label="排行榜范围">
+      <button type="button" data-scope="class" class="active">班级榜</button>
+      <button type="button" data-scope="camp">训练营榜</button>
+    </div>
+    <button id="refreshButton" class="command-button" type="button">刷新</button>
+  </nav>
+
+  <main>
+    <div id="status" class="status" role="status" aria-live="polite">正在加载排行榜…</div>
+    <section id="podium" class="podium" aria-label="前三名" hidden></section>
+    <section id="nameWall" class="name-wall" aria-label="全部排名" hidden></section>
+  </main>
+
+  <details id="adminPanel" class="admin-panel" hidden>
+    <summary>数据管理</summary>
+    <div class="admin-tools">
+      <section>
+        <h2>连接 CRM 扩展</h2>
+        <div class="inline-action"><button id="pairButton" type="button" class="command-button">生成连接码</button><output id="pairingCode"></output></div>
+      </section>
+      <section>
+        <h2>导入 Excel</h2>
+        <form id="importForm">
+          <input id="importCampId" name="campId" placeholder="营期 ID" required maxlength="100">
+          <input id="importCampName" name="campName" placeholder="营期名称" required maxlength="160">
+          <input name="files" type="file" accept=".xlsx" multiple required>
+          <button type="submit" class="command-button">导入</button>
+        </form>
+        <output id="importResult"></output>
+      </section>
+    </div>
+  </details>
+
+  <footer><span id="lastUpdated">尚未同步</span><span>每 60 秒自动刷新</span></footer>
+  <script type="module" src="/rankings.js"></script>
+</body>
+</html>
