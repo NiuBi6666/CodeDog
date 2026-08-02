@@ -30,7 +30,11 @@ public class InitialDataService implements ApplicationRunner {
     @Override public void run(ApplicationArguments args) {
         if (users.count() == 0) {
             if (password == null || password.isBlank()) throw new IllegalStateException("ADMIN_PASSWORD is required");
-            User user = new User(); user.setUsername(username); user.setPasswordHash(encoder.encode(password)); users.save(user);
+            User user = new User();
+            user.setUsername(username);
+            user.setPasswordHash(encoder.encode(password));
+            user.setAdmin(true);
+            users.save(user);
         }
         if (documents.count() == 0) {
             Document document = new Document(); document.setTitle("新的公开文档");

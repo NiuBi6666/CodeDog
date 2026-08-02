@@ -42,12 +42,13 @@ public class AuditLogController {
             String type = parts[0];
             String module = module(type);
             return new LogEntry(log.getId(), module, moduleLabel(module), operation(type), detail(type, parts),
-                type.equals("login_failed") ? "failed" : "success", log.getIpAddress(), log.getCreatedAt());
+                type.equals("login_failed") || type.equals("registration_failed") ? "failed" : "success",
+                log.getIpAddress(), log.getCreatedAt());
         }
 
         private static String module(String action) {
-            if (action.startsWith("login_")) return "auth";
-            if (action.startsWith("password_")) return "account";
+            if (action.startsWith("login_") || action.startsWith("registration_")) return "auth";
+            if (action.startsWith("password_") || action.startsWith("permissions_")) return "account";
             if (action.startsWith("document_")) return "documents";
             if (action.startsWith("student_")) return "students";
             if (action.startsWith("class_progress")) return "classes";
@@ -69,7 +70,10 @@ public class AuditLogController {
             return switch (action) {
                 case "login_succeeded" -> "登录成功";
                 case "login_failed" -> "登录失败";
+                case "registration_succeeded" -> "注册用户";
+                case "registration_failed" -> "注册失败";
                 case "password_changed" -> "修改密码";
+                case "permissions_updated" -> "设置用户权限";
                 case "document_created" -> "新建文档";
                 case "document_updated" -> "修改文档";
                 case "document_offline" -> "下线文档";
@@ -81,6 +85,9 @@ public class AuditLogController {
         }
 
         private static String detail(String action, String[] parts) {
+            if (action.startsWith("registration_") && parts.length > 1) return "用户 " + parts[1];
+            if (action.equals("permissions_updated") && parts.length > 2)
+                return "用户 " + parts[1] + "，已授予 " + parts[2] + " 项权限";
             if (action.startsWith("document_") && parts.length > 1) return "文档 #" + parts[1];
             if (action.equals("student_query") && parts.length > 2) {
                 String mode = parts[1].equals("name") ? "姓名" : "ID";

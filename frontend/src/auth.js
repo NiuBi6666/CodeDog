@@ -19,6 +19,19 @@ export async function ensureUser(force = false) {
 export async function login(username, password) {
   auth.user = await api("/auth/login", { method: "POST", body: jsonBody({ username, password }) });
   auth.checked = true;
+  return auth.user;
+}
+
+export async function register(username, password, confirmation) {
+  return api("/auth/register", {
+    method: "POST",
+    body: jsonBody({ username, password, confirmation })
+  });
+}
+
+export function hasPermission(code) {
+  if (!code || !auth.user) return false;
+  return Boolean(auth.user.admin || auth.user.permissions?.includes(code));
 }
 
 export async function logout() {
@@ -30,7 +43,10 @@ export async function logout() {
   } catch (_error) {
     // CodeDog logout must still complete if the questionnaire service is unavailable.
   }
-  await api("/auth/logout", { method: "POST" });
-  auth.user = null;
-  auth.checked = true;
+  try {
+    await api("/auth/logout", { method: "POST" });
+  } finally {
+    auth.user = null;
+    auth.checked = true;
+  }
 }

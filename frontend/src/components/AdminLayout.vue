@@ -1,8 +1,8 @@
 <script setup>
 import { ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
-import { ClipboardCheck, ExternalLink, FileText, Home, ListChecks, Menu, ScrollText, Search } from "@lucide/vue";
-import { auth, logout } from "../auth";
+import { ClipboardCheck, ExternalLink, FileText, Home, ListChecks, Menu, ScrollText, Search, ShieldCheck } from "@lucide/vue";
+import { auth, hasPermission, logout } from "../auth";
 
 defineProps({
   pageTitle: { type: String, required: true },
@@ -24,15 +24,16 @@ async function signOut() {
   <div class="admin-app" :class="{ 'sidebar-open': sidebarOpen }" data-admin-shell>
     <aside class="admin-sidebar" aria-label="后台导航">
       <RouterLink class="admin-logo" to="/index"><span class="admin-logo-mark">C</span><span>CodeDog</span></RouterLink>
-      <div class="admin-profile"><span class="admin-avatar">A</span><div><strong>{{ auth.user?.username }}</strong><span><i></i> 在线</span></div></div>
+      <div class="admin-profile"><span class="admin-avatar">A</span><div><strong>{{ auth.user?.username }}</strong><span><i></i>{{ auth.user?.admin ? "系统管理员" : "普通用户" }}</span></div></div>
       <nav class="admin-nav">
         <p>功能导航</p>
-        <RouterLink :class="{ active: activePage === 'dashboard' }" to="/index"><Home class="nav-icon" :size="17"/><span>首页</span></RouterLink>
-        <RouterLink :class="{ active: activePage === 'students' }" to="/student/query"><Search class="nav-icon" :size="17"/><span>查询学生</span></RouterLink>
-        <RouterLink :class="{ active: activePage === 'class-progress' }" to="/class/progress"><ClipboardCheck class="nav-icon" :size="17"/><span>课堂完成情况</span></RouterLink>
-        <RouterLink :class="{ active: activePage === 'questionnaire' }" to="/questionnaire"><ListChecks class="nav-icon" :size="17"/><span>问卷与作业</span></RouterLink>
-        <RouterLink :class="{ active: activePage === 'documents' }" to="/doc/list"><FileText class="nav-icon" :size="17"/><span>文档管理</span></RouterLink>
-        <RouterLink :class="{ active: activePage === 'logs' }" to="/logs"><ScrollText class="nav-icon" :size="17"/><span>操作日志</span></RouterLink>
+        <RouterLink v-if="hasPermission('dashboard.view')" :class="{ active: activePage === 'dashboard' }" to="/index"><Home class="nav-icon" :size="17"/><span>首页</span></RouterLink>
+        <RouterLink v-if="hasPermission('students.view')" :class="{ active: activePage === 'students' }" to="/student/query"><Search class="nav-icon" :size="17"/><span>查询学生</span></RouterLink>
+        <RouterLink v-if="hasPermission('class_progress.view')" :class="{ active: activePage === 'class-progress' }" to="/class/progress"><ClipboardCheck class="nav-icon" :size="17"/><span>课堂完成情况</span></RouterLink>
+        <RouterLink v-if="hasPermission('questionnaire.view')" :class="{ active: activePage === 'questionnaire' }" to="/questionnaire"><ListChecks class="nav-icon" :size="17"/><span>问卷与作业</span></RouterLink>
+        <RouterLink v-if="hasPermission('documents.view')" :class="{ active: activePage === 'documents' }" to="/doc/list"><FileText class="nav-icon" :size="17"/><span>文档管理</span></RouterLink>
+        <RouterLink v-if="hasPermission('logs.view')" :class="{ active: activePage === 'logs' }" to="/logs"><ScrollText class="nav-icon" :size="17"/><span>操作日志</span></RouterLink>
+        <RouterLink v-if="auth.user?.admin" :class="{ active: activePage === 'users' }" to="/users"><ShieldCheck class="nav-icon" :size="17"/><span>用户与权限</span></RouterLink>
       </nav>
       <div class="admin-sidebar-footer">CodeDog Admin</div>
     </aside>

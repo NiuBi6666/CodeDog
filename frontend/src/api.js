@@ -16,11 +16,26 @@ async function loadCsrf() {
 
 export async function api(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
-  if (!["GET", "HEAD", "OPTIONS"].includes(method) && !csrfToken) await loadCsrf();
-  const headers = new Headers(options.headers || {});
-  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("X-XSRF-TOKEN", csrfToken);
-  const response = await fetch(`/api${path}`, { ...options, method, headers, credentials: "same-origin" });
+  const csrfProtected = !["GET", "HEAD", "OPTIONS"].includes(method);
+  if (csrfProtected && !csrfToken) await loadCsrf();
+
+  const createHeaders = () => {
+    const headers = new Headers(options.headers || {});
+    const multipart = typeof FormData !== "undefined" && options.body instanceof FormData;
+    if (options.body && !multipart && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    if (csrfProtected) headers.set("X-XSRF-TOKEN", csrfToken);
+    return headers;
+  };
+  const send = () => fetch(`/api${path}`, { ...options, method, headers: createHeaders(), credentials: "same-origin" });
+
+  let response = await send();
+  if (csrfProtected && response.status === 403 && ["/auth/login", "/auth/logout", "/auth/register"].includes(path)) {
+    csrfToken = "";
+    await loadCsrf();
+    response = await send();
+  }
+  if (path === "/auth/logout") csrfToken = "";
+
   const contentType = response.headers.get("content-type") || "";
   const payload = response.status === 204 ? null : contentType.includes("application/json") ? await response.json() : {};
   if (!response.ok) throw new ApiError(payload?.error || "请求失败", response.status, payload);

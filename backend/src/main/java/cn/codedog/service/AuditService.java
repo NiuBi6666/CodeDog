@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -25,12 +26,12 @@ import java.util.Set;
 public class AuditService {
     private static final ZoneId CHINA = ZoneId.of("Asia/Shanghai");
     private static final Set<String> RESULTS = Set.of("success", "failed");
-    private static final Map<String, String> MODULE_PATTERNS = Map.of(
-        "auth", "login_%",
-        "account", "password_%",
-        "documents", "document_%",
-        "students", "student_%",
-        "classes", "class_progress_%"
+    private static final Map<String, List<String>> MODULE_PATTERNS = Map.of(
+        "auth", List.of("login_%", "registration_%"),
+        "account", List.of("password_%", "permissions_%"),
+        "documents", List.of("document_%"),
+        "students", List.of("student_%"),
+        "classes", List.of("class_progress_%")
     );
     private final JdbcTemplate jdbc;
     private final AuditLogRepository repository;
@@ -63,6 +64,17 @@ public class AuditService {
         return count == null ? 0 : count;
     }
 
+    public int recentRegistrations(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        String ip = forwarded == null || forwarded.isBlank()
+            ? request.getRemoteAddr() : forwarded.split(",", 2)[0].trim();
+        Integer count = jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_log
+            WHERE action LIKE 'registration_%' AND ip_address = ? AND created_at >= ?
+            """, Integer.class, ip, Timestamp.from(Instant.now().minus(1, ChronoUnit.HOURS)));
+        return count == null ? 0 : count;
+    }
+
     public Page<AuditLog> list(LocalDate startDate, LocalDate endDate, String module,
                                String result, String keyword, int page) {
         String normalizedModule = normalize(module);
@@ -81,10 +93,17 @@ public class AuditService {
                 startDate.atStartOfDay(CHINA).toInstant()));
             if (endDate != null) predicates.add(cb.lessThan(root.<Instant>get("createdAt"),
                 endDate.plusDays(1).atStartOfDay(CHINA).toInstant()));
-            if (!normalizedModule.isEmpty())
-                predicates.add(cb.like(root.get("action"), MODULE_PATTERNS.get(normalizedModule)));
-            if (normalizedResult.equals("failed")) predicates.add(cb.equal(root.get("action"), "login_failed"));
-            if (normalizedResult.equals("success")) predicates.add(cb.notEqual(root.get("action"), "login_failed"));
+            if (!normalizedModule.isEmpty()) {
+                Predicate[] modulePredicates = MODULE_PATTERNS.get(normalizedModule).stream()
+                    .map(pattern -> cb.like(root.get("action"), pattern))
+                    .toArray(Predicate[]::new);
+                predicates.add(cb.or(modulePredicates));
+            }
+            Predicate failed = cb.or(
+                cb.equal(root.get("action"), "login_failed"),
+                cb.equal(root.get("action"), "registration_failed"));
+            if (normalizedResult.equals("failed")) predicates.add(failed);
+            if (normalizedResult.equals("success")) predicates.add(cb.not(failed));
             if (!search.isEmpty()) {
                 String pattern = "%" + search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
                 predicates.add(cb.or(

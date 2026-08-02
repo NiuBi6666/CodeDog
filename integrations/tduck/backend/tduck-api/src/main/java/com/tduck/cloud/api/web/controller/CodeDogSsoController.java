@@ -130,6 +130,7 @@ public class CodeDogSsoController {
             String subject = stringClaim(claims, "sub");
             String email = stringClaim(claims, "email");
             String nonce = stringClaim(claims, "nonce");
+            boolean administrator = booleanClaim(claims, "admin");
             long issuedAt = numberClaim(claims, "iat");
             long expiresAt = numberClaim(claims, "exp");
             long now = Instant.now().getEpochSecond();
@@ -148,7 +149,7 @@ public class CodeDogSsoController {
                 throw new IllegalArgumentException("invalid claims");
             }
 
-            return new SsoPayload(subject, email, nonce);
+            return new SsoPayload(subject, email, nonce, administrator);
         } catch (SsoException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -182,12 +183,16 @@ public class CodeDogSsoController {
         if (user == null) {
             user = userService.getUserByEmail(payload.email);
         }
-        if (user == null) {
+        if (user == null && payload.administrator) {
             UserEntity admin = userService.getById(1L);
             if (admin != null && ("admin@tduckcloud.com".equalsIgnoreCase(admin.getEmail())
                     || admin.getEmail() == null || admin.getEmail().isEmpty())) {
                 user = admin;
             }
+        }
+        if (!payload.administrator && user != null && Long.valueOf(1L).equals(user.getId())) {
+            throw new SsoException(HttpServletResponse.SC_FORBIDDEN,
+                    "A non-administrator CodeDog account cannot use the questionnaire administrator identity");
         }
         if (user != null && Boolean.TRUE.equals(user.getDeleted())) {
             throw new SsoException(HttpServletResponse.SC_UNAUTHORIZED,
@@ -251,6 +256,14 @@ public class CodeDogSsoController {
         return (String) value;
     }
 
+    private boolean booleanClaim(Map<String, Object> claims, String key) {
+        Object value = claims.get(key);
+        if (!(value instanceof Boolean)) {
+            throw new IllegalArgumentException("invalid " + key);
+        }
+        return (Boolean) value;
+    }
+
     private long numberClaim(Map<String, Object> claims, String key) {
         Object value = claims.get(key);
         if (!(value instanceof Number)) {
@@ -281,11 +294,13 @@ public class CodeDogSsoController {
         private final String subject;
         private final String email;
         private final String nonce;
+        private final boolean administrator;
 
-        private SsoPayload(String subject, String email, String nonce) {
+        private SsoPayload(String subject, String email, String nonce, boolean administrator) {
             this.subject = subject;
             this.email = email;
             this.nonce = nonce;
+            this.administrator = administrator;
         }
     }
 

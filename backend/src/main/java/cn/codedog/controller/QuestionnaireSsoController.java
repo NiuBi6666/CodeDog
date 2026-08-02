@@ -1,5 +1,6 @@
 package cn.codedog.controller;
 
+import cn.codedog.security.PermissionService;
 import cn.codedog.service.AuditService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javax.crypto.Mac;
@@ -28,14 +29,17 @@ import java.util.UUID;
 public class QuestionnaireSsoController {
     private final ObjectMapper objectMapper;
     private final AuditService audit;
+    private final PermissionService permissions;
     private final String secret;
     private final String ssoUrl;
 
     public QuestionnaireSsoController(ObjectMapper objectMapper, AuditService audit,
+                                      PermissionService permissions,
                                       @Value("${codedog.questionnaire.sso-secret:}") String secret,
                                       @Value("${codedog.questionnaire.sso-url:https://www.codedog.online/tduck-api/codedog/sso}") String ssoUrl) {
         this.objectMapper = objectMapper;
         this.audit = audit;
+        this.permissions = permissions;
         this.secret = secret;
         this.ssoUrl = ssoUrl;
     }
@@ -56,6 +60,7 @@ public class QuestionnaireSsoController {
         payload.put("aud", "tduck");
         payload.put("sub", username);
         payload.put("email", localPart + "@codedog.local");
+        payload.put("admin", permissions.isAdmin(username));
         payload.put("iat", now);
         payload.put("exp", now + 60);
         payload.put("nonce", UUID.randomUUID().toString());

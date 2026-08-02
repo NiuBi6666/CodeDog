@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
+import { hasPermission } from "../auth";
 import { splitQueryValues } from "../utils";
 
 const route = useRoute(); const router = useRouter();
@@ -54,7 +55,7 @@ function exportCsv() {
       <form class="student-query-form" @submit.prevent="query">
         <label for="student-values">{{ mode === "id" ? "学生 ID" : "学生姓名" }}</label>
         <textarea id="student-values" v-model="rawValues" rows="7" :placeholder="mode === 'id' ? '每行输入一个 ID，也支持逗号分隔' : '每行输入一个姓名，也支持逗号分隔'" required></textarea>
-        <div class="query-form-footer"><span>单次最多 500 个{{ mode === "id" ? "ID" : "姓名" }}，重复输入自动去重</span><button class="button button-primary" type="submit" :disabled="busy">{{ busy ? "查询中..." : "查询" }}</button></div>
+        <div class="query-form-footer"><span>单次最多 500 个{{ mode === "id" ? "ID" : "姓名" }}，重复输入自动去重</span><button v-if="hasPermission('students.query')" class="button button-primary" type="submit" :disabled="busy">{{ busy ? "查询中..." : "查询" }}</button></div>
       </form>
     </section>
     <template v-if="result">
@@ -64,7 +65,7 @@ function exportCsv() {
         <div v-if="mode === 'name'" :class="{ warn: result.summary.ambiguous }"><strong>{{ result.summary.ambiguous }}</strong><span>重名</span></div>
       </section>
       <section class="admin-panel results-panel">
-        <div class="panel-heading"><h2>查询结果</h2><div class="button-row"><button class="button button-quiet button-small" type="button" @click="copyResults">复制结果</button><button class="button button-quiet button-small" type="button" @click="exportCsv">导出 CSV</button></div></div>
+        <div class="panel-heading"><h2>查询结果</h2><div class="button-row"><button v-if="hasPermission('students.copy')" class="button button-quiet button-small" type="button" @click="copyResults">复制结果</button><button v-if="hasPermission('students.export')" class="button button-quiet button-small" type="button" @click="exportCsv">导出 CSV</button></div></div>
         <div class="document-table-wrap"><table class="document-table" data-result-table>
           <thead><tr><th>{{ mode === "id" ? "输入 ID" : "输入姓名" }}</th><th>{{ mode === "id" ? "姓名" : "学生 ID" }}</th><th>性别</th><th>年龄</th><th>年级</th><th>班级</th><th>状态</th></tr></thead>
           <tbody><tr v-for="(row, index) in resultRows()" :key="`${row.input}-${row.student?.userId || index}`">

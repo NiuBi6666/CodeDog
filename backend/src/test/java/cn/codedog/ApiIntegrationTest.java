@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -116,7 +117,8 @@ class ApiIntegrationTest {
     void invalidLoginAndCsrfAreRejected() throws Exception {
         mvc.perform(post("/api/auth/login").contentType(APPLICATION_JSON)
                 .content("{\"username\":\"admin\",\"password\":\"wrong\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error").value("安全令牌已失效，请重试"));
         mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
                 .content("{\"username\":\"admin\",\"password\":\"wrong\"}"))
             .andExpect(status().isUnauthorized());
@@ -171,15 +173,16 @@ class ApiIntegrationTest {
     }
 
     @Test
-    void classProgressEndpointsRemainPrivateAndReportMissingUpstreamConfiguration() throws Exception {
-        mvc.perform(get("/api/class-progress/bootstrap")).andExpect(status().isUnauthorized());
+    void classProgressImportRemainsPrivateAndRejectsInvalidFiles() throws Exception {
+        MockMultipartFile invalid = new MockMultipartFile("files", "bad.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "not-an-xlsx".getBytes());
+        mvc.perform(multipart("/api/class-progress/import").file(invalid).with(csrf()))
+            .andExpect(status().isUnauthorized());
+        mvc.perform(multipart("/api/class-progress/import").file(invalid).session(session).with(csrf()))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.error").value("bad.xlsx：文件损坏或不是有效的 Excel 文件"));
         mvc.perform(get("/api/class-progress/bootstrap").session(session))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.error").value("服务器尚未配置编程猫登录凭据"))
-            .andExpect(jsonPath("$.code").value("CODEMAO_AUTH_REQUIRED"));
-        mvc.perform(post("/api/class-progress/credential").session(session).with(csrf())
-                .contentType(APPLICATION_JSON).content("{\"cookie\":\"   \"}"))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isNotFound());
     }
 
     private Student student(String id, String name) {

@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import { ClipboardCopy, Download, KeyRound, RefreshCw, Search } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
+import { hasPermission } from "../auth";
 import { buildStudentProgressRows, formatLessonState, progressResult, progressStatusClass } from "../classProgress";
 import { formatDateTime } from "../utils";
 
@@ -28,7 +29,11 @@ async function requestCredential(retry) {
   await nextTick(); credentialInput.value?.focus();
 }
 function handleFailure(failure, retry) {
-  if (requiresCredential(failure)) { requestCredential(retry); return; }
+  if (requiresCredential(failure)) {
+    if (hasPermission("class_progress.credential")) requestCredential(retry);
+    else error.value = "服务器需要编程猫 Cookie，当前账号没有录入凭据的权限";
+    return;
+  }
   error.value = failure.message;
 }
 function closeCredential() {
@@ -112,13 +117,13 @@ onMounted(loadBootstrap);
 <template>
   <AdminLayout page-title="课堂完成情况" active-page="class-progress">
     <div class="admin-page-heading"><div><h1>课堂完成情况</h1><p>班级课次作业统计</p></div><span v-if="bootstrap" class="teacher-chip">{{ bootstrap.teacher.name }} · {{ bootstrap.teacher.id }}</span></div>
-    <div v-if="error" class="notice notice-error progress-error-notice"><span>{{ error }}</span><button v-if="credentialRequired" class="button button-small button-quiet" type="button" @click="requestCredential(loadBootstrap)"><KeyRound :size="14"/>输入 Cookie</button></div>
+    <div v-if="error" class="notice notice-error progress-error-notice"><span>{{ error }}</span><button v-if="credentialRequired && hasPermission('class_progress.credential')" class="button button-small button-quiet" type="button" @click="requestCredential(loadBootstrap)"><KeyRound :size="14"/>输入 Cookie</button></div>
     <section class="admin-panel progress-filter-panel" :aria-busy="loading || querying">
       <form class="progress-filter-form" @submit.prevent="queryProgress">
         <label><span>营期</span><select v-model="campId" :disabled="loading" @change="loadClasses"><option value="">请选择营期</option><option v-for="camp in bootstrap?.camps || []" :key="camp.id" :value="String(camp.id)">{{ camp.name }} · {{ camp.coursePackageName }}</option></select></label>
         <label><span>班级</span><select v-model="classId" :disabled="!classes.length" @change="loadLessons"><option value="">请选择班级</option><option v-for="item in classes" :key="item.id" :value="String(item.id)">{{ item.name }} · {{ item.level }} · {{ item.ratio }}</option></select></label>
         <label><span>课次</span><select v-model="lessonId" :disabled="!lessons.length"><option value="">请选择课次</option><option v-for="lesson in lessons" :key="lesson.id" :value="String(lesson.id)">{{ lesson.name }} · {{ formatLessonState(lesson.state) }}</option></select></label>
-        <button class="button button-primary progress-query-button" type="submit" :disabled="querying || !lessonId"><RefreshCw v-if="querying" class="spin-icon" :size="16"/><Search v-else :size="16"/>{{ querying ? "查询中" : "查询" }}</button>
+        <button v-if="hasPermission('class_progress.query')" class="button button-primary progress-query-button" type="submit" :disabled="querying || !lessonId"><RefreshCw v-if="querying" class="spin-icon" :size="16"/><Search v-else :size="16"/>{{ querying ? "查询中" : "查询" }}</button>
       </form>
     </section>
 
@@ -142,7 +147,7 @@ onMounted(loadBootstrap);
       </section>
 
       <section v-if="report.questions.length" class="admin-panel progress-matrix-panel">
-        <div class="panel-heading"><div><h2>学生完成明细</h2><small>{{ filteredStudents.length }} / {{ studentRows.length }} 人</small></div><div class="progress-result-actions"><label class="progress-student-search"><Search :size="15"/><input v-model.trim="studentKeyword" type="search" placeholder="姓名或学生 ID"></label><button class="button button-quiet button-small" type="button" title="复制结果" @click="copyResults"><ClipboardCopy :size="14"/>复制</button><button class="button button-quiet button-small" type="button" title="导出 CSV" @click="exportCsv"><Download :size="14"/>导出</button></div></div>
+        <div class="panel-heading"><div><h2>学生完成明细</h2><small>{{ filteredStudents.length }} / {{ studentRows.length }} 人</small></div><div class="progress-result-actions"><label class="progress-student-search"><Search :size="15"/><input v-model.trim="studentKeyword" type="search" placeholder="姓名或学生 ID"></label><button v-if="hasPermission('class_progress.copy')" class="button button-quiet button-small" type="button" title="复制结果" @click="copyResults"><ClipboardCopy :size="14"/>复制</button><button v-if="hasPermission('class_progress.export')" class="button button-quiet button-small" type="button" title="导出 CSV" @click="exportCsv"><Download :size="14"/>导出</button></div></div>
         <div class="progress-matrix-wrap"><table class="progress-matrix-table">
           <thead><tr><th>学生</th><th>学生 ID</th><th v-for="(question, index) in report.questions" :key="question.stepId" :title="question.name"><span>{{ index + 1 }}</span>{{ question.name }}</th></tr></thead>
           <tbody><tr v-for="student in filteredStudents" :key="student.id"><td><strong>{{ student.name || "-" }}</strong></td><td>{{ student.id }}</td><td v-for="question in report.questions" :key="question.stepId"><span class="status-badge" :class="progressStatusClass(progressResult(student, question.stepId).result)">{{ progressResult(student, question.stepId).resultLabel }}</span></td></tr><tr v-if="!filteredStudents.length"><td class="empty-table" :colspan="report.questions.length + 2">没有符合条件的学生</td></tr></tbody>
@@ -151,7 +156,7 @@ onMounted(loadBootstrap);
     </template>
 
     <Teleport to="body">
-      <div v-if="credentialOpen" class="progress-credential-backdrop" role="presentation">
+      <div v-if="credentialOpen && hasPermission('class_progress.credential')" class="progress-credential-backdrop" role="presentation">
         <section class="progress-credential-dialog" role="dialog" aria-modal="true" aria-labelledby="credential-title">
           <div class="progress-credential-heading"><span><KeyRound :size="18"/></span><div><h2 id="credential-title">输入编程猫 Cookie</h2><p>验证成功后继续加载课堂数据</p></div></div>
           <form @submit.prevent="submitCredential">

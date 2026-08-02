@@ -2,6 +2,7 @@ package cn.codedog.controller;
 
 import cn.codedog.service.DocumentService;
 import cn.codedog.service.ClassProgressService;
+import cn.codedog.service.ClassProgressImportService;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(DocumentService.ValidationException.class)
     ResponseEntity<?> invalid(DocumentService.ValidationException error) {
+        return ResponseEntity.unprocessableEntity().body(Map.of("error", error.getMessage()));
+    }
+
+    @ExceptionHandler(ClassProgressImportService.ValidationException.class)
+    ResponseEntity<?> invalidClassProgressFile(ClassProgressImportService.ValidationException error) {
         return ResponseEntity.unprocessableEntity().body(Map.of("error", error.getMessage()));
     }
 
