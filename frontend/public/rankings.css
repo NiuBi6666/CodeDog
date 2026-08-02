@@ -40,7 +40,6 @@ main{width:min(1440px,100%);margin:0 auto;padding:30px 28px 48px}
 .podium-card[data-rank="3"] .student-name{font-size:40px}
 .podium-card[data-rank].long-name .student-name{font-size:28px}
 .score-line{display:flex;align-items:center;justify-content:center;gap:9px;min-height:24px}.score{font-variant-numeric:tabular-nums;color:#4e5c66;font-weight:700}
-.trend{display:inline-flex;align-items:center;min-width:28px;font-size:12px;font-weight:900;font-variant-numeric:tabular-nums}.trend-up{color:#c43b35}.trend-down{color:#16835c}.trend-same{color:#87939b}
 .name-wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
 .name-tile{position:relative;min-height:124px;padding:16px 14px;display:grid;grid-template-columns:34px 60px minmax(0,1fr);align-items:center;gap:12px;text-align:left;border:1px solid #dce3e6;border-radius:7px;background:#fff;overflow:visible}
 .rank-badge{align-self:start;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#eef2f3;color:#52616b;font-size:13px;font-weight:900;font-variant-numeric:tabular-nums}
