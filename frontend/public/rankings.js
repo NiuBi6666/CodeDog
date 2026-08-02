@@ -34,8 +34,8 @@ function renderBoard(board){
   elements.podium.innerHTML=rows.slice(0,3).map(podiumCard).join("");elements.wall.innerHTML=rows.slice(3).map(nameTile).join("");
   if(rows.length<4)elements.wall.hidden=true;
 }
-function podiumCard(row){return `<article class="podium-card level-${row.level}" data-rank="${row.rank}"><span class="rank-number">#${row.rank}</span><div class="student-name">${escapeHtml(row.studentName)}</div><div class="score">${row.totalPoints} 积分</div><span class="level-label">L${row.level} ${escapeHtml(row.levelName)}</span></article>`;}
-function nameTile(row){const band=row.rank<=10?"rank-4-10":row.rank<=30?"rank-11-30":"";return `<article class="name-tile ${band} level-${row.level}"><span class="rank-number">${row.rank}</span><div><div class="student-name">${escapeHtml(row.studentName)}</div><div class="meta">${row.totalPoints} 积分 · L${row.level} ${escapeHtml(row.levelName)}${state.scope==="camp"?` · ${escapeHtml(row.className)}`:""}</div></div></article>`;}
+function podiumCard(row){return `<article class="podium-card level-${row.level}" data-rank="${row.rank}"><div class="student-name">${escapeHtml(row.studentName)}</div><div class="score">${row.totalPoints} 积分</div></article>`;}
+function nameTile(row){const band=row.rank<=10?"rank-4-10":row.rank<=30?"rank-11-30":"";return `<article class="name-tile ${band} level-${row.level}"><div class="student-name">${escapeHtml(row.studentName)}</div><div class="meta">${row.totalPoints} 积分</div></article>`;}
 function showStatus(message){elements.status.hidden=false;elements.status.textContent=message;elements.podium.hidden=true;elements.wall.hidden=true;}
 function setScope(scope,reload=true){state.scope=scope;document.querySelectorAll("[data-scope]").forEach(button=>button.classList.toggle("active",button.dataset.scope===scope));elements.classField.hidden=scope==="camp";if(reload)loadBoard();}
 
