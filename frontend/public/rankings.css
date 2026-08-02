@@ -42,12 +42,11 @@ main{width:min(1440px,100%);margin:0 auto;padding:30px 28px 48px}
 .score-line{display:flex;align-items:center;justify-content:center;gap:9px;min-height:24px}.score{font-variant-numeric:tabular-nums;color:#4e5c66;font-weight:700}
 .trend{display:inline-flex;align-items:center;min-width:28px;font-size:12px;font-weight:900;font-variant-numeric:tabular-nums}.trend-up{color:#c43b35}.trend-down{color:#16835c}.trend-same{color:#87939b}
 .name-wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
-.name-tile{position:relative;min-height:118px;padding:16px 14px;display:grid;grid-template-columns:34px 46px minmax(0,1fr);align-items:center;gap:10px;text-align:left;border:1px solid #dce3e6;border-radius:7px;background:#fff;overflow:visible}
+.name-tile{position:relative;min-height:124px;padding:16px 14px;display:grid;grid-template-columns:34px 60px minmax(0,1fr);align-items:center;gap:12px;text-align:left;border:1px solid #dce3e6;border-radius:7px;background:#fff;overflow:visible}
 .rank-badge{align-self:start;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#eef2f3;color:#52616b;font-size:13px;font-weight:900;font-variant-numeric:tabular-nums}
-.student-copy{min-width:0}.name-tile .student-name{margin:0 0 6px;font-size:20px}.name-tile .score-line{justify-content:flex-start}
-.name-tile.rank-4-10 .student-name{font-size:32px}
-.name-tile.rank-11-30 .student-name{font-size:26px}
-.name-tile.long-name .student-name{font-size:20px}
+.name-tile .avatar{width:60px;height:60px;font-size:18px}
+.student-copy{min-width:0}.name-tile .student-name{margin:0 0 6px;font-size:22px}.name-tile .score-line{justify-content:flex-start}
+.name-tile.long-name .student-name{font-size:18px}
 .name-tile .meta{color:#697680;font-size:12px;font-variant-numeric:tabular-nums}
 .level-1 .student-name{color:#59636d;text-shadow:0 1px 0 #fff}
 .level-2 .student-name{color:#a45f37;text-shadow:0 1px 0 #f7d3bf}
@@ -82,7 +81,7 @@ body.is-fullscreen .admin-panel,body.is-fullscreen footer{display:none}
   .ranking-toolbar{align-items:stretch;flex-wrap:wrap;padding:12px}.ranking-toolbar label{flex:1 1 150px}.ranking-toolbar select{width:100%;min-width:0}.segments{flex:1 1 180px}.segments button{flex:1}.command-button{flex:0 0 auto}
   main{padding:38px 12px 36px}.podium{grid-template-columns:1fr;gap:24px;margin-bottom:26px}.podium-card,.podium-card[data-rank]{min-height:200px;order:initial;padding:38px 18px 20px}.podium-card[data-rank="1"]{order:1}.podium-card[data-rank="2"]{order:2}.podium-card[data-rank="3"]{order:3}
   .podium-card[data-rank="1"] .student-name{font-size:36px}.podium-card[data-rank="2"] .student-name{font-size:32px}.podium-card[data-rank="3"] .student-name{font-size:28px}
-  .name-wall{grid-template-columns:repeat(2,minmax(0,1fr))}.name-tile{min-height:112px;grid-template-columns:30px 40px minmax(0,1fr);gap:8px;padding:12px}.name-tile .avatar{width:40px;height:40px;font-size:13px}.name-tile.rank-4-10 .student-name{font-size:25px}.name-tile.rank-11-30 .student-name{font-size:22px}.name-tile .student-name{font-size:18px}
+  .name-wall{grid-template-columns:repeat(2,minmax(0,1fr))}.name-tile{min-height:116px;grid-template-columns:30px 56px minmax(0,1fr);gap:10px;padding:12px}.name-tile .avatar{width:56px;height:56px;font-size:17px}.name-tile .student-name{font-size:20px}
   .podium-card[data-rank].long-name .student-name{font-size:24px}.name-tile.long-name .student-name{font-size:18px}
   .my-rank-inner{padding:8px 12px;gap:8px;flex-wrap:wrap}.my-rank-title{font-size:13px}.my-rank-inner select{height:34px;max-width:calc(100% - 76px);flex:1}.my-rank-content{flex:1 1 100%;gap:8px}.my-rank-content .avatar{width:36px;height:36px}.my-motivation{margin-left:auto;font-size:12px}
   .admin-tools{grid-template-columns:1fr}.admin-panel{padding-inline:16px}#importForm{grid-template-columns:1fr}#importForm input[type="file"]{grid-column:auto}
