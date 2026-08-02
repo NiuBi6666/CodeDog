@@ -1,5 +1,6 @@
 package cn.codedog.ranking;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 public record RankingPayload(String campId, String campName, List<ClassData> classes) {
   public record ClassData(String classId, String className, List<LessonData> lessons) {}
@@ -15,8 +16,9 @@ public record RankingPayload(String campId, String campName, List<ClassData> cla
   public record CampOption(String id, String name, List<ClassOption> classes) {}
   public record ClassOption(String id, String name) {}
   public record Board(String campId, String campName, String classId, String className, String scope,
-                      int studentCount, Instant updatedAt, List<Entry> rankings) {}
+                      int studentCount, Instant updatedAt, LocalDate trendBaselineDate, List<Entry> rankings) {}
   public record Entry(int rank, String studentId, String studentName, String classId, String className,
                       int totalPoints, int completionPoints, int inclassPoints, int homeworkPoints,
-                      int lessonCount, int level, String levelName) {}
+                      int lessonCount, int level, String levelName, Instant scoreReachedAt,
+                      double accuracyRate, Integer previousRank, int rankChange, String trend) {}
 }

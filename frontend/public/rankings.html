@@ -50,6 +50,17 @@
     </div>
   </details>
 
+  <div id="scorePopover" class="score-popover" role="tooltip" hidden></div>
+  <aside id="myRankBar" class="my-rank-bar" aria-label="我的排名" hidden>
+    <div class="my-rank-inner">
+      <strong class="my-rank-title">我的排名</strong>
+      <select id="myStudentSelect" aria-label="选择我的姓名">
+        <option value="">选择姓名</option>
+      </select>
+      <div id="myRankContent" class="my-rank-content" hidden></div>
+    </div>
+  </aside>
+
   <footer><span id="lastUpdated">尚未同步</span><span>每 60 秒自动刷新</span></footer>
   <script type="module" src="/rankings.js"></script>
 </body>
