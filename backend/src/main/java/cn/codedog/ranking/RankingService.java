@@ -199,11 +199,27 @@ public class RankingService {
   }
 
   public String authenticateToken(String authorization) {
-    if (authorization==null || !authorization.regionMatches(true,0,"Bearer ",0,7)) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"缺少扩展设备令牌");
-    String hash=sha256(authorization.substring(7).trim());
+    String hash=deviceTokenHash(authorization);
     List<String> owners=jdbc.query("SELECT owner_username FROM ranking_extension_devices WHERE token_hash=? AND revoked_at IS NULL",(rs,n)->rs.getString(1),hash);
     if (owners.isEmpty()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"扩展设备令牌无效或已撤销");
     jdbc.update("UPDATE ranking_extension_devices SET last_seen_at=CURRENT_TIMESTAMP(6) WHERE token_hash=?",hash); return owners.getFirst();
+  }
+  public RankingPayload.ExtensionSession session(String authorization) {
+    String hash=deviceTokenHash(authorization);
+    authenticateToken(authorization);
+    List<RankingPayload.ExtensionSession> values=jdbc.query("""
+      SELECT d.id,d.owner_username,u.teacher_public_id,m.crm_teacher_id
+      FROM ranking_extension_devices d
+      JOIN users u ON u.username=d.owner_username
+      LEFT JOIN ranking_teacher_mappings m ON m.owner_username=d.owner_username
+      WHERE d.token_hash=? AND d.revoked_at IS NULL
+      """,(rs,n)->new RankingPayload.ExtensionSession(rs.getLong(1),rs.getString(2),rs.getString(3),rs.getString(4)),hash);
+    if(values.isEmpty())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"扩展设备令牌无效或已撤销");
+    return values.getFirst();
+  }
+  private String deviceTokenHash(String authorization){
+    if(authorization==null || !authorization.regionMatches(true,0,"Bearer ",0,7) || authorization.substring(7).trim().isEmpty())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"缺少扩展设备令牌");
+    return sha256(authorization.substring(7).trim());
   }
   public List<RankingPayload.Device> devices(String owner) {
     return jdbc.query("SELECT id,device_name,owner_username,created_at,last_seen_at,revoked_at FROM ranking_extension_devices WHERE owner_username=? ORDER BY created_at DESC",(rs,n)->new RankingPayload.Device(rs.getLong(1),rs.getString(2),rs.getString(3),rs.getTimestamp(4).toInstant(),instant(rs.getTimestamp(5)),rs.getTimestamp(6)!=null),owner);

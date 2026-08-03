@@ -227,6 +227,27 @@ class RbacIntegrationTest {
     }
 
     @Test
+    void extensionStatusSupportsCrmCorsWithoutAuthentication() throws Exception {
+        mvc.perform(options("/api/public/rankings/extension/status")
+                .header("Origin", "https://sk-crm.codemao.cn")
+                .header("Access-Control-Request-Method", "GET"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "https://sk-crm.codemao.cn"))
+            .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("GET")));
+
+        mvc.perform(get("/api/public/rankings/extension/status")
+                .header("Origin", "https://sk-crm.codemao.cn"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "https://sk-crm.codemao.cn"))
+            .andExpect(jsonPath("$.ok").value(true))
+            .andExpect(jsonPath("$.serverTime").isString());
+
+        mvc.perform(get("/api/public/rankings/extension/session"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error").value("缺少扩展设备令牌"));
+    }
+
+    @Test
     void administratorMapsCrmTeacherAndBootstrapUsesMappedOwner() throws Exception {
         String username = uniqueUsername("mapped");
         User member = users.saveAndFlush(user(username, "member-password-123"));

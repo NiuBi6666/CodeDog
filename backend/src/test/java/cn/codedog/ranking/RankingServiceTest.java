@@ -181,6 +181,28 @@ class RankingServiceTest {
   }
 
   @Test
+  void restoresMappedSessionFromLegacyDeviceToken() {
+    RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 旧设备");
+
+    RankingPayload.ExtensionSession session = service.session("Bearer " + connection.token());
+
+    assertThat(session.deviceId()).isEqualTo(connection.deviceId());
+    assertThat(session.username()).isEqualTo("admin");
+    assertThat(session.teacherId()).isEqualTo("CD-ADMIN001");
+    assertThat(session.crmTeacherId()).isEqualTo("29413");
+  }
+
+  @Test
+  void rejectsRevokedDeviceSession() {
+    RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 已撤销设备");
+    jdbc.update("UPDATE ranking_extension_devices SET revoked_at=CURRENT_TIMESTAMP WHERE id=?", connection.deviceId());
+
+    assertThatThrownBy(() -> service.session("Bearer " + connection.token()))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(401));
+  }
+
+  @Test
   void rejectsUnknownCrmTeacher() {
     assertThatThrownBy(() -> service.bootstrap("unknown", "Chrome 测试设备"))
       .isInstanceOf(ResponseStatusException.class)

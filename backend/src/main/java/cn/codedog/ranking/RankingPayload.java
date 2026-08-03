@@ -12,6 +12,8 @@ public record RankingPayload(String campId, String campName, List<ClassData> cla
   public record PairingCode(String code, Instant expiresAt) {}
   public record Device(long id, String deviceName, String owner, Instant createdAt, Instant lastSeenAt, boolean revoked) {}
   public record Connection(String token, long deviceId, String username, String teacherId, String crmTeacherId) {}
+  public record ExtensionStatus(boolean ok, Instant serverTime) {}
+  public record ExtensionSession(long deviceId, String username, String teacherId, String crmTeacherId) {}
   public record Catalog(String teacherId, String teacherName, List<CampOption> camps, Instant updatedAt) {}
   public record CampOption(String id, String name, List<ClassOption> classes) {}
   public record ClassOption(String id, String name) {}
