@@ -34,6 +34,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-public_doc}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       LEGACY_IMPORT_ENABLED: ${LEGACY_IMPORT_ENABLED:-false}
+      RANKING_DEFAULT_CRM_TEACHER_ID: ${RANKING_DEFAULT_CRM_TEACHER_ID:-}
     volumes:
       - ./migration:/migration:ro
     depends_on:

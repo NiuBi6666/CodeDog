@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -12,6 +13,7 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RankingServiceTest {
   private JdbcTemplate jdbc;
@@ -23,32 +25,62 @@ class RankingServiceTest {
       "jdbc:h2:mem:ranking-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE", "sa", "");
     jdbc = new JdbcTemplate(dataSource);
     jdbc.execute("""
+      CREATE TABLE users (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        teacher_public_id VARCHAR(11) NOT NULL UNIQUE,
+        is_admin BOOLEAN NOT NULL
+      )
+      """);
+    jdbc.execute("""
+      CREATE TABLE ranking_teacher_mappings (
+        crm_teacher_id VARCHAR(100) PRIMARY KEY,
+        owner_username VARCHAR(50) NOT NULL UNIQUE
+      )
+      """);
+    jdbc.execute("""
+      CREATE TABLE ranking_extension_devices (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        owner_username VARCHAR(50) NOT NULL,
+        device_name VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_seen_at TIMESTAMP(6),
+        revoked_at TIMESTAMP(6)
+      )
+      """);
+    jdbc.execute("""
       CREATE TABLE ranking_camps (
-        camp_id VARCHAR(100) PRIMARY KEY,
+        owner_username VARCHAR(50) NOT NULL,
+        camp_id VARCHAR(100) NOT NULL,
         camp_name VARCHAR(160) NOT NULL,
-        updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (owner_username, camp_id)
       )
       """);
     jdbc.execute("""
       CREATE TABLE ranking_classes (
+        owner_username VARCHAR(50) NOT NULL,
         camp_id VARCHAR(100) NOT NULL,
         class_id VARCHAR(100) NOT NULL,
         class_name VARCHAR(160) NOT NULL,
-        PRIMARY KEY (camp_id, class_id)
+        PRIMARY KEY (owner_username, camp_id, class_id)
       )
       """);
     jdbc.execute("""
       CREATE TABLE ranking_students (
+        owner_username VARCHAR(50) NOT NULL,
         camp_id VARCHAR(100) NOT NULL,
         class_id VARCHAR(100) NOT NULL,
         student_id VARCHAR(100) NOT NULL,
         student_name VARCHAR(100) NOT NULL,
         score_reached_at TIMESTAMP(6) NOT NULL,
-        PRIMARY KEY (camp_id, class_id, student_id)
+        PRIMARY KEY (owner_username, camp_id, class_id, student_id)
       )
       """);
     jdbc.execute("""
       CREATE TABLE ranking_lesson_results (
+        owner_username VARCHAR(50) NOT NULL,
         camp_id VARCHAR(100) NOT NULL,
         class_id VARCHAR(100) NOT NULL,
         lesson_id VARCHAR(100) NOT NULL,
@@ -58,34 +90,39 @@ class RankingServiceTest {
         homework_points INT NOT NULL,
         total_points INT NOT NULL,
         updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (camp_id, class_id, lesson_id, student_id)
+        PRIMARY KEY (owner_username, camp_id, class_id, lesson_id, student_id)
       )
       """);
     jdbc.execute("""
       CREATE TABLE ranking_daily_snapshots (
         snapshot_date DATE NOT NULL,
+        owner_username VARCHAR(50) NOT NULL,
         camp_id VARCHAR(100) NOT NULL,
         scope_type VARCHAR(10) NOT NULL,
         class_id VARCHAR(100) NOT NULL,
         student_id VARCHAR(100) NOT NULL,
         rank_no INT NOT NULL,
         total_points INT NOT NULL,
-        PRIMARY KEY (snapshot_date, camp_id, scope_type, class_id, student_id)
+        PRIMARY KEY (snapshot_date, owner_username, camp_id, scope_type, class_id, student_id)
       )
       """);
-    jdbc.update("INSERT INTO ranking_camps(camp_id,camp_name) VALUES('camp','测试营')");
-    jdbc.update("INSERT INTO ranking_classes(camp_id,class_id,class_name) VALUES('camp','class','测试班')");
+    jdbc.update("INSERT INTO users(username,teacher_public_id,is_admin) VALUES('admin','CD-ADMIN001',TRUE)");
+    jdbc.update("INSERT INTO users(username,teacher_public_id,is_admin) VALUES('teacher-b','CD-TEACHER2',FALSE)");
+    jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES('29413','admin')");
+    jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES('555','teacher-b')");
+    addScope("admin", "测试营", "测试班");
+    addScope("teacher-b", "B老师营", "B老师班");
     service = new RankingService(jdbc);
   }
 
   @Test
   void resolvesTiesByReachedTimeThenCombinedAssignmentAccuracy() {
-    addStudent("early-low", "先到", "2026-01-01T10:00:00Z", 100, 50, 50);
-    addStudent("late-high", "后到", "2026-01-01T11:00:00Z", 0, 100, 100);
-    addStudent("a-low", "低正确率", "2026-01-01T12:00:00Z", 100, 25, 25);
-    addStudent("z-high", "高正确率", "2026-01-01T12:00:00Z", 0, 75, 75);
+    addStudent("admin", "early-low", "先到", "2026-01-01T10:00:00Z", 100, 50, 50);
+    addStudent("admin", "late-high", "后到", "2026-01-01T11:00:00Z", 0, 100, 100);
+    addStudent("admin", "a-low", "低正确率", "2026-01-01T12:00:00Z", 100, 25, 25);
+    addStudent("admin", "z-high", "高正确率", "2026-01-01T12:00:00Z", 0, 75, 75);
 
-    RankingPayload.Board board = service.board("camp", "class", "class");
+    RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
 
     assertThat(board.rankings()).extracting(RankingPayload.Entry::studentId)
       .containsExactly("early-low", "late-high", "z-high", "a-low");
@@ -97,16 +134,16 @@ class RankingServiceTest {
 
   @Test
   void reportsUpDownSameAndNewAgainstMostRecentEarlierSnapshot() {
-    addStudent("up", "上升", "2026-01-01T10:00:00Z", 200, 100, 100);
-    addStudent("down", "下降", "2026-01-01T10:00:00Z", 100, 100, 100);
-    addStudent("same", "持平", "2026-01-01T10:00:00Z", 0, 100, 100);
-    addStudent("new", "新增", "2026-01-01T10:00:00Z", 0, 50, 50);
+    addStudent("admin", "up", "上升", "2026-01-01T10:00:00Z", 200, 100, 100);
+    addStudent("admin", "down", "下降", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudent("admin", "same", "持平", "2026-01-01T10:00:00Z", 0, 100, 100);
+    addStudent("admin", "new", "新增", "2026-01-01T10:00:00Z", 0, 50, 50);
     LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
-    addSnapshot(yesterday, "up", 2, 300);
-    addSnapshot(yesterday, "down", 1, 300);
-    addSnapshot(yesterday, "same", 3, 200);
+    addSnapshot("admin", yesterday, "up", 2, 300);
+    addSnapshot("admin", yesterday, "down", 1, 300);
+    addSnapshot("admin", yesterday, "same", 3, 200);
 
-    RankingPayload.Board board = service.board("camp", "class", "class");
+    RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
 
     assertThat(board.trendBaselineDate()).isEqualTo(yesterday);
     assertTrend(board, "up", 2, 1, "UP");
@@ -115,16 +152,56 @@ class RankingServiceTest {
     assertTrend(board, "new", null, 0, "NEW");
   }
 
-  private void addStudent(String id, String name, String reachedAt, int completion, int inclass, int homework) {
-    jdbc.update("INSERT INTO ranking_students(camp_id,class_id,student_id,student_name,score_reached_at) VALUES('camp','class',?,?,?)",
-      id, name, Timestamp.from(Instant.parse(reachedAt)));
-    jdbc.update("INSERT INTO ranking_lesson_results(camp_id,class_id,lesson_id,student_id,completion_points,inclass_points,homework_points,total_points) VALUES('camp','class','lesson',?,?,?,?,?)",
-      id, completion, inclass, homework, completion + inclass + homework);
+  @Test
+  void isolatesIdenticalRankingKeysByMappedTeacher() {
+    addStudent("admin", "same-student", "A老师学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudent("teacher-b", "same-student", "B老师学员", "2026-01-01T10:00:00Z", 10, 20, 30);
+
+    RankingPayload.Board boardA = service.board("CD-ADMIN001", "camp", "class", "class");
+    RankingPayload.Board boardB = service.board("CD-TEACHER2", "camp", "class", "class");
+
+    assertThat(boardA.rankings()).singleElement().satisfies(row -> {
+      assertThat(row.studentName()).isEqualTo("A老师学员");
+      assertThat(row.totalPoints()).isEqualTo(300);
+    });
+    assertThat(boardB.rankings()).singleElement().satisfies(row -> {
+      assertThat(row.studentName()).isEqualTo("B老师学员");
+      assertThat(row.totalPoints()).isEqualTo(60);
+    });
   }
 
-  private void addSnapshot(LocalDate date, String studentId, int rank, int points) {
-    jdbc.update("INSERT INTO ranking_daily_snapshots(snapshot_date,camp_id,scope_type,class_id,student_id,rank_no,total_points) VALUES(?,'camp','class','class',?,?,?)",
-      date, studentId, rank, points);
+  @Test
+  void bootstrapsMappedCrmTeacherAndAuthenticatesIssuedToken() {
+    RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 测试设备");
+
+    assertThat(connection.username()).isEqualTo("admin");
+    assertThat(connection.teacherId()).isEqualTo("CD-ADMIN001");
+    assertThat(connection.crmTeacherId()).isEqualTo("29413");
+    assertThat(service.authenticateToken("Bearer " + connection.token())).isEqualTo("admin");
+  }
+
+  @Test
+  void rejectsUnknownCrmTeacher() {
+    assertThatThrownBy(() -> service.bootstrap("unknown", "Chrome 测试设备"))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(404));
+  }
+
+  private void addScope(String owner, String campName, String className) {
+    jdbc.update("INSERT INTO ranking_camps(owner_username,camp_id,camp_name) VALUES(?,'camp',?)", owner, campName);
+    jdbc.update("INSERT INTO ranking_classes(owner_username,camp_id,class_id,class_name) VALUES(?,'camp','class',?)", owner, className);
+  }
+
+  private void addStudent(String owner, String id, String name, String reachedAt, int completion, int inclass, int homework) {
+    jdbc.update("INSERT INTO ranking_students(owner_username,camp_id,class_id,student_id,student_name,score_reached_at) VALUES(?,'camp','class',?,?,?)",
+      owner, id, name, Timestamp.from(Instant.parse(reachedAt)));
+    jdbc.update("INSERT INTO ranking_lesson_results(owner_username,camp_id,class_id,lesson_id,student_id,completion_points,inclass_points,homework_points,total_points) VALUES(?,'camp','class','lesson',?,?,?,?,?)",
+      owner, id, completion, inclass, homework, completion + inclass + homework);
+  }
+
+  private void addSnapshot(String owner, LocalDate date, String studentId, int rank, int points) {
+    jdbc.update("INSERT INTO ranking_daily_snapshots(snapshot_date,owner_username,camp_id,scope_type,class_id,student_id,rank_no,total_points) VALUES(?,?,'camp','class','class',?,?,?)",
+      date, owner, studentId, rank, points);
   }
 
   private void assertTrend(RankingPayload.Board board, String studentId, Integer previousRank, int change, String trend) {

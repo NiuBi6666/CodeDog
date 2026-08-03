@@ -78,10 +78,10 @@ public class AuthController {
             users.saveAndFlush(user);
         } catch (DataIntegrityViolationException error) {
             audit.record("registration_failed:" + username, request);
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名已存在");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名或教师 ID 已存在");
         }
         audit.record("registration_succeeded:" + username, request);
-        return new RegistrationResponse(true, username);
+        return new RegistrationResponse(true, username, user.getTeacherPublicId());
     }
 
     @PostMapping("/login")
@@ -126,7 +126,7 @@ public class AuthController {
 
     private AuthResponse profile(String username) {
         User user = users.findByUsername(username).orElseThrow();
-        return new AuthResponse(user.getUsername(), user.isAdmin(), permissions.permissions(user));
+        return new AuthResponse(user.getUsername(), user.getTeacherPublicId(), user.isAdmin(), permissions.permissions(user));
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
@@ -136,8 +136,8 @@ public class AuthController {
         String username,
         @NotBlank @Size(min = 8, max = 72, message = "密码长度需为 8-72 个字符") String password,
         @NotBlank String confirmation) {}
-    public record RegistrationResponse(boolean ok, String username) {}
-    public record AuthResponse(String username, boolean admin, Set<String> permissions) {}
+    public record RegistrationResponse(boolean ok, String username, String teacherId) {}
+    public record AuthResponse(String username, String teacherId, boolean admin, Set<String> permissions) {}
     public record PasswordRequest(@NotBlank String currentPassword,
                                   @NotBlank @Size(min = 12, max = 72, message = "新密码长度需为 12-72 个字符") String newPassword,
                                   @NotBlank String confirmation) {}

@@ -3225,3 +3225,73 @@ a {
     justify-content: center;
   }
 }
+
+.admin-profile .admin-teacher-id {
+  display: block;
+  margin: -2px 0 5px;
+  color: #78cfc6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.teacher-public-id {
+  margin-top: 4px;
+  color: #547078;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mapping-value {
+  color: #17643f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.permission-actions {
+  flex-wrap: wrap;
+}
+
+.mapping-dialog {
+  width: min(100%, 500px);
+}
+
+.mapping-form {
+  padding: 24px 20px 30px;
+}
+
+.mapping-form label {
+  display: grid;
+  gap: 8px;
+  color: #35474d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mapping-form input {
+  width: 100%;
+  min-height: 43px;
+  padding: 9px 11px;
+  border: 1px solid #cbd5d2;
+  border-radius: 6px;
+  color: #17211f;
+  background: #ffffff;
+  outline: none;
+}
+
+.mapping-form input:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.13);
+}
+
+@media (max-width: 760px) {
+  .permission-actions {
+    min-width: 144px;
+  }
+
+  .mapping-form {
+    padding: 20px 14px 28px;
+  }
+}

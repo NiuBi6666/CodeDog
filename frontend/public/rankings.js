@@ -1,17 +1,18 @@
 import{avatarText,pointsToPass,trendView}from"/ranking-utils.js";
 
 const elements={camp:document.querySelector("#campSelect"),class:document.querySelector("#classSelect"),classField:document.querySelector("#classField"),status:document.querySelector("#status"),podium:document.querySelector("#podium"),wall:document.querySelector("#nameWall"),subtitle:document.querySelector("#boardSubtitle"),updated:document.querySelector("#lastUpdated"),popover:document.querySelector("#scorePopover"),myBar:document.querySelector("#myRankBar"),mySelect:document.querySelector("#myStudentSelect"),myContent:document.querySelector("#myRankContent")};
-const query=new URLSearchParams(location.search),state={catalog:[],scope:query.get("scope")==="camp"?"camp":"class",timer:null,rows:[],myStudentId:query.get("student")||"",pinnedId:null};
+const query=new URLSearchParams(location.search),state={catalog:[],scope:query.get("scope")==="camp"?"camp":"class",teacherId:query.get("teacher")||query.get("teacherId")||"",timer:null,rows:[],myStudentId:query.get("student")||"",pinnedId:null};
 const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]);
 
 async function request(path,options={}){const response=await fetch(path,{credentials:"same-origin",...options});const type=response.headers.get("content-type")||"";const data=type.includes("json")?await response.json():null;if(!response.ok)throw new Error(data?.error||"请求失败");return data;}
 function option(value,label){return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;}
-function updateQuery(){const params=new URLSearchParams();if(elements.camp.value)params.set("camp",elements.camp.value);if(state.scope==="class"&&elements.class.value)params.set("class",elements.class.value);if(state.myStudentId)params.set("student",state.myStudentId);params.set("scope",state.scope);history.replaceState(null,"",`${location.pathname}?${params}`);}
+function updateQuery(){const params=new URLSearchParams();if(state.teacherId)params.set("teacher",state.teacherId);if(elements.camp.value)params.set("camp",elements.camp.value);if(state.scope==="class"&&elements.class.value)params.set("class",elements.class.value);if(state.myStudentId)params.set("student",state.myStudentId);params.set("scope",state.scope);history.replaceState(null,"",`${location.pathname}?${params}`);}
 function selectedCamp(){return state.catalog.find(item=>item.id===elements.camp.value);}
 function populateClasses(preferred=""){const classes=selectedCamp()?.classes||[];elements.class.innerHTML=classes.map(item=>option(item.id,item.name)).join("");if(classes.some(item=>item.id===preferred))elements.class.value=preferred;elements.classField.hidden=state.scope==="camp";}
 
 async function loadCatalog(){
-  const result=await request("/api/public/rankings/catalog");state.catalog=result.camps||[];
+  const catalogParams=new URLSearchParams();if(state.teacherId)catalogParams.set("teacherId",state.teacherId);
+  const result=await request(`/api/public/rankings/catalog${catalogParams.size?`?${catalogParams}`:""}`);state.teacherId=result.teacherId||state.teacherId;state.catalog=result.camps||[];
   if(!state.catalog.length){showStatus("暂无排行榜数据");return;}
   const params=new URLSearchParams(location.search),preferredCamp=params.get("camp")||"",preferredClass=params.get("class")||"";
   elements.camp.innerHTML=state.catalog.map(item=>option(item.id,item.name)).join("");
@@ -23,7 +24,7 @@ async function loadBoard(){
   if(!elements.camp.value||state.scope==="class"&&!elements.class.value){showStatus("暂无可展示的班级");return;}
   elements.status.classList.remove("error");showStatus("正在更新排行榜…");updateQuery();
   try{
-    const params=new URLSearchParams({campId:elements.camp.value,scope:state.scope});if(state.scope==="class")params.set("classId",elements.class.value);
+    const params=new URLSearchParams({campId:elements.camp.value,scope:state.scope,teacherId:state.teacherId});if(state.scope==="class")params.set("classId",elements.class.value);
     const board=await request(`/api/public/rankings?${params}`);renderBoard(board);
   }catch(error){elements.status.classList.add("error");showStatus(error.message||"排行榜加载失败");}
 }
@@ -58,7 +59,7 @@ document.querySelector("main").addEventListener("keydown",event=>{const card=car
 document.addEventListener("click",event=>{if(!cardFrom(event)&&!elements.popover.contains(event.target))hidePopover(true);});
 addEventListener("resize",()=>{if(!elements.popover.hidden){const id=state.pinnedId;if(!id){hidePopover(true);return;}const card=document.querySelector(`.rank-card[data-student-id="${CSS.escape(id)}"]`);if(card)positionPopover(card);else hidePopover(true);}});
 
-function storageKey(campId){return`codedog-ranking-student:${campId}`;}
+function storageKey(campId){return`codedog-ranking-student:${state.teacherId}:${campId}`;}
 function populateMyRank(campId,rows){
   const stored=localStorage.getItem(storageKey(campId))||"",preferred=state.myStudentId||stored;
   elements.mySelect.innerHTML=`<option value="">选择姓名</option>${rows.map(row=>option(row.studentId,`${row.studentName} · 第 ${row.rank} 名`)).join("")}`;

@@ -54,3 +54,5 @@ codedog:
     sso-url: ${QUESTIONNAIRE_SSO_URL:https://www.codedog.online/tduck-api/codedog/sso}
   codemao:
     session-cookie: ${CODEMAO_SESSION_COOKIE:}
+  ranking:
+    default-crm-teacher-id: ${RANKING_DEFAULT_CRM_TEACHER_ID:}

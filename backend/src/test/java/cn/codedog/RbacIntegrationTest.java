@@ -4,10 +4,12 @@ import cn.codedog.model.User;
 import cn.codedog.repository.UserRepository;
 import cn.codedog.security.PermissionCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +32,30 @@ class RbacIntegrationTest {
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
     @Autowired ObjectMapper json;
+    @Autowired JdbcTemplate jdbc;
+
+    @BeforeEach
+    void ensureRankingMappingTables() {
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS ranking_teacher_mappings (
+              crm_teacher_id VARCHAR(100) PRIMARY KEY,
+              owner_username VARCHAR(50) NOT NULL UNIQUE,
+              created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """);
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS ranking_extension_devices (
+              id BIGINT AUTO_INCREMENT PRIMARY KEY,
+              token_hash CHAR(64) NOT NULL UNIQUE,
+              owner_username VARCHAR(50) NOT NULL,
+              device_name VARCHAR(100) NOT NULL,
+              created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              last_seen_at TIMESTAMP(6),
+              revoked_at TIMESTAMP(6)
+            )
+            """);
+    }
 
     @Test
     void registrationCreatesMinimumPermissionUser() throws Exception {
@@ -198,6 +224,48 @@ class RbacIntegrationTest {
                     {"permissions":[]}
                     """))
             .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void administratorMapsCrmTeacherAndBootstrapUsesMappedOwner() throws Exception {
+        String username = uniqueUsername("mapped");
+        User member = users.saveAndFlush(user(username, "member-password-123"));
+        MockHttpSession admin = login("admin", "test-only-password");
+        String crmTeacherId = "crm" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+
+        mvc.perform(put("/api/admin/users/{id}/crm-teacher", member.getId()).session(admin).with(csrf())
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"crmTeacherId":"%s"}
+                    """.formatted(crmTeacherId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.teacherId").value(member.getTeacherPublicId()))
+            .andExpect(jsonPath("$.crmTeacherId").value(crmTeacherId));
+
+        mvc.perform(post("/api/public/rankings/extension/bootstrap")
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"crmTeacherId":"%s","deviceName":"integration-test"}
+                    """.formatted(crmTeacherId)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.username").value(username))
+            .andExpect(jsonPath("$.teacherId").value(member.getTeacherPublicId()));
+
+        mvc.perform(put("/api/admin/users/{id}/crm-teacher", member.getId()).session(admin).with(csrf())
+                .contentType(APPLICATION_JSON)
+                .content("{\"crmTeacherId\":null}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.crmTeacherId").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void crmTeacherMappingRequiresAdministrator() throws Exception {
+        String username = uniqueUsername("nomap");
+        User member = users.saveAndFlush(user(username, "member-password-123"));
+        MockHttpSession session = login(username, "member-password-123");
+        mvc.perform(put("/api/admin/users/{id}/crm-teacher", member.getId()).session(session).with(csrf())
+                .contentType(APPLICATION_JSON).content("{\"crmTeacherId\":\"29413\"}"))
+            .andExpect(status().isForbidden());
     }
 
     private MockHttpSession login(String username, String password) throws Exception {

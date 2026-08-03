@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { Save, Search, ShieldCheck, X } from "@lucide/vue";
+import { Link2, Save, Search, ShieldCheck, Unlink, X } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
 import { formatDateTime } from "../utils";
@@ -13,10 +13,14 @@ const saving = ref(false);
 const keyword = ref("");
 const selected = ref(null);
 const draft = ref(new Set());
+const mappingSelected = ref(null);
+const mappingDraft = ref("");
+const mappingSaving = ref(false);
 
 const filteredUsers = computed(() => {
   const value = keyword.value.trim().toLowerCase();
-  return value ? users.value.filter((user) => user.username.toLowerCase().includes(value)) : users.value;
+  return value ? users.value.filter((user) => [user.username, user.teacherId, user.crmTeacherId]
+    .some((item) => String(item || "").toLowerCase().includes(value))) : users.value;
 });
 
 async function load() {
@@ -48,6 +52,17 @@ function closePermissions() {
   draft.value = new Set();
 }
 
+function openMapping(user) {
+  mappingSelected.value = user;
+  mappingDraft.value = user.crmTeacherId || "";
+}
+
+function closeMapping() {
+  if (mappingSaving.value) return;
+  mappingSelected.value = null;
+  mappingDraft.value = "";
+}
+
 function toggle(group, permission) {
   const next = new Set(draft.value);
   const page = group.permissions.find((item) => item.type === "page");
@@ -72,6 +87,10 @@ function toggleGroup(group) {
   draft.value = next;
 }
 
+function replaceUser(updated) {
+  users.value = users.value.map((user) => user.id === updated.id ? updated : user);
+}
+
 async function savePermissions() {
   if (!selected.value) return;
   saving.value = true;
@@ -81,7 +100,7 @@ async function savePermissions() {
       method: "PUT",
       body: jsonBody({ permissions: [...draft.value] })
     });
-    users.value = users.value.map((user) => user.id === updated.id ? updated : user);
+    replaceUser(updated);
     notify("用户权限已更新");
     closePermissions();
   } catch (failure) {
@@ -91,35 +110,79 @@ async function savePermissions() {
   }
 }
 
+async function saveMapping(clear = false) {
+  if (!mappingSelected.value) return;
+  mappingSaving.value = true;
+  error.value = "";
+  try {
+    const value = clear ? null : mappingDraft.value.trim() || null;
+    const updated = await api(`/admin/users/${mappingSelected.value.id}/crm-teacher`, {
+      method: "PUT",
+      body: jsonBody({ crmTeacherId: value })
+    });
+    replaceUser(updated);
+    notify(value ? "CRM 教师已绑定" : "CRM 教师绑定已清除");
+    closeMapping();
+  } catch (failure) {
+    error.value = failure.message;
+  } finally {
+    mappingSaving.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
 <template>
   <AdminLayout page-title="用户与权限" active-page="users">
     <div class="admin-page-heading">
-      <div><h1>用户与权限</h1><p>共 {{ users.length }} 个账号，权限控制精细到页面、数据和操作按钮</p></div>
+      <div><h1>用户与权限</h1><p>共 {{ users.length }} 个账号</p></div>
     </div>
     <div v-if="error" class="notice notice-error">{{ error }}</div>
     <div class="permission-user-toolbar">
-      <label><Search :size="16"/><input v-model.trim="keyword" type="search" placeholder="搜索用户名"></label>
+      <label><Search :size="16"/><input v-model.trim="keyword" type="search" placeholder="搜索用户名或教师 ID"></label>
     </div>
     <div class="document-table-wrap" :aria-busy="loading">
       <table class="document-table permission-user-table">
-        <thead><tr><th>用户名</th><th>账号类型</th><th>已授权</th><th>注册时间</th><th>最近修改</th><th class="actions-column">操作</th></tr></thead>
+        <thead><tr><th>用户</th><th>账号类型</th><th>CRM 教师 ID</th><th>已授权</th><th>最近修改</th><th class="actions-column">操作</th></tr></thead>
         <tbody>
           <tr v-for="user in filteredUsers" :key="user.id">
-            <td><strong>{{ user.username }}</strong><span class="document-id">#{{ user.id }}</span></td>
+            <td><strong>{{ user.username }}</strong><span class="teacher-public-id">{{ user.teacherId }}</span></td>
             <td><span class="status-badge" :class="user.admin ? 'status-normal' : 'status-warning'">{{ user.admin ? "系统管理员" : "普通用户" }}</span></td>
+            <td><span v-if="user.crmTeacherId" class="mapping-value">{{ user.crmTeacherId }}</span><span v-else class="permission-locked">未绑定</span></td>
             <td>{{ user.admin ? "全部权限" : `${user.permissions.length} 项` }}</td>
-            <td>{{ formatDateTime(user.createdAt) }}</td>
             <td>{{ formatDateTime(user.updatedAt) }}</td>
-            <td><button v-if="!user.admin" class="button button-quiet button-small" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button><span v-else class="permission-locked">不可修改</span></td>
+            <td>
+              <div class="button-row permission-actions">
+                <button class="button button-quiet button-small" type="button" @click="openMapping(user)"><Link2 :size="14"/>绑定 CRM</button>
+                <button v-if="!user.admin" class="button button-quiet button-small" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button>
+              </div>
+            </td>
           </tr>
           <tr v-if="loading"><td class="empty-table" colspan="6">正在加载用户</td></tr>
           <tr v-else-if="!filteredUsers.length"><td class="empty-table" colspan="6">没有符合条件的用户</td></tr>
         </tbody>
       </table>
     </div>
+
+    <Teleport to="body">
+      <div v-if="mappingSelected" class="permission-dialog-backdrop" role="presentation">
+        <section class="permission-dialog mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="mapping-dialog-title">
+          <header>
+            <div><h2 id="mapping-dialog-title">绑定 {{ mappingSelected.username }}</h2><p>{{ mappingSelected.teacherId }}</p></div>
+            <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="mappingSaving" @click="closeMapping"><X :size="18"/></button>
+          </header>
+          <form class="mapping-form" @submit.prevent="saveMapping(false)">
+            <label>CRM 教师 ID<input v-model.trim="mappingDraft" maxlength="100" autocomplete="off" placeholder="例如 29413" autofocus></label>
+          </form>
+          <footer>
+            <button v-if="mappingSelected.crmTeacherId" class="button button-quiet" type="button" :disabled="mappingSaving" @click="saveMapping(true)"><Unlink :size="15"/>清除绑定</button>
+            <span v-else></span>
+            <div class="button-row"><button class="button button-quiet" type="button" :disabled="mappingSaving" @click="closeMapping">取消</button><button class="button button-primary" type="button" :disabled="mappingSaving || !mappingDraft.trim()" @click="saveMapping(false)"><Save :size="15"/>{{ mappingSaving ? "保存中" : "保存绑定" }}</button></div>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="selected" class="permission-dialog-backdrop" role="presentation">

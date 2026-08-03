@@ -24,7 +24,14 @@ async function signOut() {
   <div class="admin-app" :class="{ 'sidebar-open': sidebarOpen }" data-admin-shell>
     <aside class="admin-sidebar" aria-label="后台导航">
       <RouterLink class="admin-logo" to="/index"><span class="admin-logo-mark">C</span><span>CodeDog</span></RouterLink>
-      <div class="admin-profile"><span class="admin-avatar">A</span><div><strong>{{ auth.user?.username }}</strong><span><i></i>{{ auth.user?.admin ? "系统管理员" : "普通用户" }}</span></div></div>
+      <div class="admin-profile">
+        <span class="admin-avatar">A</span>
+        <div>
+          <strong>{{ auth.user?.username }}</strong>
+          <small class="admin-teacher-id">{{ auth.user?.teacherId }}</small>
+          <span><i></i>{{ auth.user?.admin ? "系统管理员" : "普通用户" }}</span>
+        </div>
+      </div>
       <nav class="admin-nav">
         <p>功能导航</p>
         <RouterLink v-if="hasPermission('dashboard.view')" :class="{ active: activePage === 'dashboard' }" to="/index"><Home class="nav-icon" :size="17"/><span>首页</span></RouterLink>
