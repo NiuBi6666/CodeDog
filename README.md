@@ -87,3 +87,11 @@ ops/backup.sh 使用一致性事务备份 CodeDog 与 TDuck 数据库、TDuck �
 定制补丁与部署清单位于 integrations/tduck，实际运行环境配置不进入 Git。
 后端基线：TDuckCloud/tduck-survey-form，提交 ea7f0fae7cb0fd998a3284c11addce689350cd69。
 前端基线：TDuckCloud/tduck-front，提交 257932566963fb0a3e70e9d40c837689bc2878c0。
+
+## Student ID service
+
+The CodeMao student ID application is exposed through this HTTPS gateway at:
+
+- https://codedog.online/student-id/
+
+The frontend container joins the external codemao_default network and proxies this path to the CodeMao application container.

@@ -63,6 +63,7 @@ services:
     networks:
       - default
       - questionnaire
+      - codemao-gateway
     healthcheck:
       test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1/healthz"]
       interval: 30s

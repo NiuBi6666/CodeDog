@@ -19,7 +19,7 @@ After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/certbot-venv/bin/certbot renew --quiet
+ExecStart=/opt/certbot-venv/bin/certbot renew --quiet --cert-name codedog.online
 EOF
 
 sudo tee /etc/systemd/system/codedog-certbot-renew.timer >/dev/null <<'EOF'
