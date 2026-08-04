@@ -12,5 +12,10 @@ export function trendView(rankChange,previousRank){
 
 export function pointsToPass(rows,index){
   if(index<=0)return 0;
-  return Math.max(1,Number(rows[index-1].totalPoints)-Number(rows[index].totalPoints)+1);
+  const currentPoints=Number(rows[index].totalPoints);
+  for(let previous=index-1;previous>=0;previous--){
+    const previousPoints=Number(rows[previous].totalPoints);
+    if(previousPoints>currentPoints)return previousPoints-currentPoints+1;
+  }
+  return 0;
 }

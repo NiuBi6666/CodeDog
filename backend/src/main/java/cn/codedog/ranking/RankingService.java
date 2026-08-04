@@ -107,8 +107,9 @@ public class RankingService {
     LocalDate baselineDate = previousSnapshotDate(owner, campId, classId, scope);
     Map<String,Integer> previousRanks = previousRanks(owner, campId, classId, scope, baselineDate);
     List<RankingPayload.Entry> entries = new ArrayList<>();
-    for (AggregateRow row : rows) {
-      int rank = entries.size()+1, level = level(row.totalPoints());
+    for (RankedRow rankedRow : rankRows(rows)) {
+      AggregateRow row = rankedRow.row();
+      int rank = rankedRow.rank(), level = level(row.totalPoints());
       Integer previousRank = previousRanks.get(row.studentId());
       int rankChange = previousRank == null ? 0 : previousRank-rank;
       entries.add(new RankingPayload.Entry(rank, row.studentId(), row.studentName(), row.classId(), row.className(),
@@ -146,9 +147,16 @@ public class RankingService {
   }
   private Map<String,Integer> previousRanks(String owner,String campId,String classId,String scope,LocalDate date) {
     if(date==null)return Map.of(); Map<String,Integer> values=new HashMap<>();
-    jdbc.query("SELECT student_id,rank_no FROM ranking_daily_snapshots WHERE snapshot_date=? AND owner_username=? AND camp_id=? AND scope_type=? AND class_id=?",
-      (rs,n)->Map.entry(rs.getString(1),rs.getInt(2)),date,owner,campId,scope,classId)
-      .forEach(entry->values.put(entry.getKey(),entry.getValue())); return values;
+    List<SnapshotScore> rows=jdbc.query("SELECT student_id,total_points FROM ranking_daily_snapshots WHERE snapshot_date=? AND owner_username=? AND camp_id=? AND scope_type=? AND class_id=? ORDER BY total_points DESC,rank_no,student_id",
+      (rs,n)->new SnapshotScore(rs.getString(1),rs.getInt(2)),date,owner,campId,scope,classId);
+    int rank=0,previousPoints=0;
+    for(int i=0;i<rows.size();i++){
+      SnapshotScore row=rows.get(i);
+      if(i==0||row.totalPoints()!=previousPoints)rank=i+1;
+      values.put(row.studentId(),rank);
+      previousPoints=row.totalPoints();
+    }
+    return values;
   }
   private void refreshSnapshots(String owner,String campId) {
     LocalDate date=LocalDate.now(ZoneId.of("Asia/Shanghai"));
@@ -158,8 +166,19 @@ public class RankingService {
     for(String classId:classes)snapshot(date,owner,campId,classId,"class",aggregateRows(owner,campId,classId,"class"));
   }
   private void snapshot(LocalDate date,String owner,String campId,String classId,String scope,List<AggregateRow> rows) {
-    for(int i=0;i<rows.size();i++)jdbc.update("INSERT INTO ranking_daily_snapshots(snapshot_date,owner_username,camp_id,scope_type,class_id,student_id,rank_no,total_points) VALUES(?,?,?,?,?,?,?,?)",
-      date,owner,campId,scope,classId,rows.get(i).studentId(),i+1,rows.get(i).totalPoints());
+    for(RankedRow rankedRow:rankRows(rows))jdbc.update("INSERT INTO ranking_daily_snapshots(snapshot_date,owner_username,camp_id,scope_type,class_id,student_id,rank_no,total_points) VALUES(?,?,?,?,?,?,?,?)",
+      date,owner,campId,scope,classId,rankedRow.row().studentId(),rankedRow.rank(),rankedRow.row().totalPoints());
+  }
+  private List<RankedRow> rankRows(List<AggregateRow> rows) {
+    List<RankedRow> rankedRows=new ArrayList<>(rows.size());
+    int rank=0,previousPoints=0;
+    for(int i=0;i<rows.size();i++){
+      AggregateRow row=rows.get(i);
+      if(i==0||row.totalPoints()!=previousPoints)rank=i+1;
+      rankedRows.add(new RankedRow(rank,row));
+      previousPoints=row.totalPoints();
+    }
+    return rankedRows;
   }
 
   @Transactional
@@ -266,5 +285,7 @@ public class RankingService {
                               int completionPoints,int inclassPoints,int homeworkPoints,int lessonCount,
                               Instant scoreReachedAt,int accuracyBasisPoints){}
   private record ExistingResult(String hash,int totalPoints){}
+  private record RankedRow(int rank,AggregateRow row){}
+  private record SnapshotScore(String studentId,int totalPoints){}
   private static final class MutableCamp{final String id,name;final List<RankingPayload.ClassOption> classes=new ArrayList<>();MutableCamp(String id,String name){this.id=id;this.name=name;}}
 }

@@ -17,7 +17,8 @@ describe("ranking UI helpers",()=>{
   it("calculates the points needed to move past the previous student",()=>{
     const rows=[{totalPoints:320},{totalPoints:300},{totalPoints:300}];
     expect(pointsToPass(rows,1)).toBe(21);
-    expect(pointsToPass(rows,2)).toBe(1);
+    expect(pointsToPass(rows,2)).toBe(21);
     expect(pointsToPass(rows,0)).toBe(0);
+    expect(pointsToPass([{totalPoints:300},{totalPoints:300}],1)).toBe(0);
   });
 });

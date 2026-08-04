@@ -69,7 +69,7 @@ function populateMyRank(campId,rows){
 function renderMyRank(){
   const index=state.rows.findIndex(row=>String(row.studentId)===String(state.myStudentId));
   if(index<0){elements.myContent.hidden=true;return;}
-  const row=state.rows[index],gap=pointsToPass(state.rows,index),message=index===0?"当前已是第 1 名":`距离超越上一名还差 ${gap} 分`;
+  const row=state.rows[index],gap=pointsToPass(state.rows,index),message=row.rank===1?"当前已是第 1 名":`距离超越上一名还差 ${gap} 分`;
   elements.myContent.innerHTML=`<div class="avatar">${escapeHtml(avatarText(row.studentName))}</div><strong>第 ${row.rank} 名</strong><span class="my-name">${escapeHtml(row.studentName)}</span><span class="my-points">${row.totalPoints} 积分</span><span class="my-motivation">${message}</span>`;
   elements.myContent.hidden=false;
 }

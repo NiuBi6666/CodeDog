@@ -116,7 +116,7 @@ class RankingServiceTest {
   }
 
   @Test
-  void resolvesTiesByReachedTimeThenCombinedAssignmentAccuracy() {
+  void ordersTiesDeterministicallyButAssignsCompetitionRanks() {
     addStudent("admin", "early-low", "先到", "2026-01-01T10:00:00Z", 100, 50, 50);
     addStudent("admin", "late-high", "后到", "2026-01-01T11:00:00Z", 0, 100, 100);
     addStudent("admin", "a-low", "低正确率", "2026-01-01T12:00:00Z", 100, 25, 25);
@@ -127,9 +127,24 @@ class RankingServiceTest {
     assertThat(board.rankings()).extracting(RankingPayload.Entry::studentId)
       .containsExactly("early-low", "late-high", "z-high", "a-low");
     assertThat(board.rankings()).extracting(RankingPayload.Entry::rank)
-      .containsExactly(1, 2, 3, 4);
+      .containsExactly(1, 1, 3, 3);
     assertThat(board.rankings().get(0).accuracyRate()).isEqualTo(50.0);
     assertThat(board.rankings().get(1).accuracyRate()).isEqualTo(100.0);
+  }
+
+  @Test
+  void skipsFollowingRanksAfterThreeStudentsTieForFirst() {
+    addStudent("admin", "one", "甲", "2026-01-01T10:00:00Z", 100, 0, 0);
+    addStudent("admin", "two", "乙", "2026-01-01T11:00:00Z", 0, 50, 50);
+    addStudent("admin", "three", "丙", "2026-01-01T12:00:00Z", 40, 30, 30);
+    addStudent("admin", "four", "丁", "2026-01-01T13:00:00Z", 30, 30, 30);
+
+    RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
+
+    assertThat(board.rankings()).extracting(RankingPayload.Entry::totalPoints)
+      .containsExactly(100, 100, 100, 90);
+    assertThat(board.rankings()).extracting(RankingPayload.Entry::rank)
+      .containsExactly(1, 1, 1, 4);
   }
 
   @Test
@@ -140,7 +155,7 @@ class RankingServiceTest {
     addStudent("admin", "new", "新增", "2026-01-01T10:00:00Z", 0, 50, 50);
     LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
     addSnapshot("admin", yesterday, "up", 2, 300);
-    addSnapshot("admin", yesterday, "down", 1, 300);
+    addSnapshot("admin", yesterday, "down", 1, 400);
     addSnapshot("admin", yesterday, "same", 3, 200);
 
     RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
