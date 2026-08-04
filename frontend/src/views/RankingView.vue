@@ -28,7 +28,10 @@ const shareUrl = computed(() => rankingShareUrl({
   classId: classId.value,
   scope: scope.value
 }));
-const boardLabel = computed(() => scope.value === "camp" ? "训练营榜" : board.value?.className || "班级榜");
+const boardLabel = computed(() => scope.value === "camp" ? "训练营榜" : "班级榜");
+const boardDetail = computed(() => scope.value === "camp" ? board.value?.campName : board.value?.className);
+const boardTitle = computed(() => scope.value === "camp"
+  ? `${board.value?.campName || ""} · 训练营榜` : `${board.value?.campName || ""} · ${board.value?.className || "班级榜"}`);
 
 function numberText(value) {
   return new Intl.NumberFormat("zh-CN").format(Number(value || 0));
@@ -140,14 +143,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     </section>
 
     <section v-if="board" class="ranking-admin-summary" aria-label="排名概览">
-      <article><span class="ranking-summary-icon ranking-summary-gold"><Trophy :size="20"/></span><div><strong>{{ boardLabel }}</strong><small>{{ board.campName }}</small></div></article>
+      <article><span class="ranking-summary-icon ranking-summary-gold"><Trophy :size="20"/></span><div><strong>{{ boardLabel }}</strong><small>{{ boardDetail }}</small></div></article>
       <article><span class="ranking-summary-icon ranking-summary-blue"><UsersRound :size="20"/></span><div><strong>{{ summary.studentCount }}</strong><small>上榜学员</small></div></article>
       <article><span class="ranking-summary-icon ranking-summary-teal">Σ</span><div><strong>{{ numberText(summary.totalPoints) }}</strong><small>累计积分</small></div></article>
       <article><span class="ranking-summary-icon ranking-summary-gray">Ø</span><div><strong>{{ numberText(summary.averagePoints) }}</strong><small>平均积分</small></div></article>
     </section>
 
     <section class="admin-panel ranking-list-panel">
-      <div class="panel-heading ranking-list-heading"><div><h2>{{ board ? `${board.campName} · ${boardLabel}` : "学员排名" }}</h2><small v-if="board">共 {{ summary.studentCount }} 名学员</small></div></div>
+      <div class="panel-heading ranking-list-heading"><div><h2>{{ board ? boardTitle : "学员排名" }}</h2><small v-if="board">共 {{ summary.studentCount }} 名学员</small></div></div>
       <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
       <div v-else-if="!catalog?.camps?.length" class="ranking-admin-state"><Trophy :size="23"/><span>暂无可展示的排行榜数据</span></div>
       <div v-else-if="board && !rows.length" class="ranking-admin-state"><UsersRound :size="23"/><span>当前范围暂无学员积分</span></div>
