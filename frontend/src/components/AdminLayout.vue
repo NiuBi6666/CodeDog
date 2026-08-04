@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
-import { ClipboardCheck, ExternalLink, FileText, Home, ListChecks, Menu, ScrollText, Search, ShieldCheck } from "@lucide/vue";
+import { ClipboardCheck, ExternalLink, FileText, Home, ListChecks, Menu, ScrollText, Search, ShieldCheck, Trophy } from "@lucide/vue";
 import { auth, hasPermission, logout } from "../auth";
 
 defineProps({
@@ -38,6 +38,7 @@ async function signOut() {
         <RouterLink v-if="hasPermission('students.view')" :class="{ active: activePage === 'students' }" to="/student/query"><Search class="nav-icon" :size="17"/><span>查询学生</span></RouterLink>
         <RouterLink v-if="hasPermission('class_progress.view')" :class="{ active: activePage === 'class-progress' }" to="/class/progress"><ClipboardCheck class="nav-icon" :size="17"/><span>课堂完成情况</span></RouterLink>
         <RouterLink v-if="hasPermission('questionnaire.view')" :class="{ active: activePage === 'questionnaire' }" to="/questionnaire"><ListChecks class="nav-icon" :size="17"/><span>问卷与作业</span></RouterLink>
+        <RouterLink :class="{ active: activePage === 'rankings' }" to="/rankings"><Trophy class="nav-icon" :size="17"/><span>学生排名</span></RouterLink>
         <RouterLink v-if="hasPermission('documents.view')" :class="{ active: activePage === 'documents' }" to="/doc/list"><FileText class="nav-icon" :size="17"/><span>文档管理</span></RouterLink>
         <RouterLink v-if="hasPermission('logs.view')" :class="{ active: activePage === 'logs' }" to="/logs"><ScrollText class="nav-icon" :size="17"/><span>操作日志</span></RouterLink>
         <RouterLink v-if="auth.user?.admin" :class="{ active: activePage === 'users' }" to="/users"><ShieldCheck class="nav-icon" :size="17"/><span>用户与权限</span></RouterLink>

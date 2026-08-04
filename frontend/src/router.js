@@ -11,6 +11,7 @@ import PasswordView from "./views/PasswordView.vue";
 import PublicDocumentView from "./views/PublicDocumentView.vue";
 import QuestionnaireView from "./views/QuestionnaireView.vue";
 import RegisterView from "./views/RegisterView.vue";
+import RankingView from "./views/RankingView.vue";
 import StudentQueryView from "./views/StudentQueryView.vue";
 import UserPermissionsView from "./views/UserPermissionsView.vue";
 
@@ -24,6 +25,7 @@ const routes = [
   { path: "/student/query", component: StudentQueryView, meta: { auth: true, permission: "students.view", bodyClass: "admin-layout", title: "查询学生 - CodeDog" } },
   { path: "/class/progress", component: ClassProgressView, meta: { auth: true, permission: "class_progress.view", bodyClass: "admin-layout", title: "课堂完成情况 - CodeDog" } },
   { path: "/questionnaire", component: QuestionnaireView, meta: { auth: true, permission: "questionnaire.view", bodyClass: "admin-layout", title: "问卷与作业 - CodeDog" } },
+  { path: "/rankings", component: RankingView, meta: { auth: true, bodyClass: "admin-layout", title: "学生排名 - CodeDog" } },
   { path: "/doc/list", component: DocumentListView, meta: { auth: true, permission: "documents.view", bodyClass: "admin-layout", title: "文档管理 - CodeDog" } },
   { path: "/logs", component: LogListView, meta: { auth: true, permission: "logs.view", bodyClass: "admin-layout", title: "操作日志 - CodeDog" } },
   { path: "/users", component: UserPermissionsView, meta: { auth: true, admin: true, bodyClass: "admin-layout", title: "用户与权限 - CodeDog" } },
