@@ -95,3 +95,14 @@ The CodeMao student ID application is exposed through this HTTPS gateway at:
 - https://codedog.online/student-id/
 
 The frontend container joins the external codemao_default network and proxies this path to the CodeMao application container.
+
+
+## 成绩管理与家长查询
+
+管理员登录后进入左侧“成绩管理”（/exams），填写考试类型或名称并上传 .xlsx / .xls。支持选择工作表、表头行、姓名列及 1–20 列成绩，成绩列名称可修改；上传前显示前五行预览。文件最大 10 MB，每场最多 10000 名学员。同一表内的重名、姓名缺失和成绩错误值会阻止整表导入。
+
+每次成功上传都创建新的考试和随机查询路径 /exam/<publicId>，同名考试也有独立链接。家长无需登录，按完整姓名查询时仅返回该场考试对应学员的成绩；0 显示“未参考”，空白显示“暂无成绩”。不同考试的数据按考试 ID 隔离，公开接口不提供名单、导出或批量查询。每个来源 IP 每分钟最多查询 30 次。
+
+后台支持复制链接、查看、暂停和恢复查询。暂停后公开信息和查询接口均返回 410；恢复后仍使用原链接。管理 API 复用管理员验证和 CSRF 保护，姓名查询 API 保持 CSRF 保护。原 Excel 不保存，数据库只保存选定的姓名、成绩及考试配置；成绩随现有 MySQL 备份归档，不得提交到 GitHub。
+
+数据库迁移：V105__exam_score_queries.sql（新增 exam_sessions / exam_scores）。功能测试：ExamIntegrationTest、examImport.test.js。
