@@ -1,4 +1,6 @@
-package cn.codedog.ranking;
+package cn.codedog.controller;
+import cn.codedog.service.*;
+import cn.codedog.model.RankingPayload;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
@@ -18,6 +20,9 @@ public class RankingPublicController {
   public RankingPayload.Connection connect(@RequestBody ConnectionRequest body){return service.connect(body.code(),body.deviceName());}
   @PostMapping("/extension/import")
   public RankingPayload.ImportSummary importData(@RequestHeader(value="Authorization",required=false)String authorization,@RequestBody RankingPayload payload){String owner=service.authenticateToken(authorization);return service.importData(payload,"EXTENSION","CRM Chrome 扩展",owner);}
+  @PostMapping("/extension/contacts")
+  public RankingPayload.ExternalContactSyncSummary syncContacts(@RequestHeader(value="Authorization",required=false)String authorization,@RequestBody RankingPayload.ExternalContactSync payload)
+  {String owner=service.authenticateToken(authorization);return service.syncExternalContacts(payload,owner);}
   public record BootstrapRequest(String crmTeacherId,String deviceName){}
   public record ConnectionRequest(String code,String deviceName){}
 }

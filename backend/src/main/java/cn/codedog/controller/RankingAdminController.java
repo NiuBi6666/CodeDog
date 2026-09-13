@@ -1,4 +1,6 @@
-package cn.codedog.ranking;
+package cn.codedog.controller;
+import cn.codedog.service.*;
+import cn.codedog.model.RankingPayload;
 import cn.codedog.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;

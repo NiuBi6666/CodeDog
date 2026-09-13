@@ -1,4 +1,7 @@
-package cn.codedog.ranking;
+package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -23,6 +26,7 @@ import java.util.*;
 public class RankingService {
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final int MAX_ROWS = 50_000;
+  private static final int MAX_CONTACT_ROWS = 5_000;
   private final JdbcTemplate jdbc;
   public RankingService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -80,6 +84,61 @@ public class RankingService {
       rejected == received ? "FAILED" : rejected > 0 ? "PARTIAL" : "COMPLETED", changed, rejected, batchId, owner);
     refreshSnapshots(owner, campId);
     return new RankingPayload.ImportSummary(batchId, received, changed, unchanged, rejected, List.copyOf(errors));
+  }
+
+  @Transactional
+  public RankingPayload.ExternalContactSyncSummary syncExternalContacts(RankingPayload.ExternalContactSync payload, String ownerValue) {
+    String owner = text(ownerValue, "数据所属用户", 50);
+    List<RankingPayload.ExternalContactInput> contacts = safe(payload == null ? null : payload.contacts());
+    if (contacts.isEmpty()) throw invalid("没有可保存的企微联系人");
+    if (contacts.size() > MAX_CONTACT_ROWS) throw invalid("单次同步不能超过 " + MAX_CONTACT_ROWS + " 条企微联系人");
+    Map<String,Set<String>> requestValues = new HashMap<>();
+    for (RankingPayload.ExternalContactInput contact : contacts) {
+      if (contact == null) continue;
+      String crmUserId = contact.crmUserId() == null ? "" : contact.crmUserId().trim();
+      String externalUserId = contact.externalUserId() == null ? "" : contact.externalUserId().trim();
+      if (!crmUserId.isEmpty() && !externalUserId.isEmpty()) {
+        requestValues.computeIfAbsent(crmUserId, ignored -> new HashSet<>()).add(externalUserId);
+      }
+    }
+    Set<String> requestConflicts = new HashSet<>();
+    requestValues.forEach((crmUserId, values) -> { if (values.size() > 1) requestConflicts.add(crmUserId); });
+    Set<String> reportedRequestConflicts = new HashSet<>();
+    int inserted = 0, unchanged = 0, conflicts = 0;
+    List<RankingPayload.ExternalContactError> errors = new ArrayList<>();
+    for (RankingPayload.ExternalContactInput contact : contacts) {
+      String crmUserId = contact == null ? "" : contact.crmUserId();
+      try {
+        crmUserId = text(crmUserId, "CRM 用户 ID", 100);
+        if (!crmUserId.matches("^[A-Za-z0-9_-]+$")) throw invalid("CRM 用户 ID 格式不正确");
+        String externalUserId = text(contact.externalUserId(), "external_userid", 128);
+        if (!externalUserId.matches("^wm[A-Za-z0-9_-]+$")) throw invalid("external_userid 格式不正确");
+        jdbc.update("INSERT INTO crm_external_contact_observations(owner_username,crm_user_id,external_userid) VALUES(?,?,?) ON DUPLICATE KEY UPDATE last_seen_at=CURRENT_TIMESTAMP(6),seen_count=seen_count+1",
+          owner, crmUserId, externalUserId);
+        if (requestConflicts.contains(crmUserId)) {
+          if (reportedRequestConflicts.add(crmUserId)) {
+            conflicts++;
+            addContactError(errors, crmUserId, "同一批次包含多个不同的 external_userid，整组未保存");
+          }
+          continue;
+        }
+        String existing = lookup("SELECT external_userid FROM crm_external_contacts WHERE owner_username=? AND crm_user_id=?", owner, crmUserId);
+        if (existing == null) {
+          jdbc.update("INSERT INTO crm_external_contacts(owner_username,crm_user_id,external_userid) VALUES(?,?,?)", owner, crmUserId, externalUserId);
+          inserted++;
+        } else if (existing.equals(externalUserId)) {
+          jdbc.update("UPDATE crm_external_contacts SET updated_at=CURRENT_TIMESTAMP(6) WHERE owner_username=? AND crm_user_id=?", owner, crmUserId);
+          unchanged++;
+        } else {
+          conflicts++;
+          addContactError(errors, crmUserId, "数据库中已存在不同的 external_userid，未覆盖原值");
+        }
+      } catch (RuntimeException error) {
+        conflicts++;
+        addContactError(errors, crmUserId, message(error));
+      }
+    }
+    return new RankingPayload.ExternalContactSyncSummary(contacts.size(), inserted, unchanged, conflicts, List.copyOf(errors));
   }
 
   public RankingPayload.Catalog catalog() { return catalog(null); }
@@ -272,6 +331,7 @@ public class RankingService {
   private int countRows(List<RankingPayload.ClassData> c){return safe(c).stream().flatMap(x->safe(x.lessons()).stream()).mapToInt(x->safe(x.students()).size()).sum();}
   private <T> List<T> safe(List<T> value){return value==null?List.of():value;}
   private void addError(List<RankingPayload.RowError> e,String c,String l,String s,String m){if(e.size()<200)e.add(new RankingPayload.RowError(c,l,s,m));}
+  private void addContactError(List<RankingPayload.ExternalContactError> e,String userId,String m){if(e.size()<200)e.add(new RankingPayload.ExternalContactError(userId,m));}
   private String message(RuntimeException e){return e.getMessage()==null?"数据无效":e.getMessage();}
   private String text(String v,String label,int max){String n=v==null?"":v.trim();if(n.isEmpty())throw invalid(label+"不能为空");if(n.length()>max)throw invalid(label+"不能超过 "+max+" 个字符");return n;}
   private ResponseStatusException invalid(String m){return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,m);}

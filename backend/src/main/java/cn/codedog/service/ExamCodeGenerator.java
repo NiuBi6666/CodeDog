@@ -1,4 +1,7 @@
-package cn.codedog.exams;
+package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 import java.security.SecureRandom;
 import org.springframework.stereotype.Component;
 

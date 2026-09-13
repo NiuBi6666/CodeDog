@@ -1,5 +1,5 @@
 package cn.codedog;
-import cn.codedog.exams.ExamExcelReader;
+import cn.codedog.service.ExamExcelReader;
 import com.fasterxml.jackson.databind.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -27,7 +27,7 @@ class ExamIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired jakarta.persistence.EntityManager entityManager;
     @Autowired ExamExcelReader reader;
-    @Autowired cn.codedog.exams.ExamService service;
+    @Autowired cn.codedog.service.ExamService service;
 
     MockMultipartFile file(boolean xls,Object[][] rows)throws Exception{
         try(Workbook b=xls?new HSSFWorkbook():new XSSFWorkbook();ByteArrayOutputStream out=new ByteArrayOutputStream()){

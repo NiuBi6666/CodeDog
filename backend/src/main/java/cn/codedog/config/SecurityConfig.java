@@ -1,9 +1,9 @@
 package cn.codedog.config;
 
 import cn.codedog.model.User;
-import cn.codedog.repository.UserRepository;
+import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
-import cn.codedog.security.PermissionService;
+import cn.codedog.service.PermissionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;

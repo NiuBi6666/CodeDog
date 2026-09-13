@@ -1,4 +1,5 @@
-package cn.codedog.repository;
+package cn.codedog.dao;
+import cn.codedog.model.*;
 
 import cn.codedog.model.Document;
 import cn.codedog.model.DocumentStatus;

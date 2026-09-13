@@ -1,4 +1,5 @@
-package cn.codedog.exams;
+package cn.codedog.dao;
+import cn.codedog.model.*;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;

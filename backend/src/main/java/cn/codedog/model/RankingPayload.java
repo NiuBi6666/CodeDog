@@ -1,4 +1,4 @@
-package cn.codedog.ranking;
+package cn.codedog.model;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -9,6 +9,10 @@ public record RankingPayload(String campId, String campName, List<ClassData> cla
   public record Counts(Integer total, Integer submitted, Integer passed) { public static Counts empty() { return new Counts(0, 0, 0); } }
   public record ImportSummary(long batchId, int receivedRows, int changedRows, int unchangedRows, int rejectedRows, List<RowError> errors) {}
   public record RowError(String classId, String lessonId, String studentId, String message) {}
+  public record ExternalContactSync(List<ExternalContactInput> contacts) {}
+  public record ExternalContactInput(String crmUserId, String externalUserId) {}
+  public record ExternalContactError(String crmUserId, String message) {}
+  public record ExternalContactSyncSummary(int received, int inserted, int unchanged, int conflicts, List<ExternalContactError> errors) {}
   public record PairingCode(String code, Instant expiresAt) {}
   public record Device(long id, String deviceName, String owner, Instant createdAt, Instant lastSeenAt, boolean revoked) {}
   public record Connection(String token, long deviceId, String username, String teacherId, String crmTeacherId) {}

@@ -1,4 +1,4 @@
-package cn.codedog.ranking;
+package cn.codedog.config;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -6,7 +6,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class RankingCorsConfig implements WebMvcConfigurer {
   @Override public void addCorsMappings(CorsRegistry registry) {
     registry.addMapping("/api/public/rankings/extension/**")
-      .allowedOrigins("https://sk-crm.codemao.cn").allowedMethods("GET", "POST", "OPTIONS")
+      .allowedOriginPatterns("https://sk-crm.codemao.cn", "chrome-extension://*").allowedMethods("GET", "POST", "OPTIONS")
       .allowedHeaders("Authorization", "Content-Type").maxAge(3600);
   }
 }

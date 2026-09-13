@@ -1,10 +1,10 @@
 package cn.codedog.controller;
 
 import cn.codedog.model.DocumentStatus;
-import cn.codedog.repository.DocumentRepository;
-import cn.codedog.repository.StudentRepository;
+import cn.codedog.dao.DocumentRepository;
+import cn.codedog.dao.StudentRepository;
 import cn.codedog.security.PermissionCatalog;
-import cn.codedog.security.PermissionService;
+import cn.codedog.service.PermissionService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

@@ -1,8 +1,11 @@
 package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 
 import cn.codedog.model.Document;
 import cn.codedog.model.DocumentStatus;
-import cn.codedog.repository.DocumentRepository;
+import cn.codedog.dao.DocumentRepository;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

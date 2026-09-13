@@ -1,7 +1,10 @@
 package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 
 import cn.codedog.model.AuditLog;
-import cn.codedog.repository.AuditLogRepository;
+import cn.codedog.dao.AuditLogRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;

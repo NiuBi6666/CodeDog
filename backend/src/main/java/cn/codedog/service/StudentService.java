@@ -1,7 +1,10 @@
 package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 
 import cn.codedog.model.Student;
-import cn.codedog.repository.StudentRepository;
+import cn.codedog.dao.StudentRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.*;

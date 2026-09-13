@@ -2,7 +2,7 @@ package cn.codedog.controller;
 
 import cn.codedog.model.Document;
 import cn.codedog.model.DocumentStatus;
-import cn.codedog.repository.DocumentRepository;
+import cn.codedog.dao.DocumentRepository;
 import cn.codedog.service.AuditService;
 import cn.codedog.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;

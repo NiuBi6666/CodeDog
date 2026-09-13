@@ -1,7 +1,8 @@
-package cn.codedog.security;
+package cn.codedog.service;
 
 import cn.codedog.model.User;
-import cn.codedog.repository.UserRepository;
+import cn.codedog.dao.UserRepository;
+import cn.codedog.security.PermissionCatalog;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 

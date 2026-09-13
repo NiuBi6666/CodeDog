@@ -1,7 +1,7 @@
 package cn.codedog;
 
 import cn.codedog.model.User;
-import cn.codedog.repository.UserRepository;
+import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +53,27 @@ class RbacIntegrationTest {
               created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
               last_seen_at TIMESTAMP(6),
               revoked_at TIMESTAMP(6)
+            )
+            """);
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS crm_external_contacts (
+              owner_username VARCHAR(50) NOT NULL,
+              crm_user_id VARCHAR(100) NOT NULL,
+              external_userid VARCHAR(128) NOT NULL,
+              created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (owner_username, crm_user_id)
+            )
+            """);
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS crm_external_contact_observations (
+              owner_username VARCHAR(50) NOT NULL,
+              crm_user_id VARCHAR(100) NOT NULL,
+              external_userid VARCHAR(128) NOT NULL,
+              first_seen_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              last_seen_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              seen_count BIGINT NOT NULL DEFAULT 1,
+              PRIMARY KEY (owner_username, crm_user_id, external_userid)
             )
             """);
     }
@@ -235,6 +256,15 @@ class RbacIntegrationTest {
             .andExpect(header().string("Access-Control-Allow-Origin", "https://sk-crm.codemao.cn"))
             .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("GET")));
 
+        mvc.perform(options("/api/public/rankings/extension/contacts")
+                .header("Origin", "chrome-extension://test-extension-id")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "authorization,content-type"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "chrome-extension://test-extension-id"))
+            .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("POST")))
+            .andExpect(header().string("Access-Control-Allow-Headers", org.hamcrest.Matchers.containsStringIgnoringCase("authorization")));
+
         mvc.perform(get("/api/public/rankings/extension/status")
                 .header("Origin", "https://sk-crm.codemao.cn"))
             .andExpect(status().isOk())
@@ -277,6 +307,86 @@ class RbacIntegrationTest {
                 .content("{\"crmTeacherId\":null}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.crmTeacherId").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void extensionStoresExternalContactsWithoutOverwritingConflicts() throws Exception {
+        String username = uniqueUsername("contacts");
+        User member = users.saveAndFlush(user(username, "member-password-123"));
+        String crmTeacherId = "crm" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES(?,?)", crmTeacherId, username);
+        String response = mvc.perform(post("/api/public/rankings/extension/bootstrap")
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"crmTeacherId":"%s","deviceName":"contact-sync-test"}
+                    """.formatted(crmTeacherId)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        String token = json.readTree(response).get("token").asText();
+
+        mvc.perform(post("/api/public/rankings/extension/contacts")
+                .header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"contacts":[{"crmUserId":"1965973887","externalUserId":"wmKdjSDAAAl1NkxWHoKwGK-yTm1GJmcQ"}]}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.inserted").value(1))
+            .andExpect(jsonPath("$.conflicts").value(0));
+
+        mvc.perform(post("/api/public/rankings/extension/contacts")
+                .header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"contacts":[{"crmUserId":"1965973887","externalUserId":"wmKdjSDAAAl1NkxWHoKwGK-yTm1GJmcQ"}]}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.unchanged").value(1));
+
+        mvc.perform(post("/api/public/rankings/extension/contacts")
+                .header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"contacts":[{"crmUserId":"1965973887","externalUserId":"wmDifferentExternalUserId"}]}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.conflicts").value(1))
+            .andExpect(jsonPath("$.errors[0].crmUserId").value("1965973887"));
+
+        mvc.perform(post("/api/public/rankings/extension/contacts")
+                .header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("""
+                    {"contacts":[
+                      {"crmUserId":"200","externalUserId":"wmFirstExternalUserId"},
+                      {"crmUserId":"200","externalUserId":"wmSecondExternalUserId"}
+                    ]}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.inserted").value(0))
+            .andExpect(jsonPath("$.conflicts").value(1))
+            .andExpect(jsonPath("$.errors[0].crmUserId").value("200"));
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM crm_external_contacts WHERE owner_username=? AND crm_user_id=?",
+            Integer.class, member.getUsername(), "200"
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM crm_external_contact_observations WHERE owner_username=? AND crm_user_id=?",
+            Integer.class, member.getUsername(), "1965973887"
+        )).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM crm_external_contact_observations WHERE owner_username=? AND crm_user_id=?",
+            Integer.class, member.getUsername(), "200"
+        )).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+            "SELECT SUM(seen_count) FROM crm_external_contact_observations WHERE owner_username=? AND crm_user_id=?",
+            Long.class, member.getUsername(), "1965973887"
+        )).isEqualTo(3L);
+
+        assertThat(jdbc.queryForObject(
+            "SELECT external_userid FROM crm_external_contacts WHERE owner_username=? AND crm_user_id=?",
+            String.class, member.getUsername(), "1965973887"
+        )).isEqualTo("wmKdjSDAAAl1NkxWHoKwGK-yTm1GJmcQ");
     }
 
     @Test

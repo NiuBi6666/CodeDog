@@ -1,9 +1,12 @@
 package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 
 import cn.codedog.model.Document;
 import cn.codedog.model.User;
-import cn.codedog.repository.DocumentRepository;
-import cn.codedog.repository.UserRepository;
+import cn.codedog.dao.DocumentRepository;
+import cn.codedog.dao.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

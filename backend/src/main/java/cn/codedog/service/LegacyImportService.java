@@ -1,4 +1,7 @@
 package cn.codedog.service;
+import cn.codedog.model.*;
+import cn.codedog.dao.*;
+import cn.codedog.service.RankingScore;
 
 import cn.codedog.model.DocumentIds;
 import org.springframework.beans.factory.annotation.Value;

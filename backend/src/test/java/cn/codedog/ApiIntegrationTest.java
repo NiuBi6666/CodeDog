@@ -1,8 +1,8 @@
 package cn.codedog;
 
 import cn.codedog.model.Student;
-import cn.codedog.repository.DocumentRepository;
-import cn.codedog.repository.StudentRepository;
+import cn.codedog.dao.DocumentRepository;
+import cn.codedog.dao.StudentRepository;
 import cn.codedog.service.HtmlSanitizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

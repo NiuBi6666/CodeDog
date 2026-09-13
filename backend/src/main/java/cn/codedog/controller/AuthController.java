@@ -1,9 +1,9 @@
 package cn.codedog.controller;
 
 import cn.codedog.model.User;
-import cn.codedog.repository.UserRepository;
+import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
-import cn.codedog.security.PermissionService;
+import cn.codedog.service.PermissionService;
 import cn.codedog.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

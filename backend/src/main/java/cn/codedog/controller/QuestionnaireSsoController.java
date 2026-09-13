@@ -1,6 +1,6 @@
 package cn.codedog.controller;
 
-import cn.codedog.security.PermissionService;
+import cn.codedog.service.PermissionService;
 import cn.codedog.service.AuditService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javax.crypto.Mac;

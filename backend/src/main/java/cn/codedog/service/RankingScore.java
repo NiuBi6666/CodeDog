@@ -1,8 +1,9 @@
-package cn.codedog.ranking;
+package cn.codedog.service;
+import cn.codedog.model.RankingPayload;
 import java.util.Objects;
-final class RankingScore {
+final public class RankingScore {
   private RankingScore() {}
-  static Score calculate(Double completionPercent, RankingPayload.Counts inclass, RankingPayload.Counts homework) {
+  public static Score calculate(Double completionPercent, RankingPayload.Counts inclass, RankingPayload.Counts homework) {
     if (completionPercent == null || !Double.isFinite(completionPercent) || completionPercent < 0 || completionPercent > 100)
       throw new IllegalArgumentException("完课率必须在 0 到 100 之间");
     Counts a = validate(inclass, "课上作业"); Counts b = validate(homework, "课后作业");
@@ -17,6 +18,6 @@ final class RankingScore {
     return new Counts(total, submitted, passed);
   }
   private static int correctness(Counts c) { if (c.total() == 0) return 100; if (c.submitted() == 0) return 0; return (int) Math.round(c.passed() * 100.0 / c.submitted()); }
-  record Counts(int total, int submitted, int passed) {}
-  record Score(double completionRate, Counts inclass, Counts homework, int completionPoints, int inclassPoints, int homeworkPoints, int totalPoints) {}
+  public record Counts(int total, int submitted, int passed) {}
+  public record Score(double completionRate, Counts inclass, Counts homework, int completionPoints, int inclassPoints, int homeworkPoints, int totalPoints) {}
 }

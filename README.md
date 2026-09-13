@@ -110,3 +110,7 @@ The frontend container joins the external codemao_default network and proxies th
 后台支持复制链接、查看、暂停和恢复查询。管理员可在考试列表点击“修改后缀”并保存；前缀 https://codedog.online/exam/ 固定不可修改。保存后复制和查看使用新链接，历史链接仍归属原考试，不得被其他考试占用；重复后缀及过期编辑会返回 409。暂停后公开信息和查询接口均返回 410；恢复后仍使用原链接。管理 API 复用管理员验证和 CSRF 保护，姓名查询 API 保持 CSRF 保护。原 Excel 不保存，数据库只保存选定的姓名、成绩及考试配置；成绩随现有 MySQL 备份归档，不得提交到 GitHub。
 
 数据库迁移：V105__exam_score_queries.sql（新增 exam_sessions / exam_scores）；V106__custom_exam_query_codes.sql（新增规范后缀与区分大小写的历史别名表，启动时为旧考试补齐混合字符后缀）。V107__exam_template_results.sql 保存展示模式和未参赛标记。功能测试：ExamIntegrationTest、examImport.test.js。
+
+## 代码目录约定
+
+后端按职责集中管理：controller 目录放置全部 HTTP 控制器，service 目录放置全部业务服务及计算与导入辅助类，dao 目录放置全部数据访问接口，config 目录放置 Spring 配置，model 目录放置实体和接口数据模型；只有确有必要时才在这些目录下增加二级包。前端可直接发布的静态文件统一放在 frontend/public 目录，由构建产物复制到站点根目录，确保 favicon、排行榜页面和验证文件保持原有 URL。
