@@ -25,7 +25,9 @@ class ExamIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
+    @Autowired jakarta.persistence.EntityManager entityManager;
     @Autowired ExamExcelReader reader;
+    @Autowired cn.codedog.exams.ExamService service;
 
     MockMultipartFile file(boolean xls,Object[][] rows)throws Exception{
         try(Workbook b=xls?new HSSFWorkbook():new XSSFWorkbook();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -111,7 +113,7 @@ class ExamIntegrationTest {
     @Test void shortLinksAreEightCharactersAndLegacyLinksStillWork()throws Exception{
         var exam=create("短链接考试",88.5);
         String token=exam.get("publicId").asText();
-        assertThat(token).matches("^[0-9a-f]{8}$");
+        assertThat(token).matches("^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])[A-Za-z0-9]{8}$");
         assertThat(exam.get("queryPath").asText()).isEqualTo("/exam/"+token);
         String legacy=jdbc.queryForObject("select public_id from exam_sessions where id=?",String.class,exam.get("id").asLong());
         assertThat(legacy).hasSize(32);
@@ -130,5 +132,100 @@ class ExamIntegrationTest {
         var exam=create("限流考试",60);String token=exam.get("publicId").asText();
         for(int i=0;i<30;i++)mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content("{\"name\":\"同名学员\"}")).andExpect(status().isOk());
         mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content("{\"name\":\"同名学员\"}")).andExpect(status().isTooManyRequests());
+    }
+
+    String linkBody(String suffix,String expected)throws Exception{
+        return json.writeValueAsString(Map.of("suffix",suffix,"expectedSuffix",expected));
+    }
+    void rename(JsonNode exam,String suffix,String expected,int expectedStatus)throws Exception{
+        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/link").with(user("admin")).with(csrf())
+            .contentType(APPLICATION_JSON).content(linkBody(suffix,expected))).andExpect(status().is(expectedStatus));
+    }
+    @Test void editingRequiresAdminAndCsrf()throws Exception{
+        var exam=create("权限测试",77);String path="/api/admin/exams/"+exam.get("id").asLong()+"/link";
+        String body=linkBody("Test123a",exam.get("publicId").asText());
+        mvc.perform(patch(path).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(patch(path).with(user("ordinary")).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        mvc.perform(patch(path).with(user("admin")).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+    }
+    @Test void savedLinkIsCanonicalAndHistoricalLinksRemainBoundToTheirExam()throws Exception{
+        var exam=create("链接测试",91.5);String original=exam.get("publicId").asText();
+        rename(exam,"Abcd1234",original,200);
+        mvc.perform(get("/api/admin/exams").with(user("admin"))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.exams[0].queryPath").value("/exam/Abcd1234"));
+        rename(exam,"Next123a","Abcd1234",200);
+        for(String code:List.of(original,"Abcd1234","Next123a"))
+            mvc.perform(post("/api/public/exams/"+code+"/query").with(csrf()).header("X-Real-IP",original)
+                .contentType(APPLICATION_JSON).content("{\"name\":\"同名学员\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.scores[0]").value("91.5"));
+        var other=create("其他考试",60);
+        rename(other,"Abcd1234",other.get("publicId").asText(),409);
+        rename(other,"Next123a",other.get("publicId").asText(),409);
+        rename(exam,"Abcd1234","Next123a",200);
+        rename(exam,"Test123a",original,409);
+        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/status").with(user("admin")).with(csrf())
+            .contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
+        for(String code:List.of(original,"Abcd1234","Next123a"))
+            mvc.perform(get("/api/public/exams/"+code)).andExpect(status().isGone());
+    }
+    @Test void linksAreCaseSensitiveAndInvalidSuffixesCannotChangePrefix()throws Exception{
+        var exam=create("格式测试",80);String original=exam.get("publicId").asText();
+        for(String invalid:List.of("12345678","abcdefgh","ABCDEFGH","abcd1234","ABCD1234","AbCdEfGh","Ab12345","Ab1234567","Abcd12_3","Abcd12/3"," Abcd123","https://codedog.online/exam/Abcd1234"))
+            rename(exam,invalid,original,422);
+        rename(exam,"Abcd1234",original,200);
+        mvc.perform(get("/api/public/exams/abcd1234")).andExpect(status().isNotFound());
+        var other=create("大小写不同考试",61);
+        rename(other,"aBcd1234",other.get("publicId").asText(),200);
+        mvc.perform(get("/api/public/exams/Abcd1234")).andExpect(status().isOk()).andExpect(jsonPath("$.title").value("格式测试"));
+        mvc.perform(get("/api/public/exams/aBcd1234")).andExpect(status().isOk()).andExpect(jsonPath("$.title").value("大小写不同考试"));
+    }
+    @Test void existingEightDigitAndUuidLinksSurviveIdempotentBackfill()throws Exception{
+        String uuid=UUID.randomUUID().toString().replace("-","");
+        jdbc.update("insert into exam_sessions(public_id,title,score_labels,student_count,enabled,created_by,created_at) values(?,?,?,0,true,'admin',CURRENT_TIMESTAMP)",uuid,"旧考试","[\"成绩\"]");
+        Long id=jdbc.queryForObject("select id from exam_sessions where public_id=?",Long.class,uuid);
+        String numeric=String.format("%08x",id);
+        service.initializeLinks();
+        entityManager.flush();
+        String code=jdbc.queryForObject("select query_code from exam_sessions where id=?",String.class,id);
+        assertThat(code).matches("(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])[A-Za-z0-9]{8}");
+        service.initializeLinks();
+        assertThat(jdbc.queryForObject("select query_code from exam_sessions where id=?",String.class,id)).isEqualTo(code);
+        for(String token:List.of(uuid,numeric,code))
+            mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isOk()).andExpect(jsonPath("$.title").value("旧考试"));
+    }
+    @Test @Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void simultaneousClaimsCannotReassignAnAlias()throws Exception{
+        var first=create("并发一",81);var second=create("并发二",82);
+        long a=first.get("id").asLong(),b=second.get("id").asLong();
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        var ready=new java.util.concurrent.CountDownLatch(2);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try{
+            var futures=new ArrayList<java.util.concurrent.Future<Long>>();
+            for(var exam:List.of(first,second)){
+                futures.add(pool.submit(()->{
+                    ready.countDown();start.await();
+                    try{
+                        return service.changeLink(exam.get("id").asLong(),"Race123a",exam.get("publicId").asText()).id();
+                    }catch(org.springframework.web.server.ResponseStatusException failure){
+                        if(failure.getStatusCode().value()!=409)throw failure;
+                        return 0L;
+                    }
+                }));
+            }
+            assertThat(ready.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            var outcomes=new ArrayList<Long>();
+            for(var future:futures)outcomes.add(future.get(15,java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(outcomes.stream().filter(id->id!=0).count()).isEqualTo(1);
+            long winner=outcomes.stream().filter(id->id!=0).findFirst().orElseThrow();
+            assertThat(jdbc.queryForObject("select exam_id from exam_query_aliases where code='Race123a'",Long.class)).isEqualTo(winner);
+            assertThat(service.query("Race123a","同名学员").scores()).containsExactly(winner==a?"81":"82");
+        }finally{
+            start.countDown();pool.shutdownNow();
+            pool.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS);
+            jdbc.update("delete from exam_query_aliases where exam_id in (?,?)",a,b);
+            jdbc.update("delete from exam_scores where exam_id in (?,?)",a,b);
+            jdbc.update("delete from exam_sessions where id in (?,?)",a,b);
+        }
     }
 }

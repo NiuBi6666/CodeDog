@@ -10,4 +10,12 @@ export function suggestExamColumns(columns) {
     scoreColumns: columns.filter(c => c.index !== name?.index && /成绩|分数|得分/.test(c.label)).slice(0, 20).map(c => c.index)
   };
 }
-export function examUrl(path, origin) { return new URL(path, origin).href; }
+export const EXAM_URL_PREFIX = "https://codedog.online/exam/";
+export function validExamSuffix(suffix) {
+  return typeof suffix === "string" && /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])[A-Za-z0-9]{8}$/.test(suffix);
+}
+export function examUrl(path) {
+  const match = /^\/exam\/([A-Za-z0-9]{8}|[0-9a-f]{32})$/.exec(path);
+  if (!match) throw new Error("查询路径无效");
+  return EXAM_URL_PREFIX + match[1];
+}

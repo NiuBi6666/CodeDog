@@ -8,6 +8,7 @@ public class Exam {
     @Id @GeneratedValue(strategy=GenerationType.IDENTITY) Long id;
     @Column(name="public_id", nullable=false, unique=true, length=32)
     String publicId=UUID.randomUUID().toString().replace("-","");
+    @Column(name="query_code",unique=true,length=8) String queryCode;
     @Column(nullable=false,length=120) String title;
     @Column(name="score_labels",nullable=false,columnDefinition="TEXT") String scoreLabels;
     @Column(name="student_count",nullable=false) int studentCount;

@@ -4,7 +4,7 @@ import { FileSpreadsheet, Copy, ExternalLink } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
 import { formatDateTime } from "../utils";
-import { displayExamScore, suggestExamColumns, examUrl } from "../examImport";
+import { displayExamScore, suggestExamColumns, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
 
 const title = ref("");
 const file = ref(null);
@@ -22,18 +22,51 @@ const created = ref(null);
 const exams = ref({ exams: [], total: 0, page: 0, pageCount: 0 });
 const loadingList = ref(false);
 const changing = ref(null);
+const linkDrafts = ref({});
+const linkErrors = ref({});
+const savingLink = ref(null);
 const mappingCurrent = computed(() => inspection.value && inspection.value.sheetIndex === Number(sheetIndex.value) && inspection.value.headerRow === Number(headerRow.value));
 const chosen = computed(() => inspection.value?.columns.filter(c => selected.value.includes(c.index)) || []);
 const canCreate = computed(() => mappingCurrent.value && chosen.value.length > 0 && chosen.value.length <= 20 && !chosen.value.some(c => c.index === nameColumn.value || !labels.value[c.index]?.trim()) && title.value.trim());
 const selectableColumns = computed(() => (inspection.value?.columns || []).filter(c => c.index !== nameColumn.value).slice().sort((a, b) => Number(selected.value.includes(b.index)) - Number(selected.value.includes(a.index)) || a.index - b.index));
 const sampleRows = computed(() => inspection.value?.samples.filter(row => row[nameColumn.value]?.trim()).slice(0, 5) || []);
-const link = exam => examUrl(exam.queryPath, window.location.origin);
+const link = exam => examUrl(exam.queryPath);
 
 async function load(page = 0) {
   loadingList.value = true; listError.value = "";
   try { exams.value = await api("/admin/exams?page=" + page); }
   catch (failure) { listError.value = failure.status ? failure.message : "连接未成功，请检查网络后重试。"; }
   finally { loadingList.value = false; }
+}
+function editLink(exam) {
+  linkDrafts.value[exam.id] = { suffix: exam.publicId, expectedSuffix: exam.publicId };
+  delete linkErrors.value[exam.id];
+}
+async function cancelLink(exam) {
+  delete linkDrafts.value[exam.id];
+  delete linkErrors.value[exam.id];
+  await load(exams.value.page);
+}
+async function saveLink(exam) {
+  const draft = linkDrafts.value[exam.id];
+  if (!draft || savingLink.value !== null) return;
+  if (!validExamSuffix(draft.suffix)) {
+    linkErrors.value[exam.id] = "请输入 8 位后缀，同时包含大写字母、小写字母和数字。";
+    return;
+  }
+  savingLink.value = exam.id;
+  delete linkErrors.value[exam.id];
+  try {
+    const saved = await api("/admin/exams/" + exam.id + "/link", {
+      method: "PATCH", body: jsonBody({ suffix: draft.suffix, expectedSuffix: draft.expectedSuffix })
+    });
+    exams.value.exams = exams.value.exams.map(row => row.id === saved.id ? saved : row);
+    if (created.value?.id === saved.id) created.value = saved;
+    delete linkDrafts.value[exam.id];
+    notify("查询链接已修改，复制和查看将使用新链接");
+  } catch (failure) {
+    linkErrors.value[exam.id] = failure.status ? failure.message : "连接未成功，请重试；复制和查看仍使用已保存的链接。";
+  } finally { savingLink.value = null; }
 }
 async function chooseFile(event) {
   file.value = event.target.files?.[0] || null;
@@ -141,12 +174,13 @@ onMounted(() => load());
       <div v-else class="exam-created" role="status">
         <strong>“{{ created.title }}”已导入 {{ created.studentCount }} 名学员</strong>
         <label>家长查询链接<input :value="link(created)" readonly @focus="$event.target.select()"></label>
-        <div class="row-actions"><button class="button button-primary" type="button" @click="copy(created)"><Copy :size="15"/>复制链接</button><a class="button button-quiet" :href="created.queryPath" target="_blank" rel="noopener">打开查询页<ExternalLink :size="15"/></a><button class="button button-quiet" type="button" @click="reset">再上传一场考试</button></div>
+        <div class="row-actions"><button class="button button-primary" type="button" @click="copy(created)"><Copy :size="15"/>复制链接</button><a class="button button-quiet" :href="link(created)" target="_blank" rel="noopener">打开查询页<ExternalLink :size="15"/></a><button class="button button-quiet" type="button" @click="reset">再上传一场考试</button></div>
       </div>
     </form>
 
     <section class="exam-panel exam-history">
       <h2>已上传的考试 <small>{{ exams.total }} 场</small></h2>
+      <p class="exam-hint">查询后缀为 8 位，须包含大写字母、小写字母和数字，区分大小写。修改后点击“保存”，再复制新链接。</p>
       <p v-if="listError" class="notice notice-error" role="alert">{{ listError }}</p>
       <div class="exam-table-wrap"><table class="document-table">
         <thead><tr><th>考试名称</th><th>成绩项目</th><th>学员数</th><th>状态</th><th>上传时间</th><th>查询链接</th><th>操作</th></tr></thead>
@@ -155,8 +189,21 @@ onMounted(() => load());
             <td><strong>{{ exam.title }}</strong></td><td>{{ exam.scoreLabels.join('、') }}</td><td>{{ exam.studentCount }}</td>
             <td><span class="status-badge" :class="exam.enabled ? 'status-normal' : 'status-offline'">{{ exam.enabled ? '可查询' : '已暂停' }}</span></td>
             <td>{{ formatDateTime(exam.createdAt) }}</td>
-            <td><input class="exam-link" :value="link(exam)" :aria-label="exam.title + '查询链接'" readonly @focus="$event.target.select()"></td>
-            <td><div class="row-actions"><button class="button button-quiet button-small" @click="copy(exam)">复制链接</button><a class="button button-quiet button-small" :href="exam.queryPath" target="_blank" rel="noopener">查看</a><button class="button button-quiet button-small" :disabled="changing !== null" @click="toggle(exam)">{{ changing === exam.id ? '处理中…' : exam.enabled ? '暂停查询' : '恢复查询' }}</button></div></td>
+            <td class="exam-link-cell">
+              <div class="exam-link-editor">
+                <span class="exam-link-prefix">{{ EXAM_URL_PREFIX }}</span>
+                <input v-if="linkDrafts[exam.id]" v-model="linkDrafts[exam.id].suffix" class="exam-link-suffix" :aria-label="exam.title + '查询后缀'" :aria-describedby="'link-hint-' + exam.id" :aria-invalid="Boolean(linkErrors[exam.id])" :disabled="savingLink === exam.id" minlength="8" maxlength="8" autocomplete="off" autocapitalize="off" spellcheck="false" @keydown.enter.prevent="saveLink(exam)" @keydown.esc.prevent="cancelLink(exam)">
+                <code v-else class="exam-saved-suffix">{{ exam.publicId }}</code>
+              </div>
+              <div v-if="linkDrafts[exam.id]" class="exam-link-controls">
+                <button class="button button-primary button-small" :disabled="savingLink !== null" @click="saveLink(exam)">{{ savingLink === exam.id ? '保存中…' : '保存' }}</button>
+                <button class="button button-quiet button-small" :disabled="savingLink === exam.id" @click="cancelLink(exam)">取消</button>
+                <small :id="'link-hint-' + exam.id">仅可修改后缀</small>
+              </div>
+              <button v-else class="button button-quiet button-small exam-edit-link" @click="editLink(exam)">修改后缀</button>
+              <p v-if="linkErrors[exam.id]" class="exam-link-error" role="alert">{{ linkErrors[exam.id] }}</p>
+            </td>
+            <td><div class="row-actions"><button class="button button-quiet button-small" @click="copy(exam)">复制链接</button><a class="button button-quiet button-small" :href="link(exam)" target="_blank" rel="noopener">查看</a><button class="button button-quiet button-small" :disabled="changing !== null" @click="toggle(exam)">{{ changing === exam.id ? '处理中…' : exam.enabled ? '暂停查询' : '恢复查询' }}</button></div></td>
           </tr>
           <tr v-if="!exams.exams.length"><td colspan="7" class="empty-table">{{ loadingList ? '正在加载…' : '还没有上传考试，请先上传 Excel 成绩表。' }}</td></tr>
         </tbody>
@@ -184,7 +231,14 @@ fieldset{border:0;padding:0;margin:0;min-width:0}
 .exam-column input[type=checkbox]{width:17px;height:17px;accent-color:#177d77;flex-shrink:0}
 .exam-table-wrap{overflow:auto}.exam-table-wrap td{max-width:300px;overflow-wrap:anywhere}
 .exam-form-actions{margin-top:24px}.exam-created{margin-top:22px;background:#eff9f6;border:1px solid #bdded4;border-radius:6px;padding:20px;display:grid;gap:16px}
-.exam-link{min-width:240px!important;font-size:12px!important}
+.exam-link-cell{min-width:330px;max-width:none!important}
+.exam-link-editor{display:flex;align-items:center;gap:0;white-space:nowrap;font-size:12px}
+.exam-link-prefix{color:#687c87;user-select:all}
+.exam-panel .exam-link-suffix{width:102px;flex:0 0 102px;padding:8px;margin-left:4px;font:600 13px ui-monospace,monospace;letter-spacing:.5px}
+.exam-saved-suffix{font:600 13px ui-monospace,monospace;color:#263b44}
+.exam-link-controls{display:flex;align-items:center;gap:8px;margin-top:10px}
+.exam-edit-link{margin-top:10px}
+.exam-link-error{font-size:12px;color:#b33d32;white-space:normal;max-width:330px;margin:8px 0 0}
 .exam-panel button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:850px){.exam-columns,.exam-form-grid{grid-template-columns:1fr}.exam-source{grid-template-columns:1fr 110px}.exam-source button{grid-column:1/-1}.exam-panel{padding:18px}.exam-panel .exam-column{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 </style>

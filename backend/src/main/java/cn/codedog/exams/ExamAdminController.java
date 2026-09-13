@@ -31,6 +31,13 @@ public class ExamAdminController {
         audit.record("exam_created:"+result.id()+":"+result.studentCount(),request);
         return result;
     }
+    public record Link(String suffix,String expectedSuffix){}
+    @PatchMapping("/{id}/link")
+    public ExamService.AdminExam link(@PathVariable long id,@RequestBody Link body,HttpServletRequest request){
+        var result=service.changeLink(id,body.suffix(),body.expectedSuffix());
+        audit.record("exam_link_changed:"+id,request);
+        return result;
+    }
     public record Status(Boolean enabled){}
     @PatchMapping("/{id}/status")
     public ExamService.AdminExam status(@PathVariable long id,@RequestBody Status body,HttpServletRequest request){
