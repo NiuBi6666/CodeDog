@@ -108,6 +108,24 @@ class ExamIntegrationTest {
         mvc.perform(patch("/api/admin/exams/"+id+"/status").with(user("admin")).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":true}")).andExpect(status().isOk()).andExpect(jsonPath("$.publicId").value(token));
         mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isOk());
     }
+    @Test void shortLinksAreEightCharactersAndLegacyLinksStillWork()throws Exception{
+        var exam=create("短链接考试",88.5);
+        String token=exam.get("publicId").asText();
+        assertThat(token).matches("^[0-9a-f]{8}$");
+        assertThat(exam.get("queryPath").asText()).isEqualTo("/exam/"+token);
+        String legacy=jdbc.queryForObject("select public_id from exam_sessions where id=?",String.class,exam.get("id").asLong());
+        assertThat(legacy).hasSize(32);
+        for(String link:List.of(token,legacy)){
+            mvc.perform(get("/api/public/exams/"+link)).andExpect(status().isOk()).andExpect(jsonPath("$.title").value("短链接考试"));
+            mvc.perform(post("/api/public/exams/"+link+"/query").with(csrf()).header("X-Real-IP",legacy)
+                .contentType(APPLICATION_JSON).content("{\"name\":\"同名学员\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.scores[0]").value("88.5"));
+        }
+        mvc.perform(get("/api/public/exams/"+token.substring(1))).andExpect(status().isNotFound());
+        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/status").with(user("admin")).with(csrf())
+            .contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
+        for(String link:List.of(token,legacy))mvc.perform(get("/api/public/exams/"+link)).andExpect(status().isGone());
+    }
     @Test void queryIsRateLimited()throws Exception{
         var exam=create("限流考试",60);String token=exam.get("publicId").asText();
         for(int i=0;i<30;i++)mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content("{\"name\":\"同名学员\"}")).andExpect(status().isOk());

@@ -64,12 +64,19 @@ public class ExamService {
         return new QueryResult(decode(row.scoreValues));
     }
     private Exam available(String token){
-        if(token==null||!token.matches("[0-9a-f]{32}"))throw missing("查询链接不存在。");
-        Exam exam=exams.findByPublicId(token).orElseThrow(()->missing("查询链接不存在。"));
+        if(token==null||!token.matches("(?:[0-9a-f]{8}|[0-9a-f]{32})"))throw missing("查询链接不存在。");
+        Exam exam=(token.length()==8 ? exams.findById(Long.parseLong(token,16)) : exams.findByPublicId(token))
+            .orElseThrow(()->missing("查询链接不存在。"));
         if(!exam.enabled) throw new ResponseStatusException(HttpStatus.GONE,"本次考试已暂停查询，请联系老师。");
         return exam;
     }
-    private AdminExam dto(Exam e){return new AdminExam(e.id,e.title,e.publicId,"/exam/"+e.publicId,decode(e.scoreLabels),e.studentCount,e.enabled,e.createdAt,e.createdBy);}
+    // The primary key gives every exam a stable, collision-free eight-character alias.
+    // Keep the original UUID stored so previously shared links continue to resolve.
+    private String shortToken(Exam e){
+        if(e.id<1||e.id>0xffffffffL)throw new IllegalStateException("Exam short-link capacity exceeded");
+        return String.format(Locale.ROOT,"%08x",e.id);
+    }
+    private AdminExam dto(Exam e){String token=shortToken(e);return new AdminExam(e.id,e.title,token,"/exam/"+token,decode(e.scoreLabels),e.studentCount,e.enabled,e.createdAt,e.createdBy);}
     private String encode(List<String> value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException(e);}}
     private List<String> decode(String value){try{return json.readValue(value,new TypeReference<List<String>>(){});}catch(Exception e){throw new IllegalStateException(e);}}
     private ResponseStatusException missing(String text){return new ResponseStatusException(HttpStatus.NOT_FOUND,text);}
