@@ -1,4 +1,4 @@
-import{avatarText,pointsToPass,trendView}from"/ranking-utils.js";
+import{pointsToPass,trendView}from"/ranking-utils.js";
 
 const elements={camp:document.querySelector("#campSelect"),class:document.querySelector("#classSelect"),classField:document.querySelector("#classField"),status:document.querySelector("#status"),podium:document.querySelector("#podium"),wall:document.querySelector("#nameWall"),subtitle:document.querySelector("#boardSubtitle"),updated:document.querySelector("#lastUpdated"),popover:document.querySelector("#scorePopover"),myBar:document.querySelector("#myRankBar"),mySelect:document.querySelector("#myStudentSelect"),myContent:document.querySelector("#myRankContent")};
 const query=new URLSearchParams(location.search),state={catalog:[],scope:query.get("scope")==="camp"?"camp":"class",teacherId:query.get("teacher")||query.get("teacherId")||"",timer:null,rows:[],myStudentId:query.get("student")||"",pinnedId:null};
@@ -40,8 +40,8 @@ function renderBoard(board){
 }
 function nameLengthClass(row){return Array.from(String(row.studentName||"")).length>6?"long-name":"";}
 function cardAttrs(row){return `data-student-id="${escapeHtml(row.studentId)}" tabindex="0" role="button" aria-label="查看${escapeHtml(row.studentName)}的积分构成"`;}
-function podiumCard(row){return `<article class="rank-card podium-card ${nameLengthClass(row)} level-${row.level}" data-rank="${row.rank}" ${cardAttrs(row)}><span class="medal medal-${row.rank}" aria-label="第 ${row.rank} 名"><small>TOP</small><strong>${row.rank}</strong></span><div class="avatar avatar-large">${escapeHtml(avatarText(row.studentName))}</div><div class="student-name">${escapeHtml(row.studentName)}</div><div class="score-line"><span class="score">${row.totalPoints} 积分</span></div></article>`;}
-function nameTile(row){const band=row.rank<=10?"rank-4-10":row.rank<=30?"rank-11-30":"";return `<article class="rank-card name-tile ${band} ${nameLengthClass(row)} level-${row.level}" ${cardAttrs(row)}><span class="rank-badge">${row.rank}</span><div class="avatar">${escapeHtml(avatarText(row.studentName))}</div><div class="student-copy"><div class="student-name">${escapeHtml(row.studentName)}</div><div class="score-line"><span class="meta">${row.totalPoints} 积分</span></div></div></article>`;}
+function podiumCard(row){return `<article class="rank-card podium-card ${nameLengthClass(row)} level-${row.level}" data-rank="${row.rank}" ${cardAttrs(row)}><span class="medal medal-${row.rank}" aria-label="第 ${row.rank} 名"><small>TOP</small><strong>${row.rank}</strong></span><img class="avatar avatar-large" src="/favicon-dog-20260913.png" alt="" width="68" height="68"><div class="student-name">${escapeHtml(row.studentName)}</div><div class="score-line"><span class="score">${row.totalPoints} 积分</span></div></article>`;}
+function nameTile(row){const band=row.rank<=10?"rank-4-10":row.rank<=30?"rank-11-30":"";return `<article class="rank-card name-tile ${band} ${nameLengthClass(row)} level-${row.level}" ${cardAttrs(row)}><span class="rank-badge">${row.rank}</span><img class="avatar" src="/favicon-dog-20260913.png" alt="" width="46" height="46" loading="lazy"><div class="student-copy"><div class="student-name">${escapeHtml(row.studentName)}</div><div class="score-line"><span class="meta">${row.totalPoints} 积分</span></div></div></article>`;}
 function showStatus(message){elements.status.hidden=false;elements.status.textContent=message;elements.podium.hidden=true;elements.wall.hidden=true;}
 function setScope(scope,reload=true){state.scope=scope;document.querySelectorAll("[data-scope]").forEach(button=>button.classList.toggle("active",button.dataset.scope===scope));elements.classField.hidden=scope==="camp";if(reload)loadBoard();}
 
@@ -70,7 +70,7 @@ function renderMyRank(){
   const index=state.rows.findIndex(row=>String(row.studentId)===String(state.myStudentId));
   if(index<0){elements.myContent.hidden=true;return;}
   const row=state.rows[index],gap=pointsToPass(state.rows,index),message=row.rank===1?"当前已是第 1 名":`距离超越上一名还差 ${gap} 分`;
-  elements.myContent.innerHTML=`<div class="avatar">${escapeHtml(avatarText(row.studentName))}</div><strong>第 ${row.rank} 名</strong><span class="my-name">${escapeHtml(row.studentName)}</span><span class="my-points">${row.totalPoints} 积分</span><span class="my-motivation">${message}</span>`;
+  elements.myContent.innerHTML=`<img class="avatar" src="/favicon-dog-20260913.png" alt="" width="46" height="46" loading="lazy"><strong>第 ${row.rank} 名</strong><span class="my-name">${escapeHtml(row.studentName)}</span><span class="my-points">${row.totalPoints} 积分</span><span class="my-motivation">${message}</span>`;
   elements.myContent.hidden=false;
 }
 

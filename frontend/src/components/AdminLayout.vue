@@ -25,7 +25,7 @@ async function signOut() {
     <aside class="admin-sidebar" aria-label="后台导航">
       <RouterLink class="admin-logo" to="/index"><span class="admin-logo-mark">C</span><span>CodeDog</span></RouterLink>
       <div class="admin-profile">
-        <span class="admin-avatar">A</span>
+        <img class="admin-avatar" src="/favicon-dog-20260913.png" alt="默认头像" width="46" height="46">
         <div>
           <strong>{{ auth.user?.username }}</strong>
           <small class="admin-teacher-id">{{ auth.user?.teacherId }}</small>

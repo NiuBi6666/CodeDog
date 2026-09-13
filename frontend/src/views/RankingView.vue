@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Copy, ExternalLink, Minus, RefreshCw, Share2, Troph
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, notify, writeClipboard } from "../api";
 import { auth } from "../auth";
-import { rankingAvatarText, rankingShareUrl, rankingSummary, rankingTrendView } from "../rankingAdmin.js";
+import { rankingShareUrl, rankingSummary, rankingTrendView } from "../rankingAdmin.js";
 import { formatDateTime } from "../utils";
 
 const catalog = ref(null);
@@ -160,7 +160,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
           <tbody>
             <tr v-for="row in rows" :key="row.studentId">
               <td><span class="ranking-number" :class="`rank-${Math.min(row.rank, 4)}`">{{ row.rank }}</span></td>
-              <td><div class="ranking-student"><span class="ranking-student-avatar">{{ rankingAvatarText(row.studentName) }}</span><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
+              <td><div class="ranking-student"><img class="ranking-student-avatar" src="/favicon-dog-20260913.png" alt="" width="38" height="38" loading="lazy"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
               <td><span class="ranking-class-name">{{ row.className || board.className }}</span></td>
               <td><strong class="ranking-total-points">{{ numberText(row.totalPoints) }}</strong></td>
               <td><div class="ranking-score-parts"><span>完课 {{ row.completionPoints }}</span><span>课上 {{ row.inclassPoints }}</span><span>课后 {{ row.homeworkPoints }}</span></div></td>

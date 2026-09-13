@@ -3814,3 +3814,5 @@ a {
     flex: 1;
   }
 }
+
+.admin-avatar,.ranking-student-avatar{object-fit:contain;background:transparent;border:0;border-radius:50%}

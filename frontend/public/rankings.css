@@ -87,3 +87,5 @@ body.is-fullscreen .admin-panel,body.is-fullscreen footer{display:none}
 }
 @media(max-width:520px){body{padding-bottom:128px}.name-wall{grid-template-columns:1fr}.my-motivation{flex-basis:100%;margin-left:44px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.level-6::after{animation:none;display:none}}
+
+img.avatar{object-fit:contain;border:0;background:transparent}
