@@ -6,5 +6,6 @@ public class ExamScore {
     @Id @GeneratedValue(strategy=GenerationType.IDENTITY) Long id;
     @Column(name="exam_id",nullable=false) Long examId;
     @Column(name="student_name",nullable=false,length=100) String studentName;
+    @Column(nullable=false) boolean absent=false;
     @Column(name="score_values",nullable=false,columnDefinition="TEXT") String scoreValues;
 }

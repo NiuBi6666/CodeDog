@@ -4,7 +4,7 @@ import { FileSpreadsheet, Copy, ExternalLink } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
 import { formatDateTime } from "../utils";
-import { displayExamScore, suggestExamColumns, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
+import { displayResultScore, isAbsentSubmission, suggestExamColumns, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
 
 const title = ref("");
 const file = ref(null);
@@ -26,10 +26,19 @@ const linkDrafts = ref({});
 const linkErrors = ref({});
 const savingLink = ref(null);
 const mappingCurrent = computed(() => inspection.value && inspection.value.sheetIndex === Number(sheetIndex.value) && inspection.value.headerRow === Number(headerRow.value));
-const chosen = computed(() => inspection.value?.columns.filter(c => selected.value.includes(c.index)) || []);
-const canCreate = computed(() => mappingCurrent.value && chosen.value.length > 0 && chosen.value.length <= 20 && !chosen.value.some(c => c.index === nameColumn.value || !labels.value[c.index]?.trim()) && title.value.trim());
+const chosen = computed(() => {
+  if (inspection.value?.template) return inspection.value.template.scoreColumns.map(index => inspection.value.columns.find(c => c.index === index));
+  return inspection.value?.columns.filter(c => selected.value.includes(c.index)) || [];
+});
+const canCreate = computed(() => mappingCurrent.value && chosen.value.length > 0 && chosen.value.length <= (inspection.value?.template ? 256 : 20) && !chosen.value.some(c => c.index === nameColumn.value || !labels.value[c.index]?.trim()) && title.value.trim());
 const selectableColumns = computed(() => (inspection.value?.columns || []).filter(c => c.index !== nameColumn.value).slice().sort((a, b) => Number(selected.value.includes(b.index)) - Number(selected.value.includes(a.index)) || a.index - b.index));
 const sampleRows = computed(() => inspection.value?.samples.filter(row => row[nameColumn.value]?.trim()).slice(0, 5) || []);
+const absentSample = row => inspection.value?.template && isAbsentSubmission(row[inspection.value.template.submissionColumn]);
+const sampleScore = (value, column) => {
+  const template = inspection.value?.template;
+  if (template?.type === "full" && column !== template.scoreColumns[0] && !String(value ?? "").trim()) return "";
+  return displayResultScore(value, template?.type || "legacy");
+};
 const link = exam => examUrl(exam.queryPath);
 
 async function load(page = 0) {
@@ -86,10 +95,13 @@ async function inspectFile() {
   body.append("headerRow", String(headerRow.value));
   try {
     inspection.value = await api("/admin/exams/inspect", { method: "POST", body });
-    const suggested = suggestExamColumns(inspection.value.columns);
+    const template = inspection.value.template;
+    const suggested = template || suggestExamColumns(inspection.value.columns);
     nameColumn.value = suggested.nameColumn;
     selected.value = suggested.scoreColumns;
-    labels.value = Object.fromEntries(inspection.value.columns.map(c => [c.index, c.label || c.letter + "列成绩"]));
+    labels.value = template
+      ? Object.fromEntries(template.scoreColumns.map((index, i) => [index, template.scoreLabels[i]]))
+      : Object.fromEntries(inspection.value.columns.map(c => [c.index, c.label || c.letter + "列成绩"]));
   } catch (failure) { inspection.value = null; error.value = failure.status ? failure.message : "连接未成功，请检查网络后重试。"; }
   finally { busy.value = false; }
 }
@@ -133,7 +145,7 @@ onMounted(() => load());
 
 <template>
   <AdminLayout page-title="成绩管理" active-page="exams">
-    <div class="admin-page-heading"><div><h1>成绩管理</h1><p>上传每场考试的成绩，生成专属查询链接。</p></div></div>
+    <div class="admin-page-heading"><div><h1>成绩管理</h1><p>上传赛考成绩表，自动识别成绩并生成查询链接。</p></div></div>
     <form class="exam-panel" @submit.prevent="createExam">
       <h2><FileSpreadsheet :size="21"/>上传成绩</h2>
       <fieldset :disabled="busy || Boolean(created)">
@@ -149,6 +161,11 @@ onMounted(() => load());
           </div>
           <p v-if="!mappingCurrent" class="notice">工作表或表头行已改变，请点击“读取列信息”。</p>
           <template v-else>
+            <div v-if="inspection.template" class="exam-template-summary" role="status">
+              <strong>已识别：{{ inspection.template.defaultLayout ? '赛考明细模板' : inspection.template.type === 'full' ? '全量数据模板' : '简单数据模板' }}</strong>
+              <p>{{ inspection.template.defaultLayout ? '读取 B 列姓名、O 列提交时间、Q 列总得分，以及 Q 列后有数据的明细。' : inspection.template.type === 'full' ? '展示总成绩和每道题得分，按题号排列。' : '仅展示总成绩。' }}提交时间为 NaT 的学员显示“未参赛”，已提交的 0 分正常显示。</p>
+            </div>
+            <template v-else>
             <label class="exam-name-column">姓名列<select v-model.number="nameColumn" @change="selected = selected.filter(c => c !== nameColumn)"><option v-for="col in inspection.columns" :key="col.index" :value="col.index">{{ col.letter }} 列 · {{ col.label || '无表头' }}</option></select></label>
             <h3>选择要展示的成绩列</h3>
             <p class="exam-hint">可选择多列；右侧名称会显示在家长查询页。只勾选需要公开的成绩。</p>
@@ -158,13 +175,14 @@ onMounted(() => load());
                 <input v-if="selected.includes(col.index)" v-model="labels[col.index]" :aria-label="col.letter + '列成绩名称'" maxlength="64" required>
               </label>
             </div>
-            <p v-if="chosen.length > 20" class="notice notice-error">最多选择 20 列成绩。</p>
+            </template>
+            <p v-if="!inspection.template && chosen.length > 20" class="notice notice-error">最多选择 20 列成绩。</p>
             <template v-if="chosen.length">
               <h3>成绩预览 <small>前 {{ sampleRows.length }} 行</small></h3>
               <div class="exam-table-wrap"><table class="document-table"><thead><tr><th>学员姓名</th><th v-for="col in chosen" :key="col.index">{{ labels[col.index] }}</th></tr></thead><tbody>
-                <tr v-for="(row, i) in sampleRows" :key="i"><td>{{ row[nameColumn] }}</td><td v-for="col in chosen" :key="col.index">{{ displayExamScore(row[col.index]) }}</td></tr>
+                <tr v-for="(row, i) in sampleRows" :key="i"><td>{{ row[nameColumn] }}</td><td v-if="absentSample(row)" :colspan="chosen.length">未参赛</td><template v-else><td v-for="col in chosen" :key="col.index">{{ sampleScore(row[col.index], col.index) }}</td></template></tr>
               </tbody></table></div>
-              <p class="exam-hint">家长按完整姓名查询，仅看到对应成绩。0 分显示“未参考”，空白显示“暂无成绩”。</p>
+              <p class="exam-hint">家长按完整姓名查询，仅看到对应成绩。<template v-if="!inspection.template">0 分显示“未参考”，空白显示“暂无成绩”。</template></p>
             </template>
           </template>
         </div>
@@ -186,7 +204,7 @@ onMounted(() => load());
         <thead><tr><th>考试名称</th><th>成绩项目</th><th>学员数</th><th>状态</th><th>上传时间</th><th>查询链接</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="exam in exams.exams" :key="exam.id">
-            <td><strong>{{ exam.title }}</strong></td><td>{{ exam.scoreLabels.join('、') }}</td><td>{{ exam.studentCount }}</td>
+            <td><strong>{{ exam.title }}</strong></td><td>{{ exam.resultMode === 'full' ? '总成绩及 ' + (exam.scoreLabels.length - 1) + ' 项明细' : exam.scoreLabels.join('、') }}</td><td>{{ exam.studentCount }}</td>
             <td><span class="status-badge" :class="exam.enabled ? 'status-normal' : 'status-offline'">{{ exam.enabled ? '可查询' : '已暂停' }}</span></td>
             <td>{{ formatDateTime(exam.createdAt) }}</td>
             <td class="exam-link-cell">
@@ -222,6 +240,7 @@ fieldset{border:0;padding:0;margin:0;min-width:0}
 .exam-panel label{display:flex;flex-direction:column;gap:8px;font-weight:600;font-size:14px}
 .exam-panel input:not([type=checkbox]),.exam-panel select{width:100%;min-width:0;padding:10px 12px;border:1px solid #c9d6dd;border-radius:5px;background:#fff;font:inherit;color:#263b44}
 .exam-panel input:focus-visible,.exam-panel select:focus-visible{outline:2px solid #168e8b;outline-offset:2px}
+.exam-template-summary{padding:14px 16px;border:1px solid #c5ded9;background:#f1f8f6;border-radius:6px;font-size:14px}.exam-template-summary p{margin:8px 0 0;color:#526d70;line-height:1.7}
 .exam-mapping{margin-top:24px;padding-top:22px;border-top:1px solid #e3ebef}
 .exam-source{grid-template-columns:minmax(160px,1fr) minmax(100px,160px) auto;align-items:end;margin-bottom:20px}
 .exam-name-column{max-width:440px}

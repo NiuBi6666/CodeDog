@@ -19,3 +19,17 @@ export function examUrl(path) {
   if (!match) throw new Error("查询路径无效");
   return EXAM_URL_PREFIX + match[1];
 }
+
+export function displayResultScore(value, resultMode = "legacy") {
+  if (resultMode === "legacy" || !resultMode) return displayExamScore(value);
+  const text = value == null ? "" : String(value).trim();
+  return text || "暂无成绩";
+}
+export function isAbsentSubmission(value) {
+  return typeof value === "string" && value.trim().toLowerCase() === "nat";
+}
+
+export function visibleExamScores(scores, resultMode) {
+  return (scores || []).map((score, index) => ({ score, index }))
+    .filter(item => resultMode !== "full" || item.index === 0 || String(item.score ?? "").trim() !== "");
+}

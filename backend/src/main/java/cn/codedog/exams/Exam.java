@@ -12,6 +12,7 @@ public class Exam {
     @Column(nullable=false,length=120) String title;
     @Column(name="score_labels",nullable=false,columnDefinition="TEXT") String scoreLabels;
     @Column(name="student_count",nullable=false) int studentCount;
+    @Column(name="result_mode",nullable=false,length=12) String resultMode="legacy";
     @Column(nullable=false) boolean enabled=true;
     @Column(name="created_by",nullable=false,length=50) String createdBy;
     @Column(name="created_at",nullable=false) Instant createdAt=Instant.now();

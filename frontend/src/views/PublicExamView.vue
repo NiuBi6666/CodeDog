@@ -1,19 +1,22 @@
 <script setup>
-import { ref, watch, onBeforeUnmount } from "vue";
+import { computed, ref, watch, onBeforeUnmount } from "vue";
 import { useRoute } from "vue-router";
 import { api, jsonBody } from "../api";
-import { displayExamScore } from "../examImport";
+import { displayResultScore, visibleExamScores } from "../examImport";
 const route = useRoute();
 const exam = ref(null);
 const loading = ref(true);
 const error = ref("");
 const name = ref("");
 const scores = ref(null);
+const absent = ref(false);
+const scoreText = value => displayResultScore(value, exam.value?.resultMode);
+const visibleScores = computed(() => visibleExamScores(scores.value, exam.value?.resultMode));
 const busy = ref(false);
 const message = ref("");
 let revision = 0;
 let controller;
-function clearQuery() { revision++; controller?.abort(); scores.value = null; message.value = ""; busy.value = false; }
+function clearQuery() { revision++; controller?.abort(); scores.value = null; absent.value = false; message.value = ""; busy.value = false; }
 async function load() {
   clearQuery(); name.value = ""; exam.value = null; error.value = ""; loading.value = true;
   const current = revision;
@@ -33,7 +36,7 @@ async function query() {
     const data = await api("/public/exams/" + encodeURIComponent(route.params.token) + "/query", {
       method: "POST", body: jsonBody({ name: name.value.trim() }), signal: activeController.signal, cache: "no-store"
     });
-    if (current === revision) scores.value = data.scores;
+    if (current === revision) { scores.value = data.scores; absent.value = Boolean(data.absent); }
   } catch (failure) {
     if (current === revision) message.value = failure.status ? failure.message : "连接未成功，请检查网络后重试。";
   } finally { window.clearTimeout(timer); if (current === revision) busy.value = false; }
@@ -53,8 +56,9 @@ onBeforeUnmount(() => { revision++; controller?.abort(); });
           <div class="exam-query-row"><input id="exam-name" v-model="name" maxlength="100" required placeholder="请输入完整姓名" autocomplete="off" spellcheck="false" aria-describedby="exam-query-message" @input="clearQuery"><button type="submit" :disabled="busy">{{ busy ? '查询中…' : '查询成绩 →' }}</button></div>
         </form>
         <p id="exam-query-message" class="exam-query-message" role="status" aria-live="polite">{{ message }}</p>
-        <dl v-if="scores" class="exam-result" aria-label="考试成绩" aria-live="polite">
-          <div v-for="(score,i) in scores" :key="i"><dt>{{ exam.scoreLabels[i] }}</dt><dd :class="{ 'exam-text-score': !/^\d+(\.\d+)?$/.test(displayExamScore(score)) }">{{ displayExamScore(score) }}</dd></div>
+        <p v-if="absent" class="exam-absent" role="status">未参赛</p>
+        <dl v-else-if="scores" class="exam-result" :class="{ 'exam-result-full': exam.resultMode === 'full' }" aria-label="考试成绩" aria-live="polite">
+          <div v-for="{ score, index } in visibleScores" :key="index"><dt>{{ exam.scoreLabels[index] }}</dt><dd :class="{ 'exam-text-score': !/^\d+(\.\d+)?$/.test(scoreText(score)) }">{{ scoreText(score) }}</dd></div>
         </dl>
       </template>
       <p v-else class="exam-unavailable" role="alert">{{ error || '查询链接不存在。' }}</p>
@@ -74,4 +78,9 @@ button{border:0;padding:12px 22px;background:#245cc5;color:#fff;white-space:nowr
 dd{font-family:"SFMono-Regular",Consolas,monospace;font-size:34px;line-height:1.3;margin:0;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 dd.exam-text-score{font-family:inherit;font-size:21px;line-height:1.6}.exam-unavailable{margin:0;line-height:1.8}
 @media(max-width:540px){.exam-query-sheet{padding:30px 24px}h1{font-size:26px}.exam-query-row{flex-direction:column}.exam-result{display:block}.exam-result>div{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:20px 0;border-bottom:1px solid #dbe5ef}.exam-result>div:last-child{border:0;padding-bottom:0}dt{margin:0}dd{font-size:32px;text-align:right}}
+.exam-absent{margin:28px 0 0;padding-top:24px;border-top:1px solid #dbe5ef;font-size:26px;font-weight:600;color:#63758a}
+.exam-result.exam-result-full{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.exam-result-full>div:first-child{grid-column:1/-1;border-bottom:1px solid #dbe5ef;padding-bottom:20px}
+.exam-result-full>div:not(:first-child) dd{font-size:25px}
+@media(max-width:540px){.exam-result.exam-result-full{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}.exam-result-full>div{display:block}.exam-result-full dt{margin-bottom:8px}.exam-result-full dd{text-align:left}}
 </style>

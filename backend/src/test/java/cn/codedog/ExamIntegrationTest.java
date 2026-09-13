@@ -64,7 +64,7 @@ class ExamIntegrationTest {
         for(var exam:List.of(first,second)){
             String token=exam.get("publicId").asText();
             var info=json.readTree(mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-            assertThat(info.size()).isEqualTo(2);assertThat(info.get("title").asText()).isEqualTo("模拟考");
+            assertThat(info.size()).isEqualTo(3);assertThat(info.get("title").asText()).isEqualTo("模拟考");
             var response=mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content("{\"name\":\"  同名学员  \"}"))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store")).andReturn().getResponse().getContentAsString();
             var result=json.readTree(response);
@@ -180,7 +180,7 @@ class ExamIntegrationTest {
     }
     @Test void existingEightDigitAndUuidLinksSurviveIdempotentBackfill()throws Exception{
         String uuid=UUID.randomUUID().toString().replace("-","");
-        jdbc.update("insert into exam_sessions(public_id,title,score_labels,student_count,enabled,created_by,created_at) values(?,?,?,0,true,'admin',CURRENT_TIMESTAMP)",uuid,"旧考试","[\"成绩\"]");
+        jdbc.update("insert into exam_sessions(public_id,title,score_labels,student_count,enabled,created_by,created_at,result_mode) values(?,?,?,0,true,'admin',CURRENT_TIMESTAMP,'legacy')",uuid,"旧考试","[\"成绩\"]");
         Long id=jdbc.queryForObject("select id from exam_sessions where public_id=?",Long.class,uuid);
         String numeric=String.format("%08x",id);
         service.initializeLinks();
@@ -227,5 +227,131 @@ class ExamIntegrationTest {
             jdbc.update("delete from exam_scores where exam_id in (?,?)",a,b);
             jdbc.update("delete from exam_sessions where id in (?,?)",a,b);
         }
+    }
+
+    Object[][] templateRows(boolean full){
+        List<Object> header=new ArrayList<>(List.of("用户id","用户姓名","老师姓名","提交时间","正确题目数","总得分"));
+        List<Object> attended=new ArrayList<>(List.of("private-id","参赛学员","NaT","2026-09-12 12:30:00",1,0));
+        List<Object> absent=new ArrayList<>(List.of("private-id-2","缺赛学员","private-teacher"," NaT ",0,99));
+        if(full){
+            for(int n:List.of(1,2,3,4,5,6,7,9,8,10,11,12,13,14,15,16,17,18,19,20)){
+                header.add("第"+n+"题得分");
+                attended.add(n==1?0:n==20?6.5:n);
+                absent.add("不应展示");
+            }
+        }
+        return new Object[][]{header.toArray(),attended.toArray(),absent.toArray()};
+    }
+    JsonNode createTemplate(boolean full)throws Exception{
+        var result=mvc.perform(multipart("/api/admin/exams").file(file(false,templateRows(full)))
+            .param("mapping",mapping(full?"全量模板测试":"简单模板测试",0,List.of(2),List.of("老师姓名")))
+            .with(user("admin")).with(csrf())).andExpect(status().isCreated()).andReturn();
+        return json.readTree(result.getResponse().getContentAsString());
+    }
+    @Test void fullTemplateSelectsAllTwentyQuestionsPlusTotalByHeaderAndQuestionNumber()throws Exception{
+        var workbook=file(false,templateRows(true));
+        var inspection=reader.inspect(workbook,0,1);
+        assertThat(inspection.template().type()).isEqualTo("full");
+        assertThat(inspection.template().scoreColumns()).hasSize(21);
+        assertThat(inspection.template().scoreColumns().get(8)).isEqualTo(14);
+        assertThat(inspection.template().scoreColumns().get(9)).isEqualTo(13);
+        var exam=createTemplate(true);String token=exam.get("publicId").asText();
+        assertThat(exam.get("resultMode").asText()).isEqualTo("full");
+        var metadata=json.readTree(mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(metadata.get("scoreLabels")).hasSize(21);
+        assertThat(metadata.get("scoreLabels").get(0).asText()).isEqualTo("总成绩");
+        assertThat(metadata.get("scoreLabels").get(8).asText()).isEqualTo("第8题得分");
+        assertThat(metadata.get("scoreLabels").get(20).asText()).isEqualTo("第20题得分");
+        var result=mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token)
+            .contentType(APPLICATION_JSON).content("{\"name\":\"参赛学员\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var values=json.readTree(result).get("scores");
+        assertThat(values).hasSize(21);
+        assertThat(values.get(0).asText()).isEqualTo("0");
+        assertThat(values.get(1).asText()).isEqualTo("0");
+        assertThat(values.get(8).asText()).isEqualTo("8");
+        assertThat(values.get(9).asText()).isEqualTo("9");
+        assertThat(values.get(20).asText()).isEqualTo("6.5");
+        assertThat(result).doesNotContain("参赛学员","private-id","老师","提交时间","未参考","NaT");
+    }
+    @Test void simpleTemplateOnlyPublishesTotalAndNaTMeansAbsentInBothFormats()throws Exception{
+        for(boolean full:List.of(false,true)){
+            var exam=createTemplate(full);String token=exam.get("publicId").asText();
+            var response=mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token)
+                .contentType(APPLICATION_JSON).content("{\"name\":\"缺赛学员\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.absent").value(true)).andExpect(jsonPath("$.scores").isEmpty()).andReturn().getResponse().getContentAsString();
+            assertThat(response).doesNotContain("缺赛学员","private-id","private-teacher","不应展示","99");
+            if(!full){
+                assertThat(exam.get("scoreLabels")).hasSize(1);
+                assertThat(exam.get("scoreLabels").get(0).asText()).isEqualTo("总成绩");
+                mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token)
+                    .contentType(APPLICATION_JSON).content("{\"name\":\"参赛学员\"}")).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.scores[0]").value("0")).andExpect(jsonPath("$.scores.length()").value(1));
+            }
+        }
+    }
+    @Test void templateMatchingToleratesReorderedColumnsAndExtraPrivateFields()throws Exception{
+        var workbook=file(true,new Object[][]{
+            {"手机号"," 第2题得分 ","总得分","用户姓名","第1题得分","提交时间","是否参加比赛","比赛ID-名称"},
+            {"private-phone",9,12,"测试学员",3,"2026-09-12 18:00:00",0,"private-exam"}
+        });
+        var parsed=reader.parse(workbook,new ExamExcelReader.Mapping("测试",0,1,0,List.of(0),List.of("错误列")));
+        assertThat(parsed.resultMode()).isEqualTo("full");
+        assertThat(parsed.labels()).containsExactly("总成绩","第1题得分","第2题得分");
+        assertThat(parsed.students().get("测试学员")).containsExactly("12","3","9");
+        assertThat(parsed.absentNames()).isEmpty();
+    }
+    @Test void templateRejectsMissingOrAmbiguousHeadersInsteadOfPublishingWrongColumns()throws Exception{
+        for(Object[] header:List.of(
+            new Object[]{"用户姓名","总得分","第1题得分"},
+            new Object[]{"用户姓名","提交时间","第1题得分"},
+            new Object[]{"用户姓名","提交时间","总得分","总得分"},
+            new Object[]{"用户姓名","提交时间","总得分","第1题得分","第1题得分"},
+            new Object[]{"用户姓名","姓名","提交时间","总得分"})){
+            mvc.perform(multipart("/api/admin/exams/inspect").file(file(false,new Object[][]{header})).with(user("admin")).with(csrf()))
+                .andExpect(status().isUnprocessableEntity());
+        }
+    }
+    @Test void onlySubmissionNaTMarksAbsenceAndBlankScoresStayUnavailable()throws Exception{
+        var workbook=file(false,new Object[][]{
+            {"用户姓名","提交时间","总得分"},
+            {"零分","2026-09-12 18:00:00",0},
+            {"缺赛","nat",100},
+            {"待批阅","2026-09-12 18:00:00",null},
+            {"时间空白",null,0}
+        });
+        var parsed=reader.parse(workbook,new ExamExcelReader.Mapping("测试",0,1,0,null,null));
+        assertThat(parsed.absentNames()).containsExactly("缺赛");
+        assertThat(parsed.students().get("零分")).containsExactly("0");
+        assertThat(parsed.students().get("待批阅")).containsExactly("暂无成绩");
+        assertThat(parsed.students().get("时间空白")).containsExactly("0");
+        assertThat(parsed.students().get("缺赛")).isEmpty();
+    }
+
+    @Test void defaultExportIncludesEveryPopulatedColumnAfterQAndKeepsZero()throws Exception{
+        Object[][] rows=new Object[38][21];
+        rows[0][1]="用户姓名";rows[0][14]="提交时间";rows[0][16]="总得分";
+        rows[0][17]="第1题得分";rows[0][18]="整列空白";rows[0][19]="加分";
+        rows[1][0]="private-id";rows[1][1]="零分学员";rows[1][14]="2026-09-13 10:00:00";rows[1][16]=0;rows[1][17]=0;
+        rows[2][1]="缺赛学员";rows[2][14]="NaT";rows[2][16]=100;
+        rows[37][1]="末行学员";rows[37][14]="2026-09-13 11:00:00";rows[37][16]=3;rows[37][19]=7.5;rows[37][20]=2;
+        var workbook=file(false,rows);
+        var inspection=reader.inspect(workbook,0,1);
+        assertThat(inspection.template().defaultLayout()).isTrue();
+        assertThat(inspection.template().scoreColumns()).containsExactly(16,17,19,20);
+        assertThat(inspection.template().scoreLabels()).containsExactly("总成绩","第1题得分","加分","U列成绩");
+        var parsed=reader.parse(workbook,new ExamExcelReader.Mapping("默认模板",0,1,0,List.of(0),List.of("私密信息")));
+        assertThat(parsed.students().get("零分学员")).containsExactly("0","0","","");
+        assertThat(parsed.students().get("末行学员")).containsExactly("3","","7.5","2");
+        assertThat(parsed.absentNames()).containsExactly("缺赛学员");
+        assertThat(parsed.students().get("缺赛学员")).isEmpty();
+    }
+    @Test void defaultExportWithEmptyTrailingColumnsOnlyShowsTotal()throws Exception{
+        Object[][] rows=new Object[2][19];
+        rows[0][1]="用户姓名";rows[0][14]="提交时间";rows[0][16]="总得分";rows[0][18]="未使用明细";
+        rows[1][1]="学员";rows[1][14]="2026-09-13 10:00:00";rows[1][16]=0;
+        var inspection=reader.inspect(file(false,rows),0,1);
+        assertThat(inspection.template().defaultLayout()).isTrue();
+        assertThat(inspection.template().type()).isEqualTo("simple");
+        assertThat(inspection.template().scoreColumns()).containsExactly(16);
     }
 }
