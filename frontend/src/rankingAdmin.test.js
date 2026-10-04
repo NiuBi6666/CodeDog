@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankingAvatarText, rankingPointsToPass, rankingShareUrl, rankingSummary, rankingTrendView } from "./rankingAdmin.js";
+import { rankingAvatarText, rankingPointsToPass, rankingShareUrl, rankingSummary, rankingTrendView, rankingVisibleRows } from "./rankingAdmin.js";
 
 describe("ranking admin helpers", () => {
   it("builds one canonical public URL without teacher or class parameters", () => {
@@ -25,5 +25,16 @@ describe("ranking admin helpers", () => {
       totalPoints: 540,
       averagePoints: 270
     });
+  });
+
+  it("shows the top ten and appends the selected student only when needed", () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      studentId: String(index + 1),
+      rank: index + 1
+    }));
+
+    expect(rankingVisibleRows(rows, "3").map((row) => row.studentId)).toEqual(rows.slice(0, 10).map((row) => row.studentId));
+    expect(rankingVisibleRows(rows, "12").map((row) => row.studentId)).toEqual([...rows.slice(0, 10), rows[11]].map((row) => row.studentId));
+    expect(rankingVisibleRows(rows, "missing")).toHaveLength(10);
   });
 });

@@ -1,3 +1,13 @@
+export function rankingVisibleRows(rows = [], selectedStudentId = "", limit = 10) {
+  const values = Array.isArray(rows) ? rows : [];
+  const leaders = values.slice(0, Math.max(0, limit));
+  const selected = values.find((row) => String(row.studentId) === String(selectedStudentId));
+  if (!selected || leaders.some((row) => String(row.studentId) === String(selected.studentId))) {
+    return leaders;
+  }
+  return [...leaders, selected];
+}
+
 export function rankingAvatarText(name) {
   const characters = Array.from(String(name || "").trim());
   return characters.slice(-2).join("") || "?";

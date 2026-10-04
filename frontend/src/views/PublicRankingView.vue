@@ -17,7 +17,8 @@ import { api } from "../api";
 import {
   rankingAvatarText,
   rankingPointsToPass,
-  rankingTrendView
+  rankingTrendView,
+  rankingVisibleRows
 } from "../rankingAdmin.js";
 
 const levelMinimums = [0, 600, 1500, 2700, 4200, 5400];
@@ -36,6 +37,8 @@ let refreshTimer;
 
 const rows = computed(() => board.value?.rankings || []);
 const selectedIndex = computed(() => rows.value.findIndex((row) => String(row.studentId) === String(selectedStudentId.value)));
+const visibleRows = computed(() => rankingVisibleRows(rows.value, selectedStudentId.value));
+const showsSelectedSeparately = computed(() => visibleRows.value.length > 10);
 const selectedStudent = computed(() => selectedIndex.value >= 0 ? rows.value[selectedIndex.value] : null);
 const nextLevelIndex = computed(() => selectedStudent.value ? Math.min(selectedStudent.value.level, levelMinimums.length - 1) : 0);
 const isMaxLevel = computed(() => Number(selectedStudent.value?.level || 0) >= 6);
@@ -210,17 +213,21 @@ onBeforeUnmount(() => {
       <main class="ranking-layout" @click.stop>
         <section class="game-panel ladder-panel" aria-labelledby="ladderTitle">
           <div class="game-panel-heading">
-            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">全员积分天梯榜</h1><p>{{ rows.length }} 名学员 · 全部课程累计积分</p></div></div>
+            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名 · 共 {{ rows.length }} 名学员</p></div></div>
             <button class="ghost-button" type="button" :disabled="loading" @click="loadBoard"><RefreshCw :class="{ spin: loading }" aria-hidden="true" />刷新</button>
           </div>
 
           <div v-if="loading && !board" class="status" role="status">正在加载排行榜…</div>
           <div v-else-if="error" class="status error" role="alert">{{ error }}</div>
           <div v-else-if="!rows.length" class="status" role="status">暂无学员积分数据</div>
-          <div v-else class="ladder-list" aria-label="全部学生排名">
-            <article
-              v-for="row in rows"
-              :key="row.studentId"
+          <div v-else class="ladder-list" aria-label="前十名与我的排名">
+            <template v-for="(row, index) in visibleRows" :key="row.studentId">
+              <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="中间名次已省略">
+                <span aria-hidden="true">•••</span>
+                <strong>中间名次已省略</strong>
+                <span aria-hidden="true">•••</span>
+              </div>
+              <article
               class="ladder-row"
               :class="[`level-${row.level}`, row.rank <= 3 ? `place-${row.rank}` : '', { selected: String(row.studentId) === selectedStudentId }]"
               :data-student-id="String(row.studentId)"
@@ -240,6 +247,7 @@ onBeforeUnmount(() => {
               <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><span class="level-badge">{{ row.levelName }}</span></div>
               <strong class="ladder-points">{{ row.totalPoints }}<small>积分</small></strong>
             </article>
+            </template>
           </div>
         </section>
 
@@ -255,7 +263,7 @@ onBeforeUnmount(() => {
         </section>
       </main>
 
-      <footer><span>{{ updatedText }}</span><span>全部学生统一排名 · 每 60 秒自动刷新</span></footer>
+      <footer><span>{{ updatedText }}</span><span>前 10 名与我的排名 · 每 60 秒自动刷新</span></footer>
     </div>
 
     <aside v-if="detailRow" ref="popover" class="score-popover" :style="popoverStyle" role="tooltip" @click.stop>
@@ -540,6 +548,32 @@ button {
 .ladder-list {
   display: grid;
   gap: 10px;
+}
+
+.omitted-ranks {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 42px;
+  gap: 12px;
+  color: #66789d;
+  font-size: 11px;
+  text-align: center;
+}
+
+.omitted-ranks::before,
+.omitted-ranks::after {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(101, 122, 164, 0.55));
+  content: "";
+}
+
+.omitted-ranks::after {
+  background: linear-gradient(90deg, rgba(101, 122, 164, 0.55), transparent);
+}
+
+.omitted-ranks span {
+  letter-spacing: 3px;
 }
 
 .ladder-row {
