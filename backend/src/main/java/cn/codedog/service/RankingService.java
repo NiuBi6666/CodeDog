@@ -179,6 +179,41 @@ public class RankingService {
     return new RankingPayload.Board(campId, campName, classId, className, scope, entries.size(), latestUpdate(owner), baselineDate, List.copyOf(entries));
   }
 
+  public RankingPayload.Board allBoard() { return allBoard(null); }
+  public RankingPayload.Board allBoard(String teacherValue) {
+    String owner = resolveTeacher(teacherValue).username();
+    List<RankingPayload.Entry> entries = new ArrayList<>();
+    for (RankedRow rankedRow : rankRows(aggregateAllRows(owner))) {
+      AggregateRow row = rankedRow.row();
+      int level = level(row.totalPoints());
+      entries.add(new RankingPayload.Entry(rankedRow.rank(), row.studentId(), row.studentName(), row.classId(), row.className(),
+        row.totalPoints(), row.completionPoints(), row.inclassPoints(), row.homeworkPoints(), row.lessonCount(),
+        level, levelName(level), row.scoreReachedAt(), row.accuracyBasisPoints()/100.0, null, 0, "NEW"));
+    }
+    return new RankingPayload.Board("", "全部学员", "", "全部学员", "all", entries.size(), latestUpdate(owner), null, List.copyOf(entries));
+  }
+
+  private List<AggregateRow> aggregateAllRows(String owner) {
+    String sql = """
+      SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
+      COALESCE(SUM(r.total_points),0) total_points,COALESCE(SUM(r.completion_points),0) completion_points,
+      COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
+      COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
+      CASE WHEN COUNT(r.lesson_id)=0 THEN 0
+      ELSE ROUND(50.0*SUM(r.inclass_points+r.homework_points)/COUNT(r.lesson_id)) END accuracy_basis_points
+      FROM ranking_students s
+      JOIN ranking_classes c ON c.owner_username=s.owner_username AND c.camp_id=s.camp_id AND c.class_id=s.class_id
+      LEFT JOIN ranking_lesson_results r ON r.owner_username=s.owner_username AND r.camp_id=s.camp_id AND r.class_id=s.class_id AND r.student_id=s.student_id
+      WHERE s.owner_username=?
+      GROUP BY s.student_id
+      ORDER BY total_points DESC,score_reached_at ASC,accuracy_basis_points DESC,homework_points DESC,inclass_points DESC,completion_points DESC,s.student_id
+      """;
+    return jdbc.query(sql, (rs,n) -> new AggregateRow(rs.getString("student_id"),rs.getString("student_name"),
+      rs.getString("class_id"),rs.getString("class_name"),rs.getInt("total_points"),rs.getInt("completion_points"),
+      rs.getInt("inclass_points"),rs.getInt("homework_points"),rs.getInt("lesson_count"),
+      rs.getTimestamp("score_reached_at").toInstant(),rs.getInt("accuracy_basis_points")),owner);
+  }
+
   private List<AggregateRow> aggregateRows(String owner, String campId, String classId, String scope) {
     String filter = scope.equals("class") ? " AND s.class_id=?" : "";
     List<Object> args = new ArrayList<>(List.of(owner, campId)); if (scope.equals("class")) args.add(classId);

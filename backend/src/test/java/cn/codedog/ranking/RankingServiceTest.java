@@ -188,6 +188,27 @@ class RankingServiceTest {
   }
 
   @Test
+  void combinesAllTeacherStudentsAcrossCampsAndMergesStableStudentIds() {
+    addScopeAt("admin", "camp-2", "class-2", "第二营", "第二班");
+    addStudent("admin", "shared", "跨营学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudentAt("admin", "camp-2", "class-2", "shared", "跨营学员", "2026-02-01T10:00:00Z", 50, 50, 50);
+    addStudentAt("admin", "camp-2", "class-2", "other", "普通学员", "2026-02-01T11:00:00Z", 80, 80, 80);
+    addStudent("teacher-b", "hidden", "其他老师学员", "2026-01-01T09:00:00Z", 200, 200, 200);
+
+    RankingPayload.Board board = service.allBoard("CD-ADMIN001");
+
+    assertThat(board.scope()).isEqualTo("all");
+    assertThat(board.studentCount()).isEqualTo(2);
+    assertThat(board.rankings()).extracting(RankingPayload.Entry::studentId)
+      .containsExactly("shared", "other");
+    assertThat(board.rankings()).extracting(RankingPayload.Entry::totalPoints)
+      .containsExactly(450, 240);
+    assertThat(board.rankings()).extracting(RankingPayload.Entry::rank)
+      .containsExactly(1, 2);
+    assertThat(board.rankings()).noneMatch(row -> row.studentName().equals("其他老师学员"));
+  }
+
+  @Test
   void bootstrapsMappedCrmTeacherAndAuthenticatesIssuedToken() {
     RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 测试设备");
 
@@ -236,6 +257,16 @@ class RankingServiceTest {
       owner, id, name, Timestamp.from(Instant.parse(reachedAt)));
     jdbc.update("INSERT INTO ranking_lesson_results(owner_username,camp_id,class_id,lesson_id,student_id,completion_points,inclass_points,homework_points,total_points) VALUES(?,'camp','class','lesson',?,?,?,?,?)",
       owner, id, completion, inclass, homework, completion + inclass + homework);
+  }
+
+  private void addScopeAt(String owner, String campId, String classId, String campName, String className) {
+    jdbc.update("INSERT INTO ranking_camps(owner_username,camp_id,camp_name) VALUES(?,?,?)", owner, campId, campName);
+    jdbc.update("INSERT INTO ranking_classes(owner_username,camp_id,class_id,class_name) VALUES(?,?,?,?)", owner, campId, classId, className);
+  }
+
+  private void addStudentAt(String owner, String campId, String classId, String id, String name, String reachedAt, int completion, int inclass, int homework) {
+    jdbc.update("INSERT INTO ranking_students(owner_username,camp_id,class_id,student_id,student_name,score_reached_at) VALUES(?,?,?,?,?,?)", owner, campId, classId, id, name, Timestamp.from(Instant.parse(reachedAt)));
+    jdbc.update("INSERT INTO ranking_lesson_results(owner_username,camp_id,class_id,lesson_id,student_id,completion_points,inclass_points,homework_points,total_points) VALUES(?,?,?,?,?,?,?,?,?)", owner, campId, classId, "lesson", id, completion, inclass, homework, completion + inclass + homework);
   }
 
   private void addSnapshot(String owner, LocalDate date, String studentId, int rank, int points) {

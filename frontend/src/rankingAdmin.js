@@ -11,13 +11,8 @@ export function rankingTrendView(row = {}) {
   return { direction: "same", label: "-", title: "排名持平" };
 }
 
-export function rankingShareUrl({ origin, teacherId, campId, classId = "", scope = "class" }) {
-  const normalizedScope = scope === "camp" ? "camp" : "class";
+export function rankingShareUrl({ origin }) {
   const url = new URL("/rankings.html", origin);
-  if (teacherId) url.searchParams.set("teacher", String(teacherId));
-  if (campId) url.searchParams.set("camp", String(campId));
-  if (normalizedScope === "class" && classId) url.searchParams.set("class", String(classId));
-  url.searchParams.set("scope", normalizedScope);
   return url.href;
 }
 

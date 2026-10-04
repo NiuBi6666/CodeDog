@@ -10,6 +10,7 @@ public class RankingPublicController {
   public RankingPublicController(RankingService service){this.service=service;}
   @GetMapping("/catalog") public RankingPayload.Catalog catalog(@RequestParam(required=false)String teacherId){return service.catalog(teacherId);}
   @GetMapping public RankingPayload.Board board(@RequestParam String campId,@RequestParam(required=false)String classId,@RequestParam(defaultValue="class")String scope,@RequestParam(required=false)String teacherId){return service.board(teacherId,campId,classId,scope);}
+  @GetMapping("/all") public RankingPayload.Board all(){return service.allBoard();}
   @GetMapping("/extension/status")
   public RankingPayload.ExtensionStatus status(){return new RankingPayload.ExtensionStatus(true,Instant.now());}
   @GetMapping("/extension/session")

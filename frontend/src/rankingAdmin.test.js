@@ -2,24 +2,14 @@ import { describe, expect, it } from "vitest";
 import { rankingAvatarText, rankingShareUrl, rankingSummary, rankingTrendView } from "./rankingAdmin.js";
 
 describe("ranking admin helpers", () => {
-  it("builds a class share URL for the public student board", () => {
+  it("builds one canonical public URL without teacher or class parameters", () => {
     expect(rankingShareUrl({
       origin: "https://codedog.online",
       teacherId: "CD-55E19DCA",
       campId: "172",
       classId: "2792",
       scope: "class"
-    })).toBe("https://codedog.online/rankings.html?teacher=CD-55E19DCA&camp=172&class=2792&scope=class");
-  });
-
-  it("omits the class from a camp share URL", () => {
-    expect(rankingShareUrl({
-      origin: "https://codedog.online",
-      teacherId: "CD-55E19DCA",
-      campId: "172",
-      classId: "2792",
-      scope: "camp"
-    })).toBe("https://codedog.online/rankings.html?teacher=CD-55E19DCA&camp=172&scope=camp");
+    })).toBe("https://codedog.online/rankings.html");
   });
 
   it("formats avatars, trends and ranking totals", () => {

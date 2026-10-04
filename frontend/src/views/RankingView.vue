@@ -102,7 +102,6 @@ async function changeScope(nextScope) {
 }
 
 function openShare() {
-  if (!campId.value || (scope.value === "class" && !classId.value)) return;
   shareOpen.value = true;
 }
 
@@ -129,7 +128,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <div><h1>学生排名</h1><p>{{ catalog?.teacherName || auth.user?.username }}名下学员积分排名</p></div>
       <div class="ranking-heading-actions">
         <button class="button button-quiet" type="button" :disabled="loading || !campId" @click="loadBoard"><RefreshCw :class="{ 'spin-icon': loading }" :size="15"/>刷新</button>
-        <button class="button button-primary" type="button" :disabled="!campId || (scope === 'class' && !classId)" @click="openShare"><Share2 :size="15"/>分享</button>
+        <button class="button button-primary" type="button" :disabled="loading" @click="openShare"><Share2 :size="15"/>分享</button>
       </div>
     </div>
 
@@ -175,7 +174,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
 
     <div v-if="shareOpen" class="ranking-share-backdrop" role="presentation" @click.self="shareOpen = false">
       <section class="ranking-share-dialog" role="dialog" aria-modal="true" aria-labelledby="ranking-share-title">
-        <header><div><span><Share2 :size="18"/></span><div><h2 id="ranking-share-title">分享学生排行榜</h2><p>{{ selectedCamp?.name }} · {{ scope === 'camp' ? '训练营榜' : classes.find(item => String(item.id) === classId)?.name }}</p></div></div><button class="icon-button" type="button" title="关闭" aria-label="关闭分享" @click="shareOpen = false"><X :size="17"/></button></header>
+        <header><div><span><Share2 :size="18"/></span><div><h2 id="ranking-share-title">分享学生排行榜</h2><p>当前账号名下全部学员总榜</p></div></div><button class="icon-button" type="button" title="关闭" aria-label="关闭分享" @click="shareOpen = false"><X :size="17"/></button></header>
         <div class="ranking-share-content"><label for="rankingShareUrl">分享链接</label><input id="rankingShareUrl" :value="shareUrl" readonly @focus="$event.target.select()"></div>
         <footer><a class="button button-quiet" :href="shareUrl" target="_blank" rel="noopener"><ExternalLink :size="15"/>打开预览</a><button class="button button-primary" type="button" @click="copyShareLink"><Copy :size="15"/>复制链接</button></footer>
       </section>
