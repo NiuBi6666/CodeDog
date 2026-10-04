@@ -3,6 +3,16 @@ export function rankingAvatarText(name) {
   return characters.slice(-2).join("") || "?";
 }
 
+export function rankingPointsToPass(rows = [], index = -1) {
+  if (index <= 0) return 0;
+  const currentPoints = Number(rows[index]?.totalPoints || 0);
+  for (let previous = index - 1; previous >= 0; previous -= 1) {
+    const previousPoints = Number(rows[previous]?.totalPoints || 0);
+    if (previousPoints > currentPoints) return previousPoints - currentPoints + 1;
+  }
+  return 0;
+}
+
 export function rankingTrendView(row = {}) {
   if (row.previousRank == null) return { direction: "same", label: "-", title: "暂无历史排名" };
   const change = Number(row.rankChange || 0);
@@ -12,7 +22,7 @@ export function rankingTrendView(row = {}) {
 }
 
 export function rankingShareUrl({ origin }) {
-  const url = new URL("/rankings.html", origin);
+  const url = new URL("/ranking-board", origin);
   return url.href;
 }
 

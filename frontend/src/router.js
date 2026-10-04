@@ -17,10 +17,13 @@ import UserPermissionsView from "./views/UserPermissionsView.vue";
 
 import ExamManageView from "./views/ExamManageView.vue";
 import PublicExamView from "./views/PublicExamView.vue";
+const PublicRankingView = () => import("./views/PublicRankingView.vue");
 
 const routes = [
   { path: "/exams", component: ExamManageView, meta: { auth: true, admin: true, bodyClass: "admin-layout", title: "成绩管理 - CodeDog" } },
   { path: "/exam/:token", component: PublicExamView, meta: { bodyClass: "exam-public-page", title: "考试成绩查询" } },
+  { path: "/ranking-board", component: PublicRankingView, meta: { bodyClass: "ranking-public-page", title: "C++ 冒险者积分中心 - CodeDog" } },
+  { path: "/rankings.html", redirect: "/ranking-board" },
   { path: "/", redirect: "/index" },
   { path: "/doc/show/:id", component: PublicDocumentView, meta: { bodyClass: "reader-page", title: "CodeDog" } },
   { path: "/documents/:id", redirect: (to) => `/doc/show/${to.params.id}` },
