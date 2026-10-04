@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import {
   Backpack,
   Check,
+  EllipsisVertical,
   Gamepad2,
   Info,
   Keyboard,
@@ -222,11 +223,7 @@ onBeforeUnmount(() => {
           <div v-else-if="!rows.length" class="status" role="status">暂无学员积分数据</div>
           <div v-else class="ladder-list" aria-label="前十名与我的排名">
             <template v-for="(row, index) in visibleRows" :key="row.studentId">
-              <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="中间名次已省略">
-                <span aria-hidden="true">•••</span>
-                <strong>中间名次已省略</strong>
-                <span aria-hidden="true">•••</span>
-              </div>
+              <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="中间名次已省略"><EllipsisVertical aria-hidden="true" /></div>
               <article
               class="ladder-row"
               :class="[`level-${row.level}`, row.rank <= 3 ? `place-${row.rank}` : '', { selected: String(row.studentId) === selectedStudentId }]"
@@ -247,6 +244,7 @@ onBeforeUnmount(() => {
               <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><span class="level-badge">{{ row.levelName }}</span></div>
               <strong class="ladder-points">{{ row.totalPoints }}<small>积分</small></strong>
             </article>
+              <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="后续名次已省略"><EllipsisVertical aria-hidden="true" /></div>
             </template>
           </div>
         </section>
@@ -551,29 +549,17 @@ button {
 }
 
 .omitted-ranks {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  min-height: 42px;
-  gap: 12px;
+  justify-content: center;
+  min-height: 28px;
   color: #66789d;
-  font-size: 11px;
-  text-align: center;
 }
 
-.omitted-ranks::before,
-.omitted-ranks::after {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(101, 122, 164, 0.55));
-  content: "";
-}
-
-.omitted-ranks::after {
-  background: linear-gradient(90deg, rgba(101, 122, 164, 0.55), transparent);
-}
-
-.omitted-ranks span {
-  letter-spacing: 3px;
+.omitted-ranks svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 3;
 }
 
 .ladder-row {
