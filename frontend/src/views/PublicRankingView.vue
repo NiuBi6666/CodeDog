@@ -5,6 +5,7 @@ import {
   Backpack,
   Check,
   EllipsisVertical,
+  Gift,
   Gamepad2,
   Info,
   Keyboard,
@@ -28,6 +29,7 @@ const levelNames = ["石墨", "青铜", "白银", "黄金", "蓝宝石", "钻石
 
 const board = ref(null);
 const announcement = ref("");
+const rewards = ref([]);
 const loading = ref(false);
 const error = ref("");
 const selectedStudentId = ref("");
@@ -83,9 +85,10 @@ async function loadBoard() {
   loading.value = true;
   error.value = "";
   try {
-    const [boardValue, announcementValue] = await Promise.all([api("/public/rankings/all"), api("/public/rankings/announcement")]);
+    const [boardValue, announcementValue, rewardValues] = await Promise.all([api("/public/rankings/all"), api("/public/rankings/announcement"), api("/public/rankings/rewards")]);
     board.value = boardValue;
     announcement.value = announcementValue?.text || "";
+    rewards.value = rewardValues || [];
     initializeSelection();
   } catch (failure) {
     error.value = failure.message || "排行榜加载失败";
@@ -264,6 +267,23 @@ onBeforeUnmount(() => {
             <article class="supply-card"><Star class="supply-icon supply-gold" aria-hidden="true" /><h3>{{ nextLevelName }}</h3><strong>{{ nextLevelPoints }}</strong><button class="supply-action" type="button" @click="showSelectedDetails">查看明细</button></article>
           </div>
           <div class="adventure-tip"><Info aria-hidden="true" /><p>{{ motivationText }}</p></div>
+
+          <section class="reward-vault" aria-labelledby="rewardVaultTitle">
+            <div class="reward-vault-heading">
+              <div><Gift aria-hidden="true" /><span><h3 id="rewardVaultTitle">冒险奖品库</h3><p>积攒积分后联系老师兑换</p></span></div>
+              <small>{{ rewards.length }} 件奖品</small>
+            </div>
+            <div v-if="rewards.length" class="reward-grid">
+              <article v-for="reward in rewards" :key="reward.id" class="reward-card">
+                <div class="reward-image">
+                  <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name">
+                  <Gift v-else aria-hidden="true" />
+                </div>
+                <div class="reward-copy"><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong></div>
+              </article>
+            </div>
+            <div v-else class="reward-empty"><Gift aria-hidden="true" /><span><strong>奖品正在补货</strong><small>老师添加奖品后会显示在这里</small></span></div>
+          </section>
         </section>
       </main>
 
@@ -777,6 +797,84 @@ button {
   font-size: 12px;
 }
 
+.reward-vault {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed #3e5477;
+}
+
+.reward-vault-heading,
+.reward-vault-heading > div,
+.reward-card,
+.reward-empty {
+  display: flex;
+  align-items: center;
+}
+
+.reward-vault-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reward-vault-heading > div { gap: 9px; }
+.reward-vault-heading svg { width: 20px; height: 20px; color: #ffca25; }
+.reward-vault-heading h3 { margin: 0; color: #f3f6ff; font-size: 15px; }
+.reward-vault-heading p { margin: 3px 0 0; color: #7483a9; font-size: 10px; }
+.reward-vault-heading small { color: #8fa0c2; font-size: 10px; white-space: nowrap; }
+
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reward-card {
+  min-width: 0;
+  min-height: 86px;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid #354c70;
+  border-radius: 7px;
+  background: #16233b;
+}
+
+.reward-image {
+  display: grid;
+  flex: 0 0 auto;
+  width: 68px;
+  height: 68px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid #465d82;
+  border-radius: 6px;
+  color: #ffca25;
+  background: #0f1a31;
+}
+
+.reward-image img { width: 100%; height: 100%; object-fit: cover; }
+.reward-image svg { width: 26px; height: 26px; }
+.reward-copy { min-width: 0; }
+.reward-copy h4 { margin: 0 0 7px; color: #f5f7ff; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.reward-copy strong { color: #39d9ff; font-family: Consolas, "SFMono-Regular", monospace; font-size: 17px; font-variant-numeric: tabular-nums; }
+.reward-copy strong small { color: #91a2c4; font-family: inherit; font-size: 9px; }
+
+.reward-empty {
+  min-height: 84px;
+  justify-content: center;
+  gap: 11px;
+  border: 1px dashed #354b6e;
+  border-radius: 7px;
+  color: #7082a7;
+  background: #111c33;
+}
+
+.reward-empty > svg { width: 24px; height: 24px; }
+.reward-empty strong,
+.reward-empty small { display: block; }
+.reward-empty strong { color: #a9b5ce; font-size: 12px; }
+.reward-empty small { margin-top: 3px; font-size: 10px; }
+
 .score-popover {
   position: fixed;
   z-index: 30;
@@ -903,6 +1001,10 @@ button {
     min-height: 150px;
     padding: 12px 8px;
   }
+
+  .reward-grid { grid-template-columns: 1fr; }
+  .reward-card { min-height: 76px; }
+  .reward-image { width: 58px; height: 58px; }
 
   .ladder-row {
     grid-template-columns: 27px 38px minmax(0, 1fr) auto;

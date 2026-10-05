@@ -35,8 +35,7 @@ public class RankingRewardService {
   }
 
   public RankingRewardPayload.Announcement publicAnnouncement() {
-    String owner = jdbc.queryForObject("SELECT username FROM users ORDER BY is_admin DESC,id LIMIT 1", String.class);
-    return announcement(owner);
+    return announcement(publicOwner());
   }
 
   @Transactional
@@ -48,7 +47,13 @@ public class RankingRewardService {
 
   public List<RankingRewardPayload.Reward> rewards(String owner) {
     return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at FROM ranking_rewards WHERE owner_username=? ORDER BY enabled DESC,required_points,id",
-      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7))), owner);
+      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), false), owner);
+  }
+
+  public List<RankingRewardPayload.Reward> publicRewards() {
+    String owner = publicOwner();
+    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE ORDER BY required_points,id",
+      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), true, rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), true), owner);
   }
 
   @Transactional
@@ -86,6 +91,14 @@ public class RankingRewardService {
 
   public RankingRewardPayload.RewardImage rewardImage(String owner, long id) {
     List<RankingRewardPayload.RewardImage> values = jdbc.query("SELECT image_data,image_content_type FROM ranking_rewards WHERE id=? AND owner_username=? AND image_data IS NOT NULL",
+      (rs, n) -> new RankingRewardPayload.RewardImage(rs.getBytes(1), rs.getString(2)), id, owner);
+    if (values.isEmpty()) throw notFound("奖品图片不存在");
+    return values.getFirst();
+  }
+
+  public RankingRewardPayload.RewardImage publicRewardImage(long id) {
+    String owner = publicOwner();
+    List<RankingRewardPayload.RewardImage> values = jdbc.query("SELECT image_data,image_content_type FROM ranking_rewards WHERE id=? AND owner_username=? AND enabled=TRUE AND image_data IS NOT NULL",
       (rs, n) -> new RankingRewardPayload.RewardImage(rs.getBytes(1), rs.getString(2)), id, owner);
     if (values.isEmpty()) throw notFound("奖品图片不存在");
     return values.getFirst();
@@ -130,13 +143,16 @@ public class RankingRewardService {
 
   private RankingRewardPayload.Reward rewardById(String owner, long id) {
     List<RankingRewardPayload.Reward> values = jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at FROM ranking_rewards WHERE id=? AND owner_username=?",
-      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7))), id, owner);
+      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), false), id, owner);
     if (values.isEmpty()) throw notFound("奖品不存在"); return values.getFirst();
   }
 
-  private RankingRewardPayload.Reward reward(long id, String name, int points, boolean enabled, boolean hasImage, Instant createdAt, Instant updatedAt) {
-    return new RankingRewardPayload.Reward(id, name, points, enabled, hasImage, hasImage ? "/api/rankings/admin/rewards/" + id + "/image?v=" + (updatedAt == null ? 0 : updatedAt.toEpochMilli()) : null, createdAt, updatedAt);
+  private RankingRewardPayload.Reward reward(long id, String name, int points, boolean enabled, boolean hasImage, Instant createdAt, Instant updatedAt, boolean publicImage) {
+    String imagePath = publicImage ? "/api/public/rankings/rewards/" : "/api/rankings/admin/rewards/";
+    return new RankingRewardPayload.Reward(id, name, points, enabled, hasImage, hasImage ? imagePath + id + "/image?v=" + (updatedAt == null ? 0 : updatedAt.toEpochMilli()) : null, createdAt, updatedAt);
   }
+
+  private String publicOwner() { return jdbc.queryForObject("SELECT username FROM users ORDER BY is_admin DESC,id LIMIT 1", String.class); }
 
   private RankingRewardPayload.Redemption redemptionById(String owner, long id) {
     return redemptions(owner).stream().filter(value -> value.id() == id).findFirst().orElseThrow(() -> notFound("兑换记录不存在"));

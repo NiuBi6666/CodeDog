@@ -92,6 +92,23 @@ class RankingRewardServiceTest {
   }
 
   @Test
+  void exposesOnlyEnabledRewardsWithPublicImages() {
+    MockMultipartFile image = new MockMultipartFile("image", "gift.png", "image/png", new byte[]{5, 6, 7});
+    var enabled = service.createReward("teacher-a", "机械键盘", 800, true, image);
+    service.createReward("teacher-a", "暂停售卖", 100, false, null);
+    service.createReward("teacher-b", "其他老师奖品", 50, true, null);
+
+    var visible = service.publicRewards();
+
+    assertThat(visible).hasSize(1);
+    assertThat(visible.getFirst().name()).isEqualTo("机械键盘");
+    assertThat(visible.getFirst().imageUrl()).startsWith("/api/public/rankings/rewards/");
+    assertThat(service.publicRewardImage(enabled.id()).data()).containsExactly(5, 6, 7);
+    assertThatThrownBy(() -> service.publicRewardImage(9999))
+      .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
   void preventsOverspendingAndTracksFulfillment() {
     var small = service.createReward("teacher-a", "小奖品", 300, true, null);
     var large = service.createReward("teacher-a", "大奖品", 250, true, null);
