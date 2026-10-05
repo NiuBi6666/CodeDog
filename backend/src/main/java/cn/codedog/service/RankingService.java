@@ -180,8 +180,10 @@ public class RankingService {
   }
 
   public RankingPayload.Board allBoard() { return allBoard(null); }
-  public RankingPayload.Board allBoard(String teacherValue) {
-    String owner = resolveTeacher(teacherValue).username();
+  public RankingPayload.Board allBoard(String teacherValue) { return allBoardForOwner(resolveTeacher(teacherValue).username()); }
+
+  public RankingPayload.Board allBoardForOwner(String ownerValue) {
+    String owner = text(ownerValue, "数据所属用户", 50);
     List<RankingPayload.Entry> entries = new ArrayList<>();
     for (RankedRow rankedRow : rankRows(aggregateAllRows(owner))) {
       AggregateRow row = rankedRow.row();

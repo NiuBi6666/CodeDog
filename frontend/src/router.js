@@ -11,7 +11,7 @@ import PasswordView from "./views/PasswordView.vue";
 import PublicDocumentView from "./views/PublicDocumentView.vue";
 import QuestionnaireView from "./views/QuestionnaireView.vue";
 import RegisterView from "./views/RegisterView.vue";
-import RankingView from "./views/RankingView.vue";
+const RankingView = () => import("./views/RankingManagementView.vue");
 import StudentQueryView from "./views/StudentQueryView.vue";
 import UserPermissionsView from "./views/UserPermissionsView.vue";
 

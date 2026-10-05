@@ -8,6 +8,7 @@ import {
   Gamepad2,
   Info,
   Keyboard,
+  Megaphone,
   Maximize2,
   Minimize2,
   RefreshCw,
@@ -26,6 +27,7 @@ const levelMinimums = [0, 600, 1500, 2700, 4200, 5400];
 const levelNames = ["石墨", "青铜", "白银", "黄金", "蓝宝石", "钻石"];
 
 const board = ref(null);
+const announcement = ref("");
 const loading = ref(false);
 const error = ref("");
 const selectedStudentId = ref("");
@@ -81,7 +83,9 @@ async function loadBoard() {
   loading.value = true;
   error.value = "";
   try {
-    board.value = await api("/public/rankings/all");
+    const [boardValue, announcementValue] = await Promise.all([api("/public/rankings/all"), api("/public/rankings/announcement")]);
+    board.value = boardValue;
+    announcement.value = announcementValue?.text || "";
     initializeSelection();
   } catch (failure) {
     error.value = failure.message || "排行榜加载失败";
@@ -210,6 +214,8 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </header>
+
+      <div v-if="announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
 
       <main class="ranking-layout" @click.stop>
         <section class="game-panel ladder-panel" aria-labelledby="ladderTitle">
@@ -442,6 +448,21 @@ button {
   width: 17px;
   height: 17px;
 }
+
+.board-announcement {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 202, 37, 0.32);
+  border-radius: 6px;
+  color: #d8e1f4;
+  background: rgba(255, 202, 37, 0.07);
+}
+
+.board-announcement svg { width: 18px; height: 18px; flex: 0 0 auto; color: #ffca25; }
+.board-announcement p { margin: 0; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .ranking-layout {
   display: grid;
