@@ -195,6 +195,37 @@ public class RankingService {
     return new RankingPayload.Board("", "全部学员", "", "全部学员", "all", entries.size(), latestUpdate(owner), null, List.copyOf(entries));
   }
 
+  public RankingPayload.OpportunitySummary opportunities(String studentValue) {
+    String owner = resolveTeacher(null).username();
+    String studentId = text(studentValue, "学员 ID", 100);
+    Integer studentCount = jdbc.queryForObject("SELECT COUNT(*) FROM ranking_students WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
+    if (studentCount == null || studentCount == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在");
+    OpportunityStats stats = jdbc.queryForObject("""
+      SELECT
+      COALESCE(SUM(CASE WHEN homework_total>homework_submitted THEN homework_total-homework_submitted ELSE 0 END),0) homework_missing,
+      COALESCE(SUM(CASE WHEN homework_submitted>homework_passed THEN homework_submitted-homework_passed ELSE 0 END),0) homework_review,
+      COALESCE(SUM(CASE WHEN inclass_total>inclass_submitted THEN inclass_total-inclass_submitted ELSE 0 END),0) inclass_missing,
+      COALESCE(SUM(CASE WHEN inclass_submitted>inclass_passed THEN inclass_submitted-inclass_passed ELSE 0 END),0) inclass_review,
+      COALESCE(SUM(CASE WHEN completion_rate<1 THEN 1 ELSE 0 END),0) incomplete_lessons
+      FROM ranking_lesson_results WHERE owner_username=? AND student_id=?
+      """, (rs, n) -> new OpportunityStats(rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5)), owner, studentId);
+    List<RankingPayload.Opportunity> values = new ArrayList<>();
+    if (stats.homeworkMissing() > 0) values.add(new RankingPayload.Opportunity(
+      "HOMEWORK_MISSING", "完成课后作业", "还有 " + stats.homeworkMissing() + " 道课后作业未提交，赶快完成并争取全部答对。", stats.homeworkMissing()));
+    if (stats.inclassMissing() > 0) values.add(new RankingPayload.Opportunity(
+      "INCLASS_MISSING", "补齐课上作业", "还有 " + stats.inclassMissing() + " 道课上作业未提交，补齐后再检查答案。", stats.inclassMissing()));
+    if (stats.incompleteLessons() > 0) values.add(new RankingPayload.Opportunity(
+      "LESSON_INCOMPLETE", "完成未学完课程", "还有 " + stats.incompleteLessons() + " 节课程没有完成，学完课程即可获得更多完课积分。", stats.incompleteLessons()));
+    if (stats.homeworkReview() > 0) values.add(new RankingPayload.Opportunity(
+      "HOMEWORK_REVIEW", "订正课后作业", "有 " + stats.homeworkReview() + " 道课后作业尚未通过，订正后可以提高正确率。", stats.homeworkReview()));
+    if (stats.inclassReview() > 0) values.add(new RankingPayload.Opportunity(
+      "INCLASS_REVIEW", "复习课上错题", "有 " + stats.inclassReview() + " 道课上作业尚未通过，重新检查解题过程。", stats.inclassReview()));
+    boolean complete = values.isEmpty();
+    if (complete) values.add(new RankingPayload.Opportunity(
+      "COMPLETE", "本期任务已全部完成", "当前同步到的课程和作业都已完成，继续保持高正确率！", 0));
+    return new RankingPayload.OpportunitySummary(studentId, complete, List.copyOf(values));
+  }
+
   private List<AggregateRow> aggregateAllRows(String owner) {
     String sql = """
       SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
@@ -384,5 +415,6 @@ public class RankingService {
   private record ExistingResult(String hash,int totalPoints){}
   private record RankedRow(int rank,AggregateRow row){}
   private record SnapshotScore(String studentId,int totalPoints){}
+  private record OpportunityStats(int homeworkMissing,int homeworkReview,int inclassMissing,int inclassReview,int incompleteLessons){}
   private static final class MutableCamp{final String id,name;final List<RankingPayload.ClassOption> classes=new ArrayList<>();MutableCamp(String id,String name){this.id=id;this.name=name;}}
 }

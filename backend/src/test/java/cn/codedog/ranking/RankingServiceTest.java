@@ -87,6 +87,9 @@ class RankingServiceTest {
         class_id VARCHAR(100) NOT NULL,
         lesson_id VARCHAR(100) NOT NULL,
         student_id VARCHAR(100) NOT NULL,
+        completion_rate DECIMAL(6,5) NOT NULL DEFAULT 1,
+        inclass_total INT NOT NULL DEFAULT 0, inclass_submitted INT NOT NULL DEFAULT 0, inclass_passed INT NOT NULL DEFAULT 0,
+        homework_total INT NOT NULL DEFAULT 0, homework_submitted INT NOT NULL DEFAULT 0, homework_passed INT NOT NULL DEFAULT 0,
         completion_points INT NOT NULL,
         inclass_points INT NOT NULL,
         homework_points INT NOT NULL,
@@ -206,6 +209,34 @@ class RankingServiceTest {
     assertThat(board.rankings()).extracting(RankingPayload.Entry::rank)
       .containsExactly(1, 2);
     assertThat(board.rankings()).noneMatch(row -> row.studentName().equals("其他老师学员"));
+  }
+
+  @Test
+  void suggestsRealIncompleteAndIncorrectWorkInPriorityOrder() {
+    addStudent("admin", "needs-work", "待提升学员", "2026-01-01T10:00:00Z", 50, 50, 50);
+    jdbc.update("""
+      UPDATE ranking_lesson_results SET completion_rate=0.5,
+      homework_total=5,homework_submitted=3,homework_passed=2,
+      inclass_total=4,inclass_submitted=3,inclass_passed=2
+      WHERE owner_username='admin' AND student_id='needs-work'
+      """);
+
+    RankingPayload.OpportunitySummary summary = service.opportunities("needs-work");
+
+    assertThat(summary.complete()).isFalse();
+    assertThat(summary.opportunities()).extracting(RankingPayload.Opportunity::type)
+      .containsExactly("HOMEWORK_MISSING", "INCLASS_MISSING", "LESSON_INCOMPLETE", "HOMEWORK_REVIEW", "INCLASS_REVIEW");
+    assertThat(summary.opportunities().getFirst().description()).contains("2 道课后作业未提交");
+  }
+
+  @Test
+  void congratulatesStudentsWithNoRemainingWork() {
+    addStudent("admin", "complete", "已完成学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+
+    RankingPayload.OpportunitySummary summary = service.opportunities("complete");
+
+    assertThat(summary.complete()).isTrue();
+    assertThat(summary.opportunities()).singleElement().satisfies(value -> assertThat(value.type()).isEqualTo("COMPLETE"));
   }
 
   @Test

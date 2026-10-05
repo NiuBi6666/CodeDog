@@ -1,9 +1,10 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import {
   Backpack,
   Check,
+  CircleCheckBig,
   EllipsisVertical,
   Gift,
   Gamepad2,
@@ -13,6 +14,7 @@ import {
   Maximize2,
   Minimize2,
   RefreshCw,
+  Sparkles,
   Star,
   Trophy
 } from "@lucide/vue";
@@ -30,6 +32,9 @@ const levelNames = ["石墨", "青铜", "白银", "黄金", "蓝宝石", "钻石
 const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
+const opportunities = ref([]);
+const opportunityLoading = ref(false);
+const opportunityError = ref("");
 const loading = ref(false);
 const error = ref("");
 const selectedStudentId = ref("");
@@ -43,6 +48,8 @@ let refreshTimer;
 const rows = computed(() => board.value?.rankings || []);
 const selectedIndex = computed(() => rows.value.findIndex((row) => String(row.studentId) === String(selectedStudentId.value)));
 const visibleRows = computed(() => rankingVisibleRows(rows.value, selectedStudentId.value));
+const visibleOpportunities = computed(() => opportunities.value.slice(0, 3));
+const opportunityComplete = computed(() => visibleOpportunities.value[0]?.type === "COMPLETE");
 const showsSelectedSeparately = computed(() => visibleRows.value.length > 10);
 const selectedStudent = computed(() => selectedIndex.value >= 0 ? rows.value[selectedIndex.value] : null);
 const nextLevelIndex = computed(() => selectedStudent.value ? Math.min(selectedStudent.value.level, levelMinimums.length - 1) : 0);
@@ -81,7 +88,24 @@ function initializeSelection() {
   rememberSelection();
 }
 
+let opportunityRequest = 0;
+async function loadOpportunities(studentId = selectedStudentId.value) {
+  if (!studentId) return;
+  const request = ++opportunityRequest;
+  opportunityLoading.value = true;
+  opportunityError.value = "";
+  try {
+    const result = await api(`/public/rankings/students/${encodeURIComponent(studentId)}/opportunities`);
+    if (request === opportunityRequest) opportunities.value = result?.opportunities || [];
+  } catch (failure) {
+    if (request === opportunityRequest) { opportunities.value = []; opportunityError.value = failure.message || "提分任务加载失败"; }
+  } finally {
+    if (request === opportunityRequest) opportunityLoading.value = false;
+  }
+}
+
 async function loadBoard() {
+  const previousStudentId = selectedStudentId.value;
   loading.value = true;
   error.value = "";
   try {
@@ -90,6 +114,7 @@ async function loadBoard() {
     announcement.value = announcementValue?.text || "";
     rewards.value = rewardValues || [];
     initializeSelection();
+    if (selectedStudentId.value === previousStudentId) loadOpportunities();
   } catch (failure) {
     error.value = failure.message || "排行榜加载失败";
   } finally {
@@ -171,6 +196,8 @@ async function toggleFullscreen() {
 function handleFullscreenChange() {
   isFullscreen.value = Boolean(document.fullscreenElement);
 }
+
+watch(selectedStudentId, (studentId) => loadOpportunities(studentId));
 
 onMounted(() => {
   loadBoard();
@@ -267,6 +294,21 @@ onBeforeUnmount(() => {
             <article class="supply-card"><Star class="supply-icon supply-gold" aria-hidden="true" /><h3>{{ nextLevelName }}</h3><strong>{{ nextLevelPoints }}</strong><button class="supply-action" type="button" @click="showSelectedDetails">查看明细</button></article>
           </div>
           <div class="adventure-tip"><Info aria-hidden="true" /><p>{{ motivationText }}</p></div>
+
+          <section class="earning-guide" aria-labelledby="earningGuideTitle">
+            <div class="earning-guide-heading"><div><Sparkles aria-hidden="true" /><span><h3 id="earningGuideTitle">我的提分任务</h3><p>根据最近同步的学习数据生成</p></span></div><small>{{ selectedStudent?.studentName || "当前学员" }}</small></div>
+            <div v-if="opportunityLoading" class="earning-state"><RefreshCw class="spin" aria-hidden="true" />正在分析可以赚积分的方法</div>
+            <div v-else-if="opportunityError" class="earning-state earning-error">{{ opportunityError }}</div>
+            <div v-else class="earning-list" :class="{ complete: opportunityComplete }">
+              <article v-for="(task, index) in visibleOpportunities" :key="task.type" class="earning-task">
+                <span class="earning-task-mark">
+                  <CircleCheckBig v-if="task.type === 'COMPLETE'" aria-hidden="true" />
+                  <strong v-else>{{ index + 1 }}</strong>
+                </span>
+                <div><h4>{{ task.title }}</h4><p>{{ task.description }}</p></div>
+              </article>
+            </div>
+          </section>
 
           <section class="reward-vault" aria-labelledby="rewardVaultTitle">
             <div class="reward-vault-heading">
@@ -796,6 +838,72 @@ button {
   margin: 0;
   font-size: 12px;
 }
+
+.earning-guide {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed #3e5477;
+}
+
+.earning-guide-heading,
+.earning-guide-heading > div,
+.earning-task,
+.earning-state {
+  display: flex;
+  align-items: center;
+}
+
+.earning-guide-heading { justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.earning-guide-heading > div { gap: 9px; }
+.earning-guide-heading svg { width: 20px; height: 20px; color: #39d9ff; }
+.earning-guide-heading h3 { margin: 0; color: #f3f6ff; font-size: 15px; }
+.earning-guide-heading p { margin: 3px 0 0; color: #7483a9; font-size: 10px; }
+.earning-guide-heading small { max-width: 120px; overflow: hidden; color: #9aabca; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
+.earning-list { display: grid; gap: 8px; }
+.earning-task {
+  min-height: 66px;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid #344e70;
+  border-left: 3px solid #39d9ff;
+  border-radius: 6px;
+  background: #142139;
+}
+
+.earning-task-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border: 1px solid #3a7290;
+  border-radius: 50%;
+  color: #49dcff;
+  background: #172f49;
+  font-size: 12px;
+}
+
+.earning-task-mark svg { width: 17px; height: 17px; }
+.earning-task > div { min-width: 0; }
+.earning-task h4 { margin: 0 0 4px; color: #f5f7ff; font-size: 12px; }
+.earning-task p { margin: 0; color: #9baac7; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.earning-list.complete .earning-task { border-color: #2b715f; border-left-color: #35d69b; background: #122d2c; }
+.earning-list.complete .earning-task-mark { border-color: #2c8c70; color: #54e8b3; background: #173d36; }
+
+.earning-state {
+  min-height: 66px;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed #354b6e;
+  border-radius: 6px;
+  color: #8191b2;
+  background: #111c33;
+  font-size: 11px;
+}
+
+.earning-state svg { width: 16px; height: 16px; }
+.earning-error { color: #ff8da2; }
 
 .reward-vault {
   margin-top: 18px;

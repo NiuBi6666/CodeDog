@@ -27,4 +27,6 @@ public record RankingPayload(String campId, String campName, List<ClassData> cla
                       int totalPoints, int completionPoints, int inclassPoints, int homeworkPoints,
                       int lessonCount, int level, String levelName, Instant scoreReachedAt,
                       double accuracyRate, Integer previousRank, int rankChange, String trend) {}
+  public record Opportunity(String type, String title, String description, int count) {}
+  public record OpportunitySummary(String studentId, boolean complete, List<Opportunity> opportunities) {}
 }

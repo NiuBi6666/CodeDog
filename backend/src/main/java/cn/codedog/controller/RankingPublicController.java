@@ -11,6 +11,7 @@ public class RankingPublicController {
   @GetMapping("/catalog") public RankingPayload.Catalog catalog(@RequestParam(required=false)String teacherId){return service.catalog(teacherId);}
   @GetMapping public RankingPayload.Board board(@RequestParam String campId,@RequestParam(required=false)String classId,@RequestParam(defaultValue="class")String scope,@RequestParam(required=false)String teacherId){return service.board(teacherId,campId,classId,scope);}
   @GetMapping("/all") public RankingPayload.Board all(){return service.allBoard();}
+  @GetMapping("/students/{studentId}/opportunities") public RankingPayload.OpportunitySummary opportunities(@PathVariable String studentId){return service.opportunities(studentId);}
   @GetMapping("/extension/status")
   public RankingPayload.ExtensionStatus status(){return new RankingPayload.ExtensionStatus(true,Instant.now());}
   @GetMapping("/extension/session")
