@@ -3,8 +3,8 @@ package cn.codedog.controller;
 import cn.codedog.model.RankingPayload;
 import cn.codedog.model.RankingRewardPayload;
 import cn.codedog.service.AuditService;
+import cn.codedog.service.RankingBoardService;
 import cn.codedog.service.RankingRewardService;
-import cn.codedog.service.RankingService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -18,11 +18,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/rankings/admin")
 public class RankingRewardAdminController {
-  private final RankingService rankings;
+  private final RankingBoardService rankings;
   private final RankingRewardService rewards;
   private final AuditService audit;
 
-  public RankingRewardAdminController(RankingService rankings, RankingRewardService rewards, AuditService audit) {
+  public RankingRewardAdminController(RankingBoardService rankings, RankingRewardService rewards, AuditService audit) {
     this.rankings = rankings; this.rewards = rewards; this.audit = audit;
   }
 

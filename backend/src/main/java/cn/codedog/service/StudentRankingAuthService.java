@@ -21,10 +21,10 @@ public class StudentRankingAuthService {
   private final JdbcTemplate jdbc;
   private final PasswordEncoder passwordEncoder;
   private final AuditService audit;
-  private final RankingService rankings;
+  private final RankingBoardService rankings;
 
   public StudentRankingAuthService(JdbcTemplate jdbc, PasswordEncoder passwordEncoder,
-                                   AuditService audit, RankingService rankings) {
+                                   AuditService audit, RankingBoardService rankings) {
     this.jdbc = jdbc;
     this.passwordEncoder = passwordEncoder;
     this.audit = audit;

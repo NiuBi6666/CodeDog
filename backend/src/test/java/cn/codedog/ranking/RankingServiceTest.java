@@ -19,7 +19,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RankingServiceTest {
   private JdbcTemplate jdbc;
-  private RankingService service;
+  private RankingBoardService service;
+  private RankingDeviceService devices;
 
   @BeforeEach
   void setUp() {
@@ -117,7 +118,8 @@ class RankingServiceTest {
     jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES('555','teacher-b')");
     addScope("admin", "测试营", "测试班");
     addScope("teacher-b", "B老师营", "B老师班");
-    service = new RankingService(jdbc);
+    service = new RankingBoardService(jdbc);
+    devices = new RankingDeviceService(jdbc);
   }
 
   @Test
@@ -241,19 +243,19 @@ class RankingServiceTest {
 
   @Test
   void bootstrapsMappedCrmTeacherAndAuthenticatesIssuedToken() {
-    RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 测试设备");
+    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 测试设备");
 
     assertThat(connection.username()).isEqualTo("admin");
     assertThat(connection.teacherId()).isEqualTo("CD-ADMIN001");
     assertThat(connection.crmTeacherId()).isEqualTo("29413");
-    assertThat(service.authenticateToken("Bearer " + connection.token())).isEqualTo("admin");
+    assertThat(devices.authenticateToken("Bearer " + connection.token())).isEqualTo("admin");
   }
 
   @Test
   void restoresMappedSessionFromLegacyDeviceToken() {
-    RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 旧设备");
+    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 旧设备");
 
-    RankingPayload.ExtensionSession session = service.session("Bearer " + connection.token());
+    RankingPayload.ExtensionSession session = devices.session("Bearer " + connection.token());
 
     assertThat(session.deviceId()).isEqualTo(connection.deviceId());
     assertThat(session.username()).isEqualTo("admin");
@@ -263,17 +265,17 @@ class RankingServiceTest {
 
   @Test
   void rejectsRevokedDeviceSession() {
-    RankingPayload.Connection connection = service.bootstrap("29413", "Chrome 已撤销设备");
+    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 已撤销设备");
     jdbc.update("UPDATE ranking_extension_devices SET revoked_at=CURRENT_TIMESTAMP WHERE id=?", connection.deviceId());
 
-    assertThatThrownBy(() -> service.session("Bearer " + connection.token()))
+    assertThatThrownBy(() -> devices.session("Bearer " + connection.token()))
       .isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(401));
   }
 
   @Test
   void rejectsUnknownCrmTeacher() {
-    assertThatThrownBy(() -> service.bootstrap("unknown", "Chrome 测试设备"))
+    assertThatThrownBy(() -> devices.bootstrap("unknown", "Chrome 测试设备"))
       .isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(404));
   }
