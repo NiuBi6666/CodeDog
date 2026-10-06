@@ -3823,16 +3823,18 @@ a {
 .ranking-workspace-tabs button span { min-width:20px;padding:2px 6px;border-radius:10px;color:#52666c;background:#e7edef;font-size:10px;text-align:center; }
 .ranking-workspace-tabs button.active span { color:#0c665f;background:#d9efeb; }
 
-.ranking-announcement-panel { display:grid;grid-template-columns:minmax(190px,.65fr) minmax(320px,1.6fr) auto;align-items:center;gap:14px;margin-bottom:16px;padding:14px 16px; }
-.ranking-announcement-panel>div { display:flex;min-width:0;align-items:flex-start;gap:9px;color:#16877f; }
-.ranking-announcement-panel>div span,.ranking-announcement-panel strong,.ranking-announcement-panel small { display:block; }
-.ranking-announcement-panel strong { color:#2b3e44;font-size:13px; }
-.ranking-announcement-panel small { margin-top:3px;color:#7b898e;font-size:10px;line-height:1.4; }
+.ranking-announcement-panel { display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px;padding:14px 16px; }
+.ranking-announcement-form-row { display:grid;grid-template-columns:minmax(300px,1.6fr) minmax(210px,1fr) minmax(210px,1fr) auto;align-items:stretch;gap:10px; }
+.ranking-announcement-description { display:flex;min-width:0;align-items:flex-start;gap:9px;color:#16877f; }
+.ranking-announcement-description span,.ranking-announcement-description strong,.ranking-announcement-description small { display:block; }
+.ranking-announcement-description strong { color:#2b3e44;font-size:13px; }
+.ranking-announcement-description small { margin-top:3px;color:#7b898e;font-size:10px;line-height:1.4; }
 .ranking-announcement-panel textarea { width:100%;min-height:58px;resize:vertical;padding:9px 11px;border:1px solid #ccd7da;border-radius:6px;outline:0;color:#304248;font:inherit;line-height:1.45; }
 .ranking-announcement-panel textarea:focus { border-color:#16877f;box-shadow:0 0 0 2px rgba(22,135,127,.12); }
+.ranking-announcement-form-row>.button { min-height:38px;white-space:nowrap; }
 .ranking-announcement-schedule { display:flex;min-height:38px;align-items:center;gap:7px;padding:0 10px;border:1px solid #d1dcde;border-radius:6px;color:#63777d;background:#f8fbfb;font-size:11px;white-space:nowrap; }
 .ranking-announcement-schedule input { min-width:0;border:0;outline:0;color:#40545a;background:transparent;font:inherit; }
-.ranking-announcement-schedules { display:grid;gap:8px;min-width:0; }
+.ranking-announcement-schedules { display:contents;min-width:0; }
 .ranking-announcement-controls { display:flex;align-items:flex-end;gap:12px; }
 .ranking-announcement-time-editor { display:flex;align-items:center;flex-wrap:wrap;gap:6px; }
 .ranking-announcement-time-editor label { display:flex;align-items:center;gap:4px;color:#718187;font-size:10px;white-space:nowrap; }
@@ -3897,7 +3899,10 @@ a {
 
 
 @media(max-width:900px) {
-  .ranking-announcement-schedule { grid-column:1/-1; }
+  .ranking-announcement-form-row { grid-template-columns:minmax(240px,1fr) minmax(190px,1fr); }
+  .ranking-announcement-form-row textarea { grid-column:1/-1; }
+  .ranking-announcement-form-row>.button { grid-column:1/-1; }
+  .ranking-announcement-form-row .ranking-announcement-schedule { grid-column:auto; }
   .ranking-announcement-row { align-items:flex-start;flex-direction:column;gap:12px; }
   .ranking-announcement-controls { width:100%;align-items:stretch;flex-direction:column;gap:10px; }
   .ranking-announcement-time-editor { width:100%; }
@@ -3905,8 +3910,8 @@ a {
   .ranking-announcement-time-editor input { width:100%; }
   .ranking-announcement-action { width:100%; }
 
-  .ranking-announcement-panel { grid-template-columns:1fr auto; }
-  .ranking-announcement-panel textarea { grid-row:2;grid-column:1/-1; }
+  .ranking-announcement-panel { grid-template-columns:1fr; }
+  .ranking-announcement-panel textarea { grid-row:auto;grid-column:auto; }
   .ranking-toolbar { align-items:stretch;flex-direction:column; }
   .ranking-toolbar-actions { align-items:stretch;flex-direction:column; }
   .ranking-search { width:100%; }
@@ -3916,8 +3921,9 @@ a {
   .ranking-workspace-tabs { overflow-x:auto; }
   .ranking-workspace-tabs button { flex:0 0 auto;padding-inline:11px; }
   .ranking-announcement-panel { grid-template-columns:1fr; }
-  .ranking-announcement-panel textarea { grid-row:auto;grid-column:auto; }
-  .ranking-announcement-schedules { grid-column:1; }
+  .ranking-announcement-form-row { grid-template-columns:1fr; }
+  .ranking-announcement-form-row textarea,.ranking-announcement-form-row>.button,.ranking-announcement-form-row .ranking-announcement-schedule { grid-column:auto; }
+  .ranking-announcement-schedules { display:grid;gap:8px; }
   .ranking-announcement-panel .button { width:100%; }
   .ranking-reward-row { grid-template-columns:56px minmax(0,1fr) auto;gap:10px;padding-inline:12px; }
   .ranking-reward-image { width:54px;height:54px; }

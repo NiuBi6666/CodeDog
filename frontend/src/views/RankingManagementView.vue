@@ -233,13 +233,15 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
 
     <template v-else-if="activeTab === 'announcements'">
       <section class="admin-panel ranking-announcement-panel">
-        <div><Megaphone :size="19"/><span><strong>学生端公告</strong><small>发布后会显示在公开排行榜顶部，最多 500 字；可立即发布或设置定时上线。</small></span></div>
-        <textarea v-model="announcementDraft" maxlength="500" rows="2" placeholder="例如：本周五积分商城开放兑换，请合理安排积分。"></textarea>
-        <div class="ranking-announcement-schedules">
-          <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>上线时间（可选）</span><input v-model="announcementPublishAt" type="datetime-local"></label>
-          <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>下线时间（可选）</span><input v-model="announcementUnpublishAt" type="datetime-local"></label>
+        <div class="ranking-announcement-form-row">
+          <textarea v-model="announcementDraft" maxlength="500" rows="2" placeholder="例如：本周五积分商城开放兑换，请合理安排积分。"></textarea>
+          <div class="ranking-announcement-schedules">
+            <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>上线时间（可选）</span><input v-model="announcementPublishAt" type="datetime-local"></label>
+            <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>下线时间（可选）</span><input v-model="announcementUnpublishAt" type="datetime-local"></label>
+          </div>
+          <button class="button button-primary" type="button" :disabled="savingAnnouncement || !announcementDraft.trim()" @click="saveAnnouncement">{{ savingAnnouncement ? "发布中" : "发布公告" }}</button>
         </div>
-        <button class="button button-primary" type="button" :disabled="savingAnnouncement || !announcementDraft.trim()" @click="saveAnnouncement">{{ savingAnnouncement ? "发布中" : "发布公告" }}</button>
+        <div class="ranking-announcement-description"><Megaphone :size="19"/><span><strong>学生端公告</strong><small>发布后会显示在公开排行榜顶部，最多 500 字；可立即发布或设置定时上线。</small></span></div>
       </section>
 
       <section class="admin-panel ranking-announcement-history">
