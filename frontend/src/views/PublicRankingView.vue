@@ -509,7 +509,7 @@ button {
 
 .login-mark svg { width: 38px; height: 38px; }
 .login-copy { z-index: 1; min-width: 0; padding-right: 18px; }
-.login-copy h1 { max-width: 440px; margin: 0; color: #f4f8ff; font-size: clamp(30px, 3.2vw, 46px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; text-shadow: 0 0 25px rgba(116, 181, 255, 0.22); }
+.login-copy h1 { max-width: 440px; margin: 0; color: #f4f8ff; font-size: clamp(28px, 2.6vw, 38px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; text-shadow: 0 0 25px rgba(116, 181, 255, 0.22); }
 .login-copy > p:last-child { max-width: 370px; margin: 17px 0 0; color: #91a6cd; font-size: 14px; line-height: 1.7; }
 .login-field { display: grid; grid-column: 3; gap: 7px; min-width: 0; z-index: 1; }
 .login-field span { color: #a9bbda; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
@@ -1318,7 +1318,7 @@ button {
   .student-login-panel::before { inset: 8px; }
   .login-mark { grid-column: 1; margin: 0 auto; }
   .login-copy { grid-column: 1; padding-right: 0; text-align: center; }
-  .login-copy h1 { margin-inline: auto; font-size: 30px; }
+  .login-copy h1 { margin-inline: auto; font-size: 26px; }
   .login-copy > p:last-child { margin-inline: auto; font-size: 12px; }
   .login-field, .login-error, .login-button { grid-column: 1; }
   .login-field { width: 100%; }
