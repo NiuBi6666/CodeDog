@@ -1,14 +1,11 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { RouterLink } from "vue-router";
 import {
   CircleCheckBig,
   EllipsisVertical,
   Gift,
   Code2,
   Megaphone,
-  Maximize2,
-  Minimize2,
   RefreshCw,
   LogOut,
   Sparkles,
@@ -32,7 +29,6 @@ const detailRow = ref(null);
 const pinnedDetailId = ref("");
 const popover = ref(null);
 const popoverStyle = ref({});
-const isFullscreen = ref(false);
 const studentSession = ref(null);
 const authReady = ref(false);
 const authLoading = ref(false);
@@ -248,21 +244,10 @@ function handleResize() {
   if (anchor) positionPopover(anchor);
 }
 
-async function toggleFullscreen() {
-  if (document.fullscreenElement) await document.exitFullscreen();
-  else await document.documentElement.requestFullscreen();
-}
-
-function handleFullscreenChange() {
-  isFullscreen.value = Boolean(document.fullscreenElement);
-}
-
-
 onMounted(() => {
   loadSession();
   document.addEventListener("click", handleOutsideClick);
   document.addEventListener("keydown", handleEscape);
-  document.addEventListener("fullscreenchange", handleFullscreenChange);
   window.addEventListener("resize", handleResize);
 });
 
@@ -270,19 +255,18 @@ onBeforeUnmount(() => {
   window.clearInterval(refreshTimer);
   document.removeEventListener("click", handleOutsideClick);
   document.removeEventListener("keydown", handleEscape);
-  document.removeEventListener("fullscreenchange", handleFullscreenChange);
   window.removeEventListener("resize", handleResize);
 });
 </script>
 
 <template>
-  <div class="ranking-public" :class="{ 'is-fullscreen': isFullscreen }">
+  <div class="ranking-public">
     <div class="adventure-shell">
       <header class="adventure-header">
-        <RouterLink class="adventure-brand" to="/index" aria-label="返回 CodeDog">
+        <div class="adventure-brand">
           <Code2 aria-hidden="true" />
           <span>C++积分中心</span>
-        </RouterLink>
+        </div>
 
         <div v-if="studentSession" class="player-console">
           <span class="player-avatar">{{ rankingAvatarText(selectedStudent?.studentName) }}</span>
@@ -294,10 +278,6 @@ onBeforeUnmount(() => {
             <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
             <strong>{{ selectedStudent ? `${selectedStudent.totalPoints} 积分` : "0 积分" }}</strong>
           </div>
-          <button class="fullscreen-button" type="button" :title="isFullscreen ? '退出全屏' : '全屏显示'" :aria-label="isFullscreen ? '退出全屏' : '全屏显示'" @click="toggleFullscreen">
-            <Minimize2 v-if="isFullscreen" aria-hidden="true" />
-            <Maximize2 v-else aria-hidden="true" />
-          </button>
           <button class="logout-button" type="button" title="退出学生登录" aria-label="退出学生登录" @click="logout"><LogOut aria-hidden="true" /></button>
         </div>
       </header>
@@ -560,7 +540,7 @@ button {
 
 .player-console {
   display: grid;
-  grid-template-columns: 38px minmax(118px, 1fr) auto 36px 36px;
+  grid-template-columns: 38px minmax(118px, 1fr) auto 36px;
   align-items: center;
   min-width: 430px;
   min-height: 54px;
@@ -646,29 +626,6 @@ button {
   box-shadow: 0 0 13px rgba(255, 203, 36, 0.6);
   font-size: 15px;
   white-space: nowrap;
-}
-
-.fullscreen-button {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid #455680;
-  border-radius: 6px;
-  color: #b9c7ef;
-  background: #1d2648;
-}
-
-.fullscreen-button:hover,
-.fullscreen-button:focus-visible {
-  border-color: #35d8ff;
-  outline: none;
-  color: #35d8ff;
-}
-
-.fullscreen-button svg {
-  width: 17px;
-  height: 17px;
 }
 
 .board-announcement {
@@ -1315,14 +1272,6 @@ button {
   font-size: 11px;
 }
 
-.is-fullscreen .adventure-shell {
-  width: calc(100% - 28px);
-}
-
-.is-fullscreen .adventure-header {
-  min-height: 62px;
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1382,7 +1331,7 @@ button {
   .password-modal-actions button { width: 100%; }
 
   .player-console {
-    grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
   }
 
   .player-score {
