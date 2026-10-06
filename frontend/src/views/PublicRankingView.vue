@@ -2,20 +2,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import {
-  Backpack,
-  Check,
   CircleCheckBig,
   EllipsisVertical,
   Gift,
   Gamepad2,
-  Info,
-  Keyboard,
   Megaphone,
   Maximize2,
   Minimize2,
   RefreshCw,
   Sparkles,
-  Star,
   Trophy
 } from "@lucide/vue";
 import { api } from "../api";
@@ -25,9 +20,6 @@ import {
   rankingTrendView,
   rankingVisibleRows
 } from "../rankingAdmin.js";
-
-const levelMinimums = [0, 600, 1500, 2700, 4200, 5400];
-const levelNames = ["石墨", "青铜", "白银", "黄金", "蓝宝石", "钻石"];
 
 const board = ref(null);
 const announcement = ref("");
@@ -52,19 +44,6 @@ const visibleOpportunities = computed(() => opportunities.value.slice(0, 3));
 const opportunityComplete = computed(() => visibleOpportunities.value[0]?.type === "COMPLETE");
 const showsSelectedSeparately = computed(() => visibleRows.value.length > 10);
 const selectedStudent = computed(() => selectedIndex.value >= 0 ? rows.value[selectedIndex.value] : null);
-const nextLevelIndex = computed(() => selectedStudent.value ? Math.min(selectedStudent.value.level, levelMinimums.length - 1) : 0);
-const isMaxLevel = computed(() => Number(selectedStudent.value?.level || 0) >= 6);
-const nextLevelName = computed(() => isMaxLevel.value ? "最高等级" : `下一等级 · ${levelNames[nextLevelIndex.value]}`);
-const nextLevelPoints = computed(() => {
-  if (!selectedStudent.value) return "等待数据";
-  if (isMaxLevel.value) return "已达钻石";
-  return `还差 ${Math.max(0, levelMinimums[nextLevelIndex.value] - Number(selectedStudent.value.totalPoints || 0))} 积分`;
-});
-const motivationText = computed(() => {
-  if (!selectedStudent.value) return "选择姓名后查看升级目标";
-  if (selectedStudent.value.rank === 1) return "当前已是全员榜第 1 名，继续保持！";
-  return `距离超越上一名还差 ${rankingPointsToPass(rows.value, selectedIndex.value)} 分`;
-});
 const updatedText = computed(() => {
   if (!board.value?.updatedAt) return "尚未同步";
   return `更新于 ${new Intl.DateTimeFormat("zh-CN", {
@@ -130,7 +109,7 @@ function selectStudent(row) {
 function positionPopover(anchor) {
   if (!anchor) return;
   const rect = anchor.getBoundingClientRect();
-  const width = Math.min(290, window.innerWidth - 20);
+  const width = Math.min(360, window.innerWidth - 20);
   const left = Math.max(10, Math.min(window.innerWidth - width - 10, rect.left + (rect.width - width) / 2));
   popoverStyle.value = { left: `${Math.round(left)}px`, top: `${Math.round(Math.max(10, rect.bottom + 10))}px` };
   nextTick(() => {
@@ -146,11 +125,6 @@ function showDetails(row, event, pin = false) {
   detailRow.value = row;
   pinnedDetailId.value = pin ? String(row.studentId) : "";
   positionPopover(event.currentTarget);
-}
-
-function showSelectedDetails(event) {
-  if (!selectedStudent.value) return;
-  showDetails(selectedStudent.value, event, true);
 }
 
 function hideHover() {
@@ -266,7 +240,7 @@ onBeforeUnmount(() => {
               :data-student-id="String(row.studentId)"
               tabindex="0"
               role="button"
-              :aria-label="`查看${row.studentName}的积分构成`"
+              :aria-label="String(row.studentId) === selectedStudentId ? `查看我的积分构成和提分任务` : `查看${row.studentName}的积分构成`"
               @mouseenter="showDetails(row, $event)"
               @mouseleave="hideHover"
               @focusin="showDetails(row, $event)"
@@ -285,36 +259,11 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="game-panel supply-panel" aria-labelledby="supplyTitle">
-          <div class="game-panel-heading"><div><Backpack class="panel-icon" aria-hidden="true" /><div><h2 id="supplyTitle">积分补给站</h2><p>查看当前学员的积分构成与升级进度</p></div></div></div>
-          <div class="supply-grid">
-            <article class="supply-card"><Check class="supply-icon supply-cyan" aria-hidden="true" /><h3>课程完课积分</h3><strong>{{ selectedStudent?.completionPoints || 0 }} 积分</strong><button class="supply-action" type="button" @click="showSelectedDetails">查看明细</button></article>
-            <article class="supply-card"><Keyboard class="supply-icon supply-pink" aria-hidden="true" /><h3>课上作业积分</h3><strong>{{ selectedStudent?.inclassPoints || 0 }} 积分</strong><button class="supply-action" type="button" @click="showSelectedDetails">查看明细</button></article>
-            <article class="supply-card"><Gamepad2 class="supply-icon supply-green" aria-hidden="true" /><h3>课后作业积分</h3><strong>{{ selectedStudent?.homeworkPoints || 0 }} 积分</strong><button class="supply-action" type="button" @click="showSelectedDetails">查看明细</button></article>
-            <article class="supply-card"><Star class="supply-icon supply-gold" aria-hidden="true" /><h3>{{ nextLevelName }}</h3><strong>{{ nextLevelPoints }}</strong><button class="supply-action" type="button" @click="showSelectedDetails">查看明细</button></article>
+        <section class="game-panel supply-panel" aria-labelledby="rewardVaultTitle">
+          <div class="game-panel-heading reward-panel-heading">
+            <div><Gift class="panel-icon" aria-hidden="true" /><div><h2 id="rewardVaultTitle">冒险奖品库</h2><p>积攒积分后联系老师兑换</p></div></div>
+            <small>{{ rewards.length }} 件奖品</small>
           </div>
-          <div class="adventure-tip"><Info aria-hidden="true" /><p>{{ motivationText }}</p></div>
-
-          <section class="earning-guide" aria-labelledby="earningGuideTitle">
-            <div class="earning-guide-heading"><div><Sparkles aria-hidden="true" /><span><h3 id="earningGuideTitle">我的提分任务</h3><p>根据最近同步的学习数据生成</p></span></div><small>{{ selectedStudent?.studentName || "当前学员" }}</small></div>
-            <div v-if="opportunityLoading" class="earning-state"><RefreshCw class="spin" aria-hidden="true" />正在分析可以赚积分的方法</div>
-            <div v-else-if="opportunityError" class="earning-state earning-error">{{ opportunityError }}</div>
-            <div v-else class="earning-list" :class="{ complete: opportunityComplete }">
-              <article v-for="(task, index) in visibleOpportunities" :key="task.type" class="earning-task">
-                <span class="earning-task-mark">
-                  <CircleCheckBig v-if="task.type === 'COMPLETE'" aria-hidden="true" />
-                  <strong v-else>{{ index + 1 }}</strong>
-                </span>
-                <div><h4>{{ task.title }}</h4><p>{{ task.description }}</p></div>
-              </article>
-            </div>
-          </section>
-
-          <section class="reward-vault" aria-labelledby="rewardVaultTitle">
-            <div class="reward-vault-heading">
-              <div><Gift aria-hidden="true" /><span><h3 id="rewardVaultTitle">冒险奖品库</h3><p>积攒积分后联系老师兑换</p></span></div>
-              <small>{{ rewards.length }} 件奖品</small>
-            </div>
             <div v-if="rewards.length" class="reward-grid">
               <article v-for="reward in rewards" :key="reward.id" class="reward-card">
                 <div class="reward-image">
@@ -325,7 +274,6 @@ onBeforeUnmount(() => {
               </article>
             </div>
             <div v-else class="reward-empty"><Gift aria-hidden="true" /><span><strong>奖品正在补货</strong><small>老师添加奖品后会显示在这里</small></span></div>
-          </section>
         </section>
       </main>
 
@@ -341,6 +289,18 @@ onBeforeUnmount(() => {
         <div><dt>综合正确率</dt><dd>{{ Number(detailRow.accuracyRate || 0).toFixed(1) }}%</dd></div>
         <div><dt>排名趋势</dt><dd>{{ rankingTrendView(detailRow).title }}</dd></div>
       </dl>
+      <section v-if="String(detailRow.studentId) === selectedStudentId" class="score-opportunities" :class="{ complete: opportunityComplete }">
+        <header><Sparkles aria-hidden="true" /><div><h4>还能这样赚积分</h4><p>根据最近同步的学习数据</p></div></header>
+        <div v-if="opportunityLoading" class="score-opportunity-state"><RefreshCw class="spin" aria-hidden="true" />正在分析</div>
+        <div v-else-if="opportunityError" class="score-opportunity-state error">{{ opportunityError }}</div>
+        <div v-else class="score-opportunity-list">
+          <article v-for="task in visibleOpportunities" :key="task.type">
+            <CircleCheckBig v-if="task.type === 'COMPLETE'" aria-hidden="true" />
+            <span v-else class="opportunity-dot" aria-hidden="true"></span>
+            <div><strong>{{ task.title }}</strong><p>{{ task.description }}</p></div>
+          </article>
+        </div>
+      </section>
     </aside>
   </div>
 </template>
@@ -542,6 +502,11 @@ button {
   border-radius: 8px;
   background: #0d152b;
   box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.18);
+}
+
+.supply-panel {
+  align-self: start;
+  min-height: 0;
 }
 
 .game-panel-heading,
@@ -986,7 +951,10 @@ button {
 .score-popover {
   position: fixed;
   z-index: 30;
-  width: min(290px, calc(100vw - 20px));
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 20px));
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
   padding: 14px 16px;
   border: 1px solid #43cdeb;
   border-radius: 7px;
@@ -1016,6 +984,68 @@ button {
 
 .score-popover dt { color: #aab5d0; }
 .score-popover dd { margin: 0; color: #ffce3b; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+.score-opportunities {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #385070;
+}
+
+.score-opportunities header,
+.score-opportunity-state,
+.score-opportunity-list article {
+  display: flex;
+  align-items: flex-start;
+}
+
+.score-opportunities header {
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.score-opportunities header > svg {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  color: #39d9ff;
+}
+
+.score-opportunities h4,
+.score-opportunities p {
+  margin: 0;
+}
+
+.score-opportunities h4 { color: #f4f7ff; font-size: 12px; }
+.score-opportunities header p { margin-top: 2px; color: #7f90b1; font-size: 9px; }
+.score-opportunity-list { display: grid; gap: 7px; }
+.score-opportunity-list article { gap: 8px; }
+.score-opportunity-list article > svg { flex: 0 0 auto; width: 13px; height: 13px; color: #54e8b3; }
+.score-opportunity-list article > div { min-width: 0; }
+.score-opportunity-list strong { display: block; color: #dfe7fb; font-size: 10px; }
+.score-opportunity-list p { margin-top: 2px; color: #9aa9c5; font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+
+.opportunity-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: 4px 3px 0;
+  border-radius: 50%;
+  background: #39d9ff;
+  box-shadow: 0 0 7px rgba(57, 217, 255, 0.62);
+}
+
+.score-opportunity-state {
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #8191b2;
+  font-size: 10px;
+}
+
+.score-opportunity-state svg { width: 13px; height: 13px; }
+.score-opportunity-state.error { color: #ff8da2; }
+.score-opportunities.complete { border-top-color: #2b715f; }
 
 .adventure-shell footer {
   display: flex;
@@ -1100,14 +1130,8 @@ button {
     padding: 12px;
   }
 
-  .supply-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .supply-card {
-    min-height: 150px;
-    padding: 12px 8px;
+  .supply-panel {
+    order: 0;
   }
 
   .reward-grid { grid-template-columns: 1fr; }
