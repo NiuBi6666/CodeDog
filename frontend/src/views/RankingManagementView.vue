@@ -240,8 +240,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
             <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>下线时间（可选）</span><input v-model="announcementUnpublishAt" type="datetime-local"></label>
           </div>
           <button class="button button-primary" type="button" :disabled="savingAnnouncement || !announcementDraft.trim()" @click="saveAnnouncement">{{ savingAnnouncement ? "发布中" : "发布公告" }}</button>
+          <div class="ranking-announcement-description"><Megaphone :size="19"/><span><strong>学生端公告</strong><small>发布后会显示在公开排行榜顶部，最多 500 字；可立即发布或设置定时上线。</small></span></div>
         </div>
-        <div class="ranking-announcement-description"><Megaphone :size="19"/><span><strong>学生端公告</strong><small>发布后会显示在公开排行榜顶部，最多 500 字；可立即发布或设置定时上线。</small></span></div>
       </section>
 
       <section class="admin-panel ranking-announcement-history">
