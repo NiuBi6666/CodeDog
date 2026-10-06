@@ -34,8 +34,38 @@ public class RankingRewardService {
     return values.isEmpty() ? new RankingRewardPayload.Announcement("", null) : values.getFirst();
   }
 
+  public List<RankingRewardPayload.AnnouncementItem> announcements(String owner) {
+    return jdbc.query("SELECT id,announcement_text,enabled,publish_at,created_at,updated_at FROM ranking_announcements WHERE owner_username=? ORDER BY created_at DESC,id DESC",
+      (rs, n) -> new RankingRewardPayload.AnnouncementItem(rs.getLong(1), rs.getString(2), announcementStatus(rs.getBoolean(3), rs.getTimestamp(4)),
+        instant(rs.getTimestamp(4)), instant(rs.getTimestamp(5)), instant(rs.getTimestamp(6))), owner);
+  }
+
+  @Transactional
+  public RankingRewardPayload.AnnouncementItem createAnnouncement(String owner, String textValue, Instant publishAt) {
+    String text = text(textValue, "\u516C\u544A\u5185\u5BB9", 500);
+    boolean enabled = publishAt == null || !publishAt.isAfter(Instant.now());
+    jdbc.update("INSERT INTO ranking_announcements(owner_username,announcement_text,enabled,publish_at) VALUES(?,?,?,?)",
+      owner, text, enabled, publishAt == null ? null : Timestamp.from(publishAt));
+    return announcementById(owner, jdbc.queryForObject("SELECT MAX(id) FROM ranking_announcements WHERE owner_username=?", Long.class, owner));
+  }
+
+  @Transactional
+  public RankingRewardPayload.AnnouncementItem setAnnouncementOnline(String owner, long id, boolean online) {
+    int changed = online
+      ? jdbc.update("UPDATE ranking_announcements SET enabled=TRUE,publish_at=CURRENT_TIMESTAMP(6),updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", id, owner)
+      : jdbc.update("UPDATE ranking_announcements SET enabled=FALSE,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", id, owner);
+    if (changed == 0) throw notFound("\u516C\u544A\u4E0D\u5B58\u5728");
+    return announcementById(owner, id);
+  }
+
   public RankingRewardPayload.Announcement publicAnnouncement() {
-    return announcement(publicOwner());
+    String owner = publicOwner();
+    List<RankingRewardPayload.Announcement> active = jdbc.query(
+      "SELECT announcement_text,updated_at FROM ranking_announcements WHERE owner_username=? AND enabled=TRUE AND (publish_at IS NULL OR publish_at<=CURRENT_TIMESTAMP(6)) ORDER BY COALESCE(publish_at,created_at) DESC,id DESC LIMIT 1",
+      (rs, n) -> new RankingRewardPayload.Announcement(rs.getString(1), instant(rs.getTimestamp(2))), owner);
+    if (!active.isEmpty()) return active.getFirst();
+    Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM ranking_announcements WHERE owner_username=?", Integer.class, owner);
+    return count != null && count > 0 ? new RankingRewardPayload.Announcement("", null) : announcement(owner);
   }
 
   @Transactional
@@ -156,6 +186,20 @@ public class RankingRewardService {
 
   private RankingRewardPayload.Redemption redemptionById(String owner, long id) {
     return redemptions(owner).stream().filter(value -> value.id() == id).findFirst().orElseThrow(() -> notFound("兑换记录不存在"));
+  }
+
+  private RankingRewardPayload.AnnouncementItem announcementById(String owner, long id) {
+    List<RankingRewardPayload.AnnouncementItem> values = jdbc.query(
+      "SELECT id,announcement_text,enabled,publish_at,created_at,updated_at FROM ranking_announcements WHERE id=? AND owner_username=?",
+      (rs, n) -> new RankingRewardPayload.AnnouncementItem(rs.getLong(1), rs.getString(2), announcementStatus(rs.getBoolean(3), rs.getTimestamp(4)),
+        instant(rs.getTimestamp(4)), instant(rs.getTimestamp(5)), instant(rs.getTimestamp(6))), id, owner);
+    if (values.isEmpty()) throw notFound("\u516C\u544A\u4E0D\u5B58\u5728");
+    return values.getFirst();
+  }
+
+  private String announcementStatus(boolean enabled, Timestamp publishAt) {
+    if (!enabled) return "OFFLINE";
+    return publishAt != null && publishAt.toInstant().isAfter(Instant.now()) ? "SCHEDULED" : "ONLINE";
   }
 
   private ImageValue image(MultipartFile file, boolean optional) {

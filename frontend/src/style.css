@@ -3830,6 +3830,20 @@ a {
 .ranking-announcement-panel small { margin-top:3px;color:#7b898e;font-size:10px;line-height:1.4; }
 .ranking-announcement-panel textarea { width:100%;min-height:58px;resize:vertical;padding:9px 11px;border:1px solid #ccd7da;border-radius:6px;outline:0;color:#304248;font:inherit;line-height:1.45; }
 .ranking-announcement-panel textarea:focus { border-color:#16877f;box-shadow:0 0 0 2px rgba(22,135,127,.12); }
+.ranking-announcement-schedule { display:flex;min-height:38px;align-items:center;gap:7px;padding:0 10px;border:1px solid #d1dcde;border-radius:6px;color:#63777d;background:#f8fbfb;font-size:11px;white-space:nowrap; }
+.ranking-announcement-schedule input { min-width:0;border:0;outline:0;color:#40545a;background:transparent;font:inherit; }
+.ranking-announcement-history { margin-bottom:16px; }
+.ranking-history-heading-icon { color:#16877f; }
+.ranking-announcement-list { display:grid; }
+.ranking-announcement-row { display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;border-top:1px solid #e5ebed; }
+.ranking-announcement-copy { min-width:0; }
+.ranking-announcement-copy p { margin:0;color:#30454b;font-size:13px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere; }
+.ranking-announcement-meta { display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px;color:#849398;font-size:10px; }
+.ranking-announcement-status-online { color:#187055;background:#dcf1e9; }
+.ranking-announcement-status-scheduled { color:#815d0b;background:#fff0c8; }
+.ranking-announcement-status-offline { color:#6f7a7e;background:#edf1f2; }
+.ranking-announcement-action { min-width:76px;justify-content:center; }
+
 
 .ranking-toolbar { display:flex;align-items:center;justify-content:space-between;gap:16px; }
 .ranking-toolbar-actions,.ranking-row-actions { display:flex;align-items:center;gap:8px; }
@@ -3875,7 +3889,12 @@ a {
 .ranking-redemption-check.invalid { border-color:#e3b6b1;color:#a33d35;background:#fff7f6; }
 .ranking-redemption-check.invalid strong { color:#a33d35; }
 
+
 @media(max-width:900px) {
+  .ranking-announcement-schedule { grid-column:1/-1; }
+  .ranking-announcement-row { align-items:flex-start;flex-direction:column;gap:12px; }
+  .ranking-announcement-action { width:100%; }
+
   .ranking-announcement-panel { grid-template-columns:1fr auto; }
   .ranking-announcement-panel textarea { grid-row:2;grid-column:1/-1; }
   .ranking-toolbar { align-items:stretch;flex-direction:column; }

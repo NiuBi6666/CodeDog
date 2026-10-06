@@ -32,6 +32,29 @@ public class RankingRewardAdminController {
   @GetMapping("/announcement")
   public RankingRewardPayload.Announcement announcement(Principal principal) { return rewards.announcement(principal.getName()); }
 
+  @GetMapping("/announcements")
+  public List<RankingRewardPayload.AnnouncementItem> announcements(Principal principal) {
+    return rewards.announcements(principal.getName());
+  }
+
+  @PostMapping("/announcements")
+  @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+  public RankingRewardPayload.AnnouncementItem createAnnouncement(
+      @RequestBody RankingRewardPayload.AnnouncementRequest body, Principal principal, HttpServletRequest request) {
+    var value = rewards.createAnnouncement(principal.getName(), body == null ? "" : body.text(), body == null ? null : body.publishAt());
+    audit.record("ranking_announcement_created:" + value.id(), request);
+    return value;
+  }
+
+  @PatchMapping("/announcements/{id}/status")
+  public RankingRewardPayload.AnnouncementItem announcementStatus(
+      @PathVariable long id, @RequestBody RankingRewardPayload.AnnouncementStatusRequest body,
+      Principal principal, HttpServletRequest request) {
+    var value = rewards.setAnnouncementOnline(principal.getName(), id, body != null && body.online());
+    audit.record("ranking_announcement_status:" + id + ":" + value.status(), request);
+    return value;
+  }
+
   @PutMapping("/announcement")
   public RankingRewardPayload.Announcement updateAnnouncement(@RequestBody AnnouncementRequest body, Principal principal, HttpServletRequest request) {
     var value = rewards.updateAnnouncement(principal.getName(), body == null ? "" : body.text());

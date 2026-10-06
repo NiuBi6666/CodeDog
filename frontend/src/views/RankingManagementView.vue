@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
-  ArrowDown, ArrowUp, Award, CheckCircle2, Copy, ExternalLink, Gift, ImagePlus,
+  ArrowDown, ArrowUp, Award, CalendarClock, CheckCircle2, CircleOff, Copy, ExternalLink, Gift, ImagePlus,
   Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Search, Share2,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
@@ -13,8 +13,9 @@ import { formatDateTime } from "../utils";
 const board = ref(null);
 const rewards = ref([]);
 const redemptions = ref([]);
-const announcement = ref({ text: "", updatedAt: null });
+const announcements = ref([]);
 const announcementDraft = ref("");
+const announcementPublishAt = ref("");
 const activeTab = ref("rankings");
 const searchText = ref("");
 const redemptionSearch = ref("");
@@ -60,11 +61,11 @@ function numberText(value) { return new Intl.NumberFormat("zh-CN").format(Number
 async function loadAll() {
   loading.value = true; error.value = "";
   try {
-    const [boardValue, announcementValue, rewardValues, redemptionValues] = await Promise.all([
-      api("/rankings/admin/board"), api("/rankings/admin/announcement"),
+    const [boardValue, announcementValues, rewardValues, redemptionValues] = await Promise.all([
+      api("/rankings/admin/board"), api("/rankings/admin/announcements"),
       api("/rankings/admin/rewards"), api("/rankings/admin/redemptions")
     ]);
-    board.value = boardValue; announcement.value = announcementValue; announcementDraft.value = announcementValue.text || "";
+    board.value = boardValue; announcements.value = announcementValues;
     rewards.value = rewardValues; redemptions.value = redemptionValues;
   } catch (failure) { error.value = failure.message; }
   finally { loading.value = false; }
@@ -73,10 +74,27 @@ async function loadAll() {
 async function saveAnnouncement() {
   savingAnnouncement.value = true;
   try {
-    announcement.value = await api("/rankings/admin/announcement", { method: "PUT", body: jsonBody({ text: announcementDraft.value }) });
-    announcementDraft.value = announcement.value.text || ""; notify("排行榜公告已保存");
+    const publishAt = announcementPublishAt.value ? new Date(announcementPublishAt.value).toISOString() : null;
+    const created = await api("/rankings/admin/announcements", {
+      method: "POST", body: jsonBody({ text: announcementDraft.value, publishAt })
+    });
+    announcements.value = [created, ...announcements.value];
+    announcementDraft.value = ""; announcementPublishAt.value = "";
+    notify(created.status === "SCHEDULED" ? "公告已设置定时发布" : "公告已发布");
   } catch (failure) { notify(failure.message); }
   finally { savingAnnouncement.value = false; }
+}
+function announcementStatusLabel(status) {
+  return status === "ONLINE" ? "已上线" : status === "SCHEDULED" ? "定时发布" : "已下线";
+}
+async function setAnnouncementOnline(item, online) {
+  try {
+    const updated = await api(`/rankings/admin/announcements/${item.id}/status`, {
+      method: "PATCH", body: jsonBody({ online })
+    });
+    announcements.value = announcements.value.map((row) => row.id === updated.id ? updated : row);
+    notify(online ? "公告已上线" : "公告已下线");
+  } catch (failure) { notify(failure.message); }
 }
 
 function openReward(reward = null) {
@@ -149,9 +167,21 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
 
     <template v-if="activeTab === 'rankings'">
       <section class="admin-panel ranking-announcement-panel">
-        <div><Megaphone :size="19"/><span><strong>学生端公告</strong><small>保存后会显示在公开排行榜顶部，最多 500 字。</small></span></div>
+        <div><Megaphone :size="19"/><span><strong>学生端公告</strong><small>发布后会显示在公开排行榜顶部，最多 500 字；可立即发布或设置定时上线。</small></span></div>
         <textarea v-model="announcementDraft" maxlength="500" rows="2" placeholder="例如：本周五积分商城开放兑换，请合理安排积分。"></textarea>
-        <button class="button button-primary" type="button" :disabled="savingAnnouncement || announcementDraft === announcement.text" @click="saveAnnouncement">{{ savingAnnouncement ? "保存中" : "保存公告" }}</button>
+        <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>定时发布（可选）</span><input v-model="announcementPublishAt" type="datetime-local"></label>
+        <button class="button button-primary" type="button" :disabled="savingAnnouncement || !announcementDraft.trim()" @click="saveAnnouncement">{{ savingAnnouncement ? "发布中" : "发布公告" }}</button>
+      </section>
+
+      <section class="admin-panel ranking-announcement-history">
+        <div class="panel-heading ranking-toolbar"><div><h2>历史公告</h2><small>共 {{ announcements.length }} 条，支持手动上线、下线和定时发布</small></div><CalendarClock :size="19" class="ranking-history-heading-icon"/></div>
+        <div v-if="!announcements.length" class="ranking-admin-state"><Megaphone :size="25"/><span>还没有发布过公告</span></div>
+        <div v-else class="ranking-announcement-list">
+          <article v-for="item in announcements" :key="item.id" class="ranking-announcement-row">
+            <div class="ranking-announcement-copy"><p>{{ item.text }}</p><div class="ranking-announcement-meta"><span class="ranking-status" :class="`ranking-announcement-status-${item.status.toLowerCase()}`">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">发布时间 {{ formatDateTime(item.publishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div></div>
+            <div class="ranking-row-actions"><button v-if="item.status === 'ONLINE'" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
+          </article>
+        </div>
       </section>
 
       <section v-if="board" class="ranking-admin-summary" aria-label="排名概览">
