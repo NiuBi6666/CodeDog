@@ -41,6 +41,7 @@ const confirmPassword = ref("");
 const passwordChangeError = ref("");
 const passwordChangeLoading = ref(false);
 let refreshTimer;
+let announcementRefreshTimer;
 
 const rows = computed(() => board.value?.rankings || []);
 const selectedIndex = computed(() => rows.value.findIndex((row) => String(row.studentId) === String(selectedStudentId.value)));
@@ -95,6 +96,16 @@ async function loadBoard() {
   }
 }
 
+async function loadAnnouncement() {
+  if (!studentSession.value) return;
+  try {
+    const value = await api("/public/rankings/announcement");
+    announcement.value = value?.text || "";
+  } catch (failure) {
+    if (failure.status === 401) handleSessionExpired();
+  }
+}
+
 
 function handleSessionExpired() {
   studentSession.value = null;
@@ -103,6 +114,14 @@ function handleSessionExpired() {
   authReady.value = true;
   loginError.value = "登录已失效，请重新登录";
   window.clearInterval(refreshTimer);
+  window.clearInterval(announcementRefreshTimer);
+}
+
+function startRefreshTimers() {
+  window.clearInterval(refreshTimer);
+  window.clearInterval(announcementRefreshTimer);
+  refreshTimer = window.setInterval(loadBoard, 60_000);
+  announcementRefreshTimer = window.setInterval(loadAnnouncement, 15_000);
 }
 
 async function loadSession() {
@@ -111,7 +130,7 @@ async function loadSession() {
     selectedStudentId.value = String(studentSession.value.studentId);
     authReady.value = true;
     await loadBoard();
-    refreshTimer = window.setInterval(loadBoard, 60_000);
+    startRefreshTimers();
   } catch (failure) {
     if (failure.status !== 401) loginError.value = failure.message || "登录状态加载失败";
     authReady.value = true;
@@ -130,7 +149,7 @@ async function login() {
     loginPassword.value = "";
     await loadBoard();
     openPasswordPrompt(studentSession.value);
-    refreshTimer = window.setInterval(loadBoard, 60_000);
+    startRefreshTimers();
   } catch (failure) {
     loginError.value = failure.message || "登录失败，请检查手机号和密码";
   } finally {
@@ -243,17 +262,24 @@ function handleResize() {
   if (anchor) positionPopover(anchor);
 }
 
+function handleVisibilityChange() {
+  if (document.visibilityState === "visible" && studentSession.value) loadAnnouncement();
+}
+
 onMounted(() => {
   loadSession();
   document.addEventListener("click", handleOutsideClick);
   document.addEventListener("keydown", handleEscape);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("resize", handleResize);
 });
 
 onBeforeUnmount(() => {
   window.clearInterval(refreshTimer);
+  window.clearInterval(announcementRefreshTimer);
   document.removeEventListener("click", handleOutsideClick);
   document.removeEventListener("keydown", handleEscape);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("resize", handleResize);
 });
 </script>
