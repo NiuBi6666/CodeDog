@@ -6,6 +6,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -217,6 +218,13 @@ public class RankingRewardService {
 
   private void publishAnnouncement(String owner) {
     if (announcements != null) announcements.publish(owner, publicAnnouncement(owner));
+  }
+
+  @Scheduled(fixedDelay = 30000, initialDelay = 30000)
+  public void refreshScheduledAnnouncements() {
+    if (announcements == null) return;
+    jdbc.queryForList("SELECT DISTINCT owner_username FROM ranking_announcements", String.class)
+      .forEach(this::publishAnnouncement);
   }
 
   private RankingRewardPayload.Redemption redemptionById(String owner, long id) {
