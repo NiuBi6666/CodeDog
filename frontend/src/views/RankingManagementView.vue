@@ -131,6 +131,27 @@ async function saveAnnouncementSchedule(item) {
     notify("公告时间已更新");
   } catch (failure) { notify(failure.message); }
 }
+function startAnnouncementEdit(item) {
+  item.editing = true;
+  item.editText = item.text;
+}
+function cancelAnnouncementEdit(item) {
+  item.editing = false;
+  item.editText = item.text;
+}
+async function saveAnnouncementEdit(item) {
+  const text = String(item.editText || "").trim();
+  if (!text) { notify("公告内容不能为空"); return; }
+  try {
+    const updated = await api("/rankings/admin/announcements/" + item.id, {
+      method: "PATCH",
+      body: jsonBody({ text, publishAt: toInstant(item.publishAtInput), unpublishAt: toInstant(item.unpublishAtInput) })
+    });
+    const normalised = normaliseAnnouncements([updated])[0];
+    announcements.value = announcements.value.map((row) => row.id === updated.id ? normalised : row);
+    notify("公告内容已更新");
+  } catch (failure) { notify(failure.message); }
+}
 
 function openReward(reward = null) {
   rewardForm.value = reward ? { id: reward.id, name: reward.name, requiredPoints: reward.requiredPoints, enabled: reward.enabled, imageUrl: reward.imageUrl || "" } : emptyRewardForm();
@@ -249,14 +270,23 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <div v-if="!announcements.length" class="ranking-admin-state"><Megaphone :size="25"/><span>还没有发布过公告</span></div>
       <div v-else class="ranking-announcement-list">
         <article v-for="item in announcements" :key="item.id" class="ranking-announcement-row">
-          <div class="ranking-announcement-copy"><p>{{ item.text }}</p><div class="ranking-announcement-meta"><span class="ranking-status" :class="'ranking-announcement-status-' + item.status.toLowerCase()">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">上线 {{ formatDateTime(item.publishAt) }}</span><span v-if="item.unpublishAt">下线 {{ formatDateTime(item.unpublishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div></div>
+          <div class="ranking-announcement-copy">
+            <template v-if="item.editing">
+              <textarea v-model="item.editText" class="ranking-announcement-edit-text" maxlength="500" rows="2"></textarea>
+              <div class="ranking-announcement-edit-actions"><button class="button button-primary" type="button" @click="saveAnnouncementEdit(item)">保存内容</button><button class="button button-quiet" type="button" @click="cancelAnnouncementEdit(item)">取消</button></div>
+            </template>
+            <template v-else>
+              <p>{{ item.text }}</p>
+              <div class="ranking-announcement-meta"><span class="ranking-status" :class="'ranking-announcement-status-' + item.status.toLowerCase()">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">上线 {{ formatDateTime(item.publishAt) }}</span><span v-if="item.unpublishAt">下线 {{ formatDateTime(item.unpublishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div>
+            </template>
+          </div>
           <div class="ranking-announcement-controls">
             <div class="ranking-announcement-time-editor">
               <label>上线 <input v-model="item.publishAtInput" type="datetime-local"></label>
               <label>下线 <input v-model="item.unpublishAtInput" type="datetime-local"></label>
               <button class="button button-quiet ranking-announcement-save" type="button" @click="saveAnnouncementSchedule(item)"><Save :size="14"/>保存时间</button>
             </div>
-            <div class="ranking-row-actions"><button v-if="item.status === 'ONLINE'" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
+            <div class="ranking-row-actions"><button v-if="!item.editing" class="button button-quiet ranking-announcement-action" type="button" @click="startAnnouncementEdit(item)"><Pencil :size="14"/>编辑</button><button v-if="item.status === 'ONLINE' && !item.editing" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else-if="!item.editing" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
           </div>
         </article>
       </div>

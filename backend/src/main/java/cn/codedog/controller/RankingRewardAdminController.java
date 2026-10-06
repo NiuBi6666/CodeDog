@@ -51,7 +51,7 @@ public class RankingRewardAdminController {
       @PathVariable long id, @RequestBody RankingRewardPayload.AnnouncementScheduleRequest body,
       Principal principal, HttpServletRequest request) {
     var value = rewards.updateAnnouncementSchedule(principal.getName(), id,
-      body == null ? null : body.publishAt(), body == null ? null : body.unpublishAt());
+      body == null ? null : body.text(), body == null ? null : body.publishAt(), body == null ? null : body.unpublishAt());
     audit.record("ranking_announcement_schedule:" + id, request);
     return value;
   }

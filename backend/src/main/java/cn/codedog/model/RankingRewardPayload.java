@@ -10,7 +10,7 @@ public final class RankingRewardPayload {
   public record AnnouncementItem(long id, String text, String status, Instant publishAt,
                                  Instant unpublishAt, Instant createdAt, Instant updatedAt) {}
   public record AnnouncementRequest(String text, Instant publishAt, Instant unpublishAt) {}
-  public record AnnouncementScheduleRequest(Instant publishAt, Instant unpublishAt) {}
+  public record AnnouncementScheduleRequest(String text, Instant publishAt, Instant unpublishAt) {}
   public record AnnouncementStatusRequest(boolean online) {}
   public record Reward(long id, String name, int requiredPoints, boolean enabled,
                        boolean hasImage, String imageUrl, Instant createdAt, Instant updatedAt) {}

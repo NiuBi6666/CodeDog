@@ -76,9 +76,18 @@ public class RankingRewardService {
 
   @Transactional
   public RankingRewardPayload.AnnouncementItem updateAnnouncementSchedule(String owner, long id, Instant publishAt, Instant unpublishAt) {
+    return updateAnnouncementSchedule(owner, id, null, publishAt, unpublishAt);
+  }
+
+  @Transactional
+  public RankingRewardPayload.AnnouncementItem updateAnnouncementSchedule(String owner, long id, String textValue, Instant publishAt, Instant unpublishAt) {
     validateAnnouncementTimes(publishAt, unpublishAt);
-    int changed = jdbc.update("UPDATE ranking_announcements SET enabled=TRUE,publish_at=?,unpublish_at=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?",
-      publishAt == null ? null : Timestamp.from(publishAt), unpublishAt == null ? null : Timestamp.from(unpublishAt), id, owner);
+    String textValueSql = textValue == null ? null : text(textValue, "\u516C\u544A\u5185\u5BB9", 500);
+    int changed = textValueSql == null
+      ? jdbc.update("UPDATE ranking_announcements SET enabled=TRUE,publish_at=?,unpublish_at=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?",
+        publishAt == null ? null : Timestamp.from(publishAt), unpublishAt == null ? null : Timestamp.from(unpublishAt), id, owner)
+      : jdbc.update("UPDATE ranking_announcements SET announcement_text=?,enabled=TRUE,publish_at=?,unpublish_at=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?",
+        textValueSql, publishAt == null ? null : Timestamp.from(publishAt), unpublishAt == null ? null : Timestamp.from(unpublishAt), id, owner);
     if (changed == 0) throw notFound("公告不存在");
     var result = announcementById(owner, id);
     publishAnnouncement(owner);
