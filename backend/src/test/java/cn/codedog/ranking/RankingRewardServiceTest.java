@@ -9,6 +9,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +30,12 @@ class RankingRewardServiceTest {
       CREATE TABLE ranking_board_settings(
         owner_username VARCHAR(50) PRIMARY KEY,announcement VARCHAR(500) NOT NULL DEFAULT '',
         updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+      """);
+    jdbc.execute("""
+      CREATE TABLE ranking_announcements(
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,announcement_text VARCHAR(500) NOT NULL,
+        enabled BOOLEAN NOT NULL DEFAULT FALSE,publish_at TIMESTAMP(6),unpublish_at TIMESTAMP(6),
+        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
       """);
     jdbc.execute("""
       CREATE TABLE ranking_rewards(
@@ -69,6 +77,31 @@ class RankingRewardServiceTest {
 
     assertThat(service.announcement("teacher-a").text()).isEqualTo("周五开放兑换");
     assertThat(service.announcement("teacher-b").text()).isEqualTo("B老师公告");
+  }
+
+  @Test
+  void schedulesAndUpdatesAnnouncementTimes() {
+    Instant publishAt = Instant.now().plusSeconds(3600).truncatedTo(ChronoUnit.MICROS);
+    Instant unpublishAt = publishAt.plusSeconds(3600);
+    var scheduled = service.createAnnouncement("teacher-a", "周五公告", publishAt, unpublishAt);
+
+    assertThat(scheduled.status()).isEqualTo("SCHEDULED");
+    assertThat(scheduled.publishAt()).isEqualTo(publishAt);
+    assertThat(scheduled.unpublishAt()).isEqualTo(unpublishAt);
+
+    var online = service.updateAnnouncementSchedule("teacher-a", scheduled.id(),
+      Instant.now().minusSeconds(5), Instant.now().plusSeconds(3600));
+    assertThat(online.status()).isEqualTo("ONLINE");
+
+    var offline = service.setAnnouncementOnline("teacher-a", scheduled.id(), false);
+    assertThat(offline.status()).isEqualTo("OFFLINE");
+  }
+
+  @Test
+  void rejectsInvalidAnnouncementTimeRange() {
+    assertThatThrownBy(() -> service.createAnnouncement("teacher-a", "错误时间", Instant.now().plusSeconds(100), Instant.now()))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> assertThat(((ResponseStatusException) error).getReason()).contains("下线时间必须晚于上线时间"));
   }
 
   @Test

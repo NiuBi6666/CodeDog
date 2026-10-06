@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ArrowDown, ArrowUp, Award, CalendarClock, CheckCircle2, CircleOff, Copy, ExternalLink, Gift, ImagePlus,
-  Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Search, Share2,
+  Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
@@ -16,6 +16,7 @@ const redemptions = ref([]);
 const announcements = ref([]);
 const announcementDraft = ref("");
 const announcementPublishAt = ref("");
+const announcementUnpublishAt = ref("");
 const activeTab = ref("rankings");
 const searchText = ref("");
 const redemptionSearch = ref("");
@@ -57,6 +58,21 @@ const pendingCount = computed(() => redemptions.value.filter((item) => item.stat
 
 function emptyRewardForm() { return { id: null, name: "", requiredPoints: 100, enabled: true, imageUrl: "" }; }
 function numberText(value) { return new Intl.NumberFormat("zh-CN").format(Number(value || 0)); }
+function toDateTimeInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number) => String(number).padStart(2, "0");
+  return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+}
+function toInstant(value) { return value ? new Date(value).toISOString() : null; }
+function normaliseAnnouncements(values) {
+  return (values || []).map((item) => ({
+    ...item,
+    publishAtInput: toDateTimeInput(item.publishAt),
+    unpublishAtInput: toDateTimeInput(item.unpublishAt)
+  }));
+}
 
 async function loadAll() {
   loading.value = true; error.value = "";
@@ -65,7 +81,7 @@ async function loadAll() {
       api("/rankings/admin/board"), api("/rankings/admin/announcements"),
       api("/rankings/admin/rewards"), api("/rankings/admin/redemptions")
     ]);
-    board.value = boardValue; announcements.value = announcementValues;
+    board.value = boardValue; announcements.value = normaliseAnnouncements(announcementValues);
     rewards.value = rewardValues; redemptions.value = redemptionValues;
   } catch (failure) { error.value = failure.message; }
   finally { loading.value = false; }
@@ -74,12 +90,16 @@ async function loadAll() {
 async function saveAnnouncement() {
   savingAnnouncement.value = true;
   try {
-    const publishAt = announcementPublishAt.value ? new Date(announcementPublishAt.value).toISOString() : null;
+    const publishAt = toInstant(announcementPublishAt.value);
+    const unpublishAt = toInstant(announcementUnpublishAt.value);
+    if (publishAt && unpublishAt && new Date(unpublishAt) <= new Date(publishAt)) {
+      notify("下线时间必须晚于上线时间"); return;
+    }
     const created = await api("/rankings/admin/announcements", {
-      method: "POST", body: jsonBody({ text: announcementDraft.value, publishAt })
+      method: "POST", body: jsonBody({ text: announcementDraft.value, publishAt, unpublishAt })
     });
-    announcements.value = [created, ...announcements.value];
-    announcementDraft.value = ""; announcementPublishAt.value = "";
+    announcements.value = [normaliseAnnouncements([created])[0], ...announcements.value];
+    announcementDraft.value = ""; announcementPublishAt.value = ""; announcementUnpublishAt.value = "";
     notify(created.status === "SCHEDULED" ? "公告已设置定时发布" : "公告已发布");
   } catch (failure) { notify(failure.message); }
   finally { savingAnnouncement.value = false; }
@@ -92,8 +112,23 @@ async function setAnnouncementOnline(item, online) {
     const updated = await api(`/rankings/admin/announcements/${item.id}/status`, {
       method: "PATCH", body: jsonBody({ online })
     });
-    announcements.value = announcements.value.map((row) => row.id === updated.id ? updated : row);
+    announcements.value = announcements.value.map((row) => row.id === updated.id ? { ...normaliseAnnouncements([updated])[0] } : row);
     notify(online ? "公告已上线" : "公告已下线");
+  } catch (failure) { notify(failure.message); }
+}
+async function saveAnnouncementSchedule(item) {
+  const publishAt = toInstant(item.publishAtInput);
+  const unpublishAt = toInstant(item.unpublishAtInput);
+  if (publishAt && unpublishAt && new Date(unpublishAt) <= new Date(publishAt)) {
+    notify("下线时间必须晚于上线时间"); return;
+  }
+  try {
+    const updated = await api("/rankings/admin/announcements/" + item.id, {
+      method: "PATCH", body: jsonBody({ publishAt, unpublishAt })
+    });
+    const normalised = normaliseAnnouncements([updated])[0];
+    announcements.value = announcements.value.map((row) => row.id === updated.id ? normalised : row);
+    notify("公告时间已更新");
   } catch (failure) { notify(failure.message); }
 }
 
@@ -200,7 +235,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <section class="admin-panel ranking-announcement-panel">
         <div><Megaphone :size="19"/><span><strong>学生端公告</strong><small>发布后会显示在公开排行榜顶部，最多 500 字；可立即发布或设置定时上线。</small></span></div>
         <textarea v-model="announcementDraft" maxlength="500" rows="2" placeholder="例如：本周五积分商城开放兑换，请合理安排积分。"></textarea>
-        <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>定时发布（可选）</span><input v-model="announcementPublishAt" type="datetime-local"></label>
+        <div class="ranking-announcement-schedules">
+          <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>上线时间（可选）</span><input v-model="announcementPublishAt" type="datetime-local"></label>
+          <label class="ranking-announcement-schedule"><CalendarClock :size="16"/><span>下线时间（可选）</span><input v-model="announcementUnpublishAt" type="datetime-local"></label>
+        </div>
         <button class="button button-primary" type="button" :disabled="savingAnnouncement || !announcementDraft.trim()" @click="saveAnnouncement">{{ savingAnnouncement ? "发布中" : "发布公告" }}</button>
       </section>
 
@@ -209,8 +247,15 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <div v-if="!announcements.length" class="ranking-admin-state"><Megaphone :size="25"/><span>还没有发布过公告</span></div>
       <div v-else class="ranking-announcement-list">
         <article v-for="item in announcements" :key="item.id" class="ranking-announcement-row">
-          <div class="ranking-announcement-copy"><p>{{ item.text }}</p><div class="ranking-announcement-meta"><span class="ranking-status" :class="`ranking-announcement-status-${item.status.toLowerCase()}`">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">发布时间 {{ formatDateTime(item.publishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div></div>
-          <div class="ranking-row-actions"><button v-if="item.status === 'ONLINE'" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
+          <div class="ranking-announcement-copy"><p>{{ item.text }}</p><div class="ranking-announcement-meta"><span class="ranking-status" :class="'ranking-announcement-status-' + item.status.toLowerCase()">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">上线 {{ formatDateTime(item.publishAt) }}</span><span v-if="item.unpublishAt">下线 {{ formatDateTime(item.unpublishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div></div>
+          <div class="ranking-announcement-controls">
+            <div class="ranking-announcement-time-editor">
+              <label>上线 <input v-model="item.publishAtInput" type="datetime-local"></label>
+              <label>下线 <input v-model="item.unpublishAtInput" type="datetime-local"></label>
+              <button class="button button-quiet ranking-announcement-save" type="button" @click="saveAnnouncementSchedule(item)"><Save :size="14"/>保存时间</button>
+            </div>
+            <div class="ranking-row-actions"><button v-if="item.status === 'ONLINE'" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
+          </div>
         </article>
       </div>
       </section>

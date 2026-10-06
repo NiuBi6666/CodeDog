@@ -3832,6 +3832,12 @@ a {
 .ranking-announcement-panel textarea:focus { border-color:#16877f;box-shadow:0 0 0 2px rgba(22,135,127,.12); }
 .ranking-announcement-schedule { display:flex;min-height:38px;align-items:center;gap:7px;padding:0 10px;border:1px solid #d1dcde;border-radius:6px;color:#63777d;background:#f8fbfb;font-size:11px;white-space:nowrap; }
 .ranking-announcement-schedule input { min-width:0;border:0;outline:0;color:#40545a;background:transparent;font:inherit; }
+.ranking-announcement-schedules { display:grid;gap:8px;min-width:0; }
+.ranking-announcement-controls { display:flex;align-items:flex-end;gap:12px; }
+.ranking-announcement-time-editor { display:flex;align-items:center;flex-wrap:wrap;gap:6px; }
+.ranking-announcement-time-editor label { display:flex;align-items:center;gap:4px;color:#718187;font-size:10px;white-space:nowrap; }
+.ranking-announcement-time-editor input { width:164px;height:30px;padding:0 6px;border:1px solid #d1dcde;border-radius:5px;color:#40545a;background:#f8fbfb;font:inherit; }
+.ranking-announcement-save { min-height:30px;padding-inline:8px;font-size:11px; }
 .ranking-announcement-history { margin-bottom:16px; }
 .ranking-history-heading-icon { color:#16877f; }
 .ranking-announcement-list { display:grid; }
@@ -3893,6 +3899,10 @@ a {
 @media(max-width:900px) {
   .ranking-announcement-schedule { grid-column:1/-1; }
   .ranking-announcement-row { align-items:flex-start;flex-direction:column;gap:12px; }
+  .ranking-announcement-controls { width:100%;align-items:stretch;flex-direction:column;gap:10px; }
+  .ranking-announcement-time-editor { width:100%; }
+  .ranking-announcement-time-editor label { flex:1 1 220px; }
+  .ranking-announcement-time-editor input { width:100%; }
   .ranking-announcement-action { width:100%; }
 
   .ranking-announcement-panel { grid-template-columns:1fr auto; }
@@ -3907,6 +3917,7 @@ a {
   .ranking-workspace-tabs button { flex:0 0 auto;padding-inline:11px; }
   .ranking-announcement-panel { grid-template-columns:1fr; }
   .ranking-announcement-panel textarea { grid-row:auto;grid-column:auto; }
+  .ranking-announcement-schedules { grid-column:1; }
   .ranking-announcement-panel .button { width:100%; }
   .ranking-reward-row { grid-template-columns:56px minmax(0,1fr) auto;gap:10px;padding-inline:12px; }
   .ranking-reward-image { width:54px;height:54px; }
