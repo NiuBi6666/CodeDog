@@ -5,7 +5,7 @@ import {
   CircleCheckBig,
   EllipsisVertical,
   Gift,
-  Gamepad2,
+  Code2,
   Megaphone,
   Maximize2,
   Minimize2,
@@ -235,8 +235,8 @@ onBeforeUnmount(() => {
     <div class="adventure-shell">
       <header class="adventure-header">
         <RouterLink class="adventure-brand" to="/index" aria-label="返回 CodeDog">
-          <Gamepad2 aria-hidden="true" />
-          <span>C++ 冒险者积分中心</span>
+          <Code2 aria-hidden="true" />
+          <span>C++积分中心</span>
         </RouterLink>
 
         <div v-if="studentSession" class="player-console">
@@ -259,9 +259,9 @@ onBeforeUnmount(() => {
 
       <div v-if="!authReady" class="auth-status" role="status">正在检查学生登录状态…</div>
       <form v-else-if="!studentSession" class="student-login-panel" @submit.prevent="login">
-        <div class="login-mark"><Gamepad2 aria-hidden="true" /></div>
-        <div class="login-copy"><p class="login-kicker">C++ 冒险者积分中心</p><h1>登录查看你的排名</h1><p>使用老师登记的手机号进入专属积分榜。</p></div>
-        <label class="login-field"><span>手机号</span><input v-model="loginPhone" inputmode="numeric" autocomplete="username" maxlength="11" placeholder="请输入手机号" /></label>
+        <div class="login-mark"><Code2 aria-hidden="true" /></div>
+        <div class="login-copy"><h1>登录查看你的排名</h1><p>使用老师登记的手机号进入专属积分榜。</p></div>
+        <label class="login-field"><span>手机号</span><input v-model="loginPhone" inputmode="numeric" autocomplete="username" maxlength="11" placeholder="请输入编程猫注册手机号" /></label>
         <label class="login-field"><span>密码</span><input v-model="loginPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入密码" /></label>
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
@@ -466,8 +466,6 @@ button {
 
 .login-mark svg { width: 38px; height: 38px; }
 .login-copy { z-index: 1; min-width: 0; padding-right: 18px; }
-.login-kicker { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 14px; color: #55ddff; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; }
-.login-kicker::before { width: 22px; height: 2px; background: #55ddff; box-shadow: 0 0 10px rgba(85, 221, 255, 0.8); content: ""; }
 .login-copy h1 { max-width: 440px; margin: 0; color: #f4f8ff; font-size: clamp(30px, 3.2vw, 46px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; text-shadow: 0 0 25px rgba(116, 181, 255, 0.22); }
 .login-copy > p:last-child { max-width: 370px; margin: 17px 0 0; color: #91a6cd; font-size: 14px; line-height: 1.7; }
 .login-field { display: grid; grid-column: 3; gap: 7px; min-width: 0; z-index: 1; }
@@ -1251,7 +1249,6 @@ button {
   .student-login-panel::before { inset: 8px; }
   .login-mark { grid-column: 1; margin: 0 auto; }
   .login-copy { grid-column: 1; padding-right: 0; text-align: center; }
-  .login-kicker { justify-content: center; }
   .login-copy h1 { margin-inline: auto; font-size: 30px; }
   .login-copy > p:last-child { margin-inline: auto; font-size: 12px; }
   .login-field, .login-error, .login-button { grid-column: 1; }
