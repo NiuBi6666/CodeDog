@@ -111,7 +111,6 @@ async function loadSession() {
     selectedStudentId.value = String(studentSession.value.studentId);
     authReady.value = true;
     await loadBoard();
-    openPasswordPrompt(studentSession.value);
     refreshTimer = window.setInterval(loadBoard, 60_000);
   } catch (failure) {
     if (failure.status !== 401) loginError.value = failure.message || "登录状态加载失败";
