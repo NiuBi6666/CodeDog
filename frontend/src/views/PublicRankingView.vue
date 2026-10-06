@@ -9,7 +9,8 @@ import {
   RefreshCw,
   LogOut,
   Sparkles,
-  Trophy
+  Trophy,
+  X
 } from "@lucide/vue";
 import { api, jsonBody } from "../api";
 import {
@@ -19,6 +20,12 @@ import {
 const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
+const balance = ref({ earnedPoints: 0, spentPoints: 0, availablePoints: 0 });
+const redeemOpen = ref(false);
+const selectedReward = ref(null);
+const redeemSaving = ref(false);
+const redeemError = ref("");
+const redeemNotice = ref("");
 const opportunities = ref([]);
 const opportunityLoading = ref(false);
 const opportunityError = ref("");
@@ -82,9 +89,12 @@ async function loadBoard() {
   loading.value = true;
   error.value = "";
   try {
-    const [boardValue, rewardValues] = await Promise.all([api("/public/rankings/student-board"), api("/public/rankings/rewards")]);
+    const [boardValue, rewardValues, balanceValue] = await Promise.all([
+      api("/public/rankings/student-board"), api("/public/rankings/rewards"), api("/public/rankings/student-balance")
+    ]);
     board.value = boardValue;
     rewards.value = rewardValues || [];
+    balance.value = balanceValue || { earnedPoints: 0, spentPoints: 0, availablePoints: 0 };
     selectedStudentId.value = String(studentSession.value?.studentId || "");
     loadOpportunities(selectedStudentId.value);
   } catch (failure) {
@@ -260,6 +270,41 @@ function closeDetails() {
   pinnedDetailId.value = "";
 }
 
+async function openRewardRedeem(reward) {
+  selectedReward.value = reward;
+  redeemError.value = "";
+  redeemNotice.value = "";
+  redeemOpen.value = true;
+  try {
+    balance.value = await api("/public/rankings/student-balance");
+  } catch (failure) {
+    redeemError.value = failure.message || "积分余额加载失败，请重试";
+  }
+}
+
+function closeRewardRedeem(force = false) {
+  if (redeemSaving.value && !force) return;
+  redeemOpen.value = false;
+  selectedReward.value = null;
+  redeemError.value = "";
+}
+
+async function redeemReward() {
+  if (!selectedReward.value || redeemSaving.value) return;
+  redeemSaving.value = true;
+  redeemError.value = "";
+  try {
+    await api(`/public/rankings/rewards/${selectedReward.value.id}/redeem`, { method: "POST" });
+    balance.value = await api("/public/rankings/student-balance");
+    redeemNotice.value = `已兑换“${selectedReward.value.name}”，请联系老师领取。`;
+    closeRewardRedeem(true);
+  } catch (failure) {
+    redeemError.value = failure.message || "兑换失败，请刷新后重试";
+  } finally {
+    redeemSaving.value = false;
+  }
+}
+
 function toggleRowDetails(row, event) {
   if (pinnedDetailId.value === String(row.studentId)) {
     closeDetails();
@@ -273,7 +318,7 @@ function handleOutsideClick() {
 }
 
 function handleEscape(event) {
-  if (event.key === "Escape") closeDetails();
+  if (event.key === "Escape") { closeDetails(); closeRewardRedeem(); }
 }
 
 function handleResize() {
@@ -318,7 +363,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="player-score">
             <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
-            <strong>{{ selectedStudent ? `${selectedStudent.totalPoints} 积分` : "0 积分" }}</strong>
+            <strong>{{ balance.availablePoints }} 可用积分</strong>
           </div>
           <button class="logout-button" type="button" title="退出学生登录" aria-label="退出学生登录" @click="logout"><LogOut aria-hidden="true" /></button>
         </div>
@@ -333,6 +378,13 @@ onBeforeUnmount(() => {
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
       </form>
+      <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop" @click.self="closeRewardRedeem">
+        <section class="reward-redeem-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
+          <header><div><span class="reward-redeem-mark"><Gift aria-hidden="true" /></span><div><p class="password-modal-kicker">积分兑换</p><h2 id="rewardRedeemTitle">确认兑换奖品</h2></div></div><button class="icon-button" type="button" title="关闭" @click="closeRewardRedeem"><X :size="17" /></button></header>
+          <div class="reward-redeem-body"><div class="reward-redeem-item"><div class="reward-image"><img v-if="selectedReward.imageUrl" :src="selectedReward.imageUrl" :alt="selectedReward.name"><Gift v-else aria-hidden="true" /></div><div><strong>{{ selectedReward.name }}</strong><small>需要 {{ selectedReward.requiredPoints }} 积分</small></div></div><p>当前可用积分：<b>{{ balance.availablePoints }}</b>；兑换后剩余：<b>{{ Math.max(0, balance.availablePoints - selectedReward.requiredPoints) }}</b></p><p v-if="redeemError" class="redeem-error" role="alert">{{ redeemError }}</p></div>
+          <footer><button class="password-later-button" type="button" @click="closeRewardRedeem">取消</button><button class="login-button" type="button" :disabled="redeemSaving || balance.availablePoints < selectedReward.requiredPoints" @click="redeemReward"><RefreshCw v-if="redeemSaving" class="spin" aria-hidden="true" /><span>{{ redeemSaving ? "兑换中…" : "确认兑换" }}</span></button></footer>
+        </section>
+      </div>
       <div v-if="passwordPromptOpen" class="password-modal-backdrop" @click.self="deferPasswordChange">
         <section class="password-modal" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle" @click.stop>
           <div class="password-modal-mark"><Code2 aria-hidden="true" /></div>
@@ -394,11 +446,12 @@ onBeforeUnmount(() => {
 
         <section class="game-panel supply-panel" aria-labelledby="rewardVaultTitle">
           <div class="game-panel-heading reward-panel-heading">
-            <div><Gift class="panel-icon" aria-hidden="true" /><div><h2 id="rewardVaultTitle">冒险奖品库</h2><p>积攒积分后联系老师兑换</p></div></div>
+            <div><Gift class="panel-icon" aria-hidden="true" /><div><h2 id="rewardVaultTitle">冒险奖品库</h2><p>点击奖品查看兑换提示</p></div></div>
             <small>{{ rewards.length }} 件奖品</small>
           </div>
+          <p v-if="redeemNotice" class="redeem-notice" role="status">{{ redeemNotice }}</p>
             <div v-if="rewards.length" class="reward-grid">
-              <article v-for="reward in rewards" :key="reward.id" class="reward-card">
+              <article v-for="reward in rewards" :key="reward.id" class="reward-card" role="button" tabindex="0" @click="openRewardRedeem(reward)" @keydown.enter.prevent="openRewardRedeem(reward)">
                 <div class="reward-image">
                   <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name">
                   <Gift v-else aria-hidden="true" />
@@ -1441,4 +1494,33 @@ button {
     animation: none;
   }
 }
+.reward-card { cursor: pointer; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.reward-card:hover, .reward-card:focus-visible { border-color: #55ddff; outline: none; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(42, 189, 255, .16); }
+.redeem-notice { margin: -2px 0 10px; padding: 8px 10px; border: 1px solid #2b715f; border-radius: 6px; color: #9ff5c8; background: rgba(31, 103, 78, .2); font-size: 11px; }
+.reward-redeem-backdrop { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(3, 8, 27, .74); backdrop-filter: blur(7px); }
+.reward-redeem-modal { width: min(460px, 100%); padding: 22px; border: 1px solid rgba(86, 219, 255, .68); border-radius: 16px; color: #f4f8ff; background: linear-gradient(145deg, #172954, #0b1536); box-shadow: 0 24px 80px rgba(0, 0, 0, .48), inset 0 0 35px rgba(65, 143, 255, .14); }
+.reward-redeem-modal > header, .reward-redeem-modal > header > div { display: flex; align-items: center; }
+.reward-redeem-modal > header { justify-content: space-between; gap: 12px; }
+.reward-redeem-modal > header > div { gap: 10px; }
+.reward-redeem-modal h2 { margin: 0; font-size: 20px; }
+.reward-redeem-mark { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid #55ddff; border-radius: 12px; color: #ffca25; background: #112b54; }
+.reward-redeem-mark svg { width: 22px; height: 22px; }
+.reward-redeem-body { display: grid; gap: 14px; margin-top: 20px; }
+.reward-redeem-item { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid #354c70; border-radius: 8px; background: #16233b; }
+.reward-redeem-item .reward-image { width: 60px; height: 60px; }
+.reward-redeem-item strong, .reward-redeem-item small { display: block; }
+.reward-redeem-item strong { color: #f5f7ff; font-size: 14px; }
+.reward-redeem-item small { margin-top: 5px; color: #55ddff; font-size: 11px; }
+.reward-redeem-body > p { margin: 0; color: #a4b7d9; font-size: 12px; line-height: 1.6; }
+.reward-redeem-body b { color: #55ddff; }
+.redeem-error { color: #ff8da2 !important; }
+.reward-redeem-modal > footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.reward-redeem-modal > footer .login-button { min-width: 130px; }
+@media (max-width: 560px) {
+  .reward-redeem-backdrop { padding: 12px; }
+  .reward-redeem-modal { padding: 18px; }
+  .reward-redeem-modal > footer { flex-direction: column-reverse; }
+  .reward-redeem-modal > footer button { width: 100%; }
+}
+
 </style>

@@ -9,6 +9,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +40,18 @@ public class RankingRewardPublicController {
 
   @GetMapping("/rewards")
   public List<RankingRewardPayload.Reward> rewards() { return rewards.publicRewards(); }
+
+  @GetMapping("/student-balance")
+  public RankingRewardPayload.Balance balance(HttpServletRequest request) {
+    var student = studentAuth.current(request);
+    return rewards.balance(student.ownerUsername(), student.studentId());
+  }
+
+  @PostMapping("/rewards/{id}/redeem")
+  public RankingRewardPayload.Redemption redeem(@PathVariable long id, HttpServletRequest request) {
+    var student = studentAuth.current(request);
+    return rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id);
+  }
 
   @GetMapping("/rewards/{id}/image")
   public ResponseEntity<byte[]> rewardImage(@PathVariable long id) {

@@ -180,27 +180,49 @@ public class RankingRewardService {
       (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getString(7), instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9)), rs.getString(10)), owner);
   }
 
+  public RankingRewardPayload.Balance balance(String owner, String studentValue) {
+    String studentId = text(studentValue, "学员 ID", 100);
+    Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM ranking_students WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
+    if (count == null || count == 0) throw notFound("学员不存在");
+    return balanceValues(owner, studentId);
+  }
+
   @Transactional
   public RankingRewardPayload.Redemption createRedemption(String owner, RankingRewardPayload.RedemptionRequest request) {
     if (request == null) throw invalid("兑换信息不能为空");
-    String studentId = text(request.studentId(), "学员 ID", 100);
-    List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC LIMIT 1 FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
+    return createRedemptionInternal(owner, text(request.studentId(), "学员 ID", 100), request.rewardId());
+  }
+
+  @Transactional
+  public RankingRewardPayload.Redemption createStudentRedemption(String owner, String studentValue, long rewardId) {
+    return createRedemptionInternal(owner, text(studentValue, "学员 ID", 100), rewardId);
+  }
+
+  private RankingRewardPayload.Redemption createRedemptionInternal(String owner, String studentId, long rewardId) {
+    // Lock every current student row before reading the balance so two tabs cannot spend the same points.
+    List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
     if (names.isEmpty()) throw notFound("学员不存在");
     List<RewardValue> rewardValues = jdbc.query("SELECT id,reward_name,required_points,enabled FROM ranking_rewards WHERE id=? AND owner_username=? FOR UPDATE",
-      (rs, n) -> new RewardValue(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4)), request.rewardId(), owner);
+      (rs, n) -> new RewardValue(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4)), rewardId, owner);
     if (rewardValues.isEmpty()) throw notFound("奖品不存在");
     RewardValue reward = rewardValues.getFirst();
     if (!reward.enabled()) throw invalid("该奖品已停用");
-    Integer earned = jdbc.queryForObject("SELECT COALESCE(SUM(total_points),0) FROM ranking_lesson_results WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
-    Integer spent = jdbc.queryForObject("SELECT COALESCE(SUM(points_spent),0) FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
-    int available = Math.max(0, Objects.requireNonNullElse(earned, 0) - Objects.requireNonNullElse(spent, 0));
-    if (available < reward.points()) throw invalid("可用积分不足，当前可用 " + available + " 分");
+    RankingRewardPayload.Balance current = balanceValues(owner, studentId);
+    if (current.availablePoints() < reward.points()) throw invalid("可用积分不足，当前可用 " + current.availablePoints() + " 分");
     GeneratedKeyHolder key = new GeneratedKeyHolder();
     jdbc.update(connection -> {
       PreparedStatement statement = connection.prepareStatement("INSERT INTO ranking_reward_redemptions(owner_username,student_id,student_name,reward_id,reward_name,points_spent) VALUES(?,?,?,?,?,?)", new String[]{"id"});
       statement.setString(1, owner); statement.setString(2, studentId); statement.setString(3, names.getFirst()); statement.setLong(4, reward.id()); statement.setString(5, reward.name()); statement.setInt(6, reward.points()); return statement;
     }, key);
     return redemptionById(owner, Objects.requireNonNull(key.getKey()).longValue());
+  }
+
+  private RankingRewardPayload.Balance balanceValues(String owner, String studentId) {
+    Integer earned = jdbc.queryForObject("SELECT COALESCE(SUM(total_points),0) FROM ranking_lesson_results WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
+    Integer spent = jdbc.queryForObject("SELECT COALESCE(SUM(points_spent),0) FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
+    int earnedPoints = Objects.requireNonNullElse(earned, 0);
+    int spentPoints = Objects.requireNonNullElse(spent, 0);
+    return new RankingRewardPayload.Balance(earnedPoints, spentPoints, Math.max(0, earnedPoints - spentPoints));
   }
 
   @Transactional
