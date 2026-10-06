@@ -3825,7 +3825,7 @@ a {
 
 .ranking-announcement-panel { display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px;padding:14px 16px; }
 .ranking-announcement-form-row { display:grid;grid-template-columns:minmax(420px,2.6fr) minmax(150px,.85fr) minmax(150px,.85fr) auto;align-items:stretch;gap:10px; }
-.ranking-announcement-description { display:flex;grid-column:1;grid-row:2;min-width:0;align-items:flex-start;gap:9px;color:#16877f; }
+.ranking-announcement-description { display:flex;min-width:0;align-items:flex-start;gap:9px;color:#16877f; }
 .ranking-announcement-description span,.ranking-announcement-description strong,.ranking-announcement-description small { display:block; }
 .ranking-announcement-description strong { color:#2b3e44;font-size:13px; }
 .ranking-announcement-description small { margin-top:3px;color:#7b898e;font-size:10px;line-height:1.4; }
