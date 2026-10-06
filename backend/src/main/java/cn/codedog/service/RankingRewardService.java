@@ -1,6 +1,7 @@
 package cn.codedog.service;
 
 import cn.codedog.model.RankingRewardPayload;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,8 +25,14 @@ public class RankingRewardService {
   private static final int MAX_IMAGE_BYTES = 2 * 1024 * 1024;
   private static final Set<String> IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
   private final JdbcTemplate jdbc;
+  private final RankingAnnouncementBroadcaster announcements;
 
-  public RankingRewardService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+  public RankingRewardService(JdbcTemplate jdbc) { this(jdbc, null); }
+
+  @Autowired
+  public RankingRewardService(JdbcTemplate jdbc, RankingAnnouncementBroadcaster announcements) {
+    this.jdbc = jdbc; this.announcements = announcements;
+  }
 
   public RankingRewardPayload.Announcement announcement(String owner) {
     List<RankingRewardPayload.Announcement> values = jdbc.query(
@@ -46,7 +53,9 @@ public class RankingRewardService {
     boolean enabled = publishAt == null || !publishAt.isAfter(Instant.now());
     jdbc.update("INSERT INTO ranking_announcements(owner_username,announcement_text,enabled,publish_at) VALUES(?,?,?,?)",
       owner, text, enabled, publishAt == null ? null : Timestamp.from(publishAt));
-    return announcementById(owner, jdbc.queryForObject("SELECT MAX(id) FROM ranking_announcements WHERE owner_username=?", Long.class, owner));
+    var result = announcementById(owner, jdbc.queryForObject("SELECT MAX(id) FROM ranking_announcements WHERE owner_username=?", Long.class, owner));
+    publishAnnouncement(owner);
+    return result;
   }
 
   @Transactional
@@ -55,11 +64,16 @@ public class RankingRewardService {
       ? jdbc.update("UPDATE ranking_announcements SET enabled=TRUE,publish_at=CURRENT_TIMESTAMP(6),updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", id, owner)
       : jdbc.update("UPDATE ranking_announcements SET enabled=FALSE,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", id, owner);
     if (changed == 0) throw notFound("\u516C\u544A\u4E0D\u5B58\u5728");
-    return announcementById(owner, id);
+    var result = announcementById(owner, id);
+    publishAnnouncement(owner);
+    return result;
   }
 
   public RankingRewardPayload.Announcement publicAnnouncement() {
-    String owner = publicOwner();
+    return publicAnnouncement(publicOwner());
+  }
+
+  public RankingRewardPayload.Announcement publicAnnouncement(String owner) {
     List<RankingRewardPayload.Announcement> active = jdbc.query(
       "SELECT announcement_text,updated_at FROM ranking_announcements WHERE owner_username=? AND enabled=TRUE AND (publish_at IS NULL OR publish_at<=CURRENT_TIMESTAMP(6)) ORDER BY COALESCE(publish_at,created_at) DESC,id DESC LIMIT 1",
       (rs, n) -> new RankingRewardPayload.Announcement(rs.getString(1), instant(rs.getTimestamp(2))), owner);
@@ -72,7 +86,9 @@ public class RankingRewardService {
   public RankingRewardPayload.Announcement updateAnnouncement(String owner, String value) {
     String announcement = optionalText(value, "排行榜公告", 500);
     jdbc.update("INSERT INTO ranking_board_settings(owner_username,announcement) VALUES(?,?) ON DUPLICATE KEY UPDATE announcement=VALUES(announcement),updated_at=CURRENT_TIMESTAMP(6)", owner, announcement);
-    return announcement(owner);
+    var result = announcement(owner);
+    publishAnnouncement(owner);
+    return result;
   }
 
   public List<RankingRewardPayload.Reward> rewards(String owner) {
@@ -183,6 +199,10 @@ public class RankingRewardService {
   }
 
   private String publicOwner() { return jdbc.queryForObject("SELECT username FROM users ORDER BY is_admin DESC,id LIMIT 1", String.class); }
+
+  private void publishAnnouncement(String owner) {
+    if (announcements != null) announcements.publish(owner, publicAnnouncement(owner));
+  }
 
   private RankingRewardPayload.Redemption redemptionById(String owner, long id) {
     return redemptions(owner).stream().filter(value -> value.id() == id).findFirst().orElseThrow(() -> notFound("兑换记录不存在"));

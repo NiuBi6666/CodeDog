@@ -41,7 +41,7 @@ const confirmPassword = ref("");
 const passwordChangeError = ref("");
 const passwordChangeLoading = ref(false);
 let refreshTimer;
-let announcementRefreshTimer;
+let announcementStream;
 
 const rows = computed(() => board.value?.rankings || []);
 const selectedIndex = computed(() => rows.value.findIndex((row) => String(row.studentId) === String(selectedStudentId.value)));
@@ -82,9 +82,8 @@ async function loadBoard() {
   loading.value = true;
   error.value = "";
   try {
-    const [boardValue, announcementValue, rewardValues] = await Promise.all([api("/public/rankings/student-board"), api("/public/rankings/announcement"), api("/public/rankings/rewards")]);
+    const [boardValue, rewardValues] = await Promise.all([api("/public/rankings/student-board"), api("/public/rankings/rewards")]);
     board.value = boardValue;
-    announcement.value = announcementValue?.text || "";
     rewards.value = rewardValues || [];
     selectedStudentId.value = String(studentSession.value?.studentId || "");
     loadOpportunities(selectedStudentId.value);
@@ -106,6 +105,31 @@ async function loadAnnouncement() {
   }
 }
 
+function closeAnnouncementStream() {
+  if (announcementStream) announcementStream.close();
+  announcementStream = null;
+}
+
+function connectAnnouncementStream() {
+  closeAnnouncementStream();
+  if (!studentSession.value) return;
+  loadAnnouncement();
+  if (typeof EventSource === "undefined") return;
+  const stream = new EventSource("/api/public/rankings/announcement/events");
+  announcementStream = stream;
+  stream.addEventListener("announcement", (event) => {
+    try {
+      const value = JSON.parse(event.data);
+      announcement.value = value?.text || "";
+    } catch (_error) {
+      // Ignore malformed event data and keep the current announcement visible.
+    }
+  });
+  stream.onerror = () => {
+    if (announcementStream !== stream) stream.close();
+  };
+}
+
 
 function handleSessionExpired() {
   studentSession.value = null;
@@ -114,14 +138,13 @@ function handleSessionExpired() {
   authReady.value = true;
   loginError.value = "登录已失效，请重新登录";
   window.clearInterval(refreshTimer);
-  window.clearInterval(announcementRefreshTimer);
+  closeAnnouncementStream();
 }
 
 function startRefreshTimers() {
   window.clearInterval(refreshTimer);
-  window.clearInterval(announcementRefreshTimer);
   refreshTimer = window.setInterval(loadBoard, 60_000);
-  announcementRefreshTimer = window.setInterval(loadAnnouncement, 15_000);
+  connectAnnouncementStream();
 }
 
 async function loadSession() {
@@ -262,24 +285,18 @@ function handleResize() {
   if (anchor) positionPopover(anchor);
 }
 
-function handleVisibilityChange() {
-  if (document.visibilityState === "visible" && studentSession.value) loadAnnouncement();
-}
-
 onMounted(() => {
   loadSession();
   document.addEventListener("click", handleOutsideClick);
   document.addEventListener("keydown", handleEscape);
-  document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("resize", handleResize);
 });
 
 onBeforeUnmount(() => {
   window.clearInterval(refreshTimer);
-  window.clearInterval(announcementRefreshTimer);
+  closeAnnouncementStream();
   document.removeEventListener("click", handleOutsideClick);
   document.removeEventListener("keydown", handleEscape);
-  document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("resize", handleResize);
 });
 </script>
