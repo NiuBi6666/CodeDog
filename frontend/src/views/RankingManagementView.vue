@@ -163,6 +163,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <button type="button" :class="{ active: activeTab === 'rankings' }" @click="activeTab = 'rankings'"><Trophy :size="17"/>全量排名</button>
       <button type="button" :class="{ active: activeTab === 'rewards' }" @click="activeTab = 'rewards'"><Gift :size="17"/>奖品管理 <span>{{ rewards.length }}</span></button>
       <button type="button" :class="{ active: activeTab === 'redemptions' }" @click="activeTab = 'redemptions'"><PackageCheck :size="17"/>兑换记录 <span v-if="pendingCount">{{ pendingCount }}</span></button>
+      <button type="button" :class="{ active: activeTab === 'announcements' }" @click="activeTab = 'announcements'"><Megaphone :size="17"/>历史公告 <span>{{ announcements.length }}</span></button>
     </nav>
 
     <template v-if="activeTab === 'rankings'">
@@ -173,16 +174,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <button class="button button-primary" type="button" :disabled="savingAnnouncement || !announcementDraft.trim()" @click="saveAnnouncement">{{ savingAnnouncement ? "发布中" : "发布公告" }}</button>
       </section>
 
-      <section class="admin-panel ranking-announcement-history">
-        <div class="panel-heading ranking-toolbar"><div><h2>历史公告</h2><small>共 {{ announcements.length }} 条，支持手动上线、下线和定时发布</small></div><CalendarClock :size="19" class="ranking-history-heading-icon"/></div>
-        <div v-if="!announcements.length" class="ranking-admin-state"><Megaphone :size="25"/><span>还没有发布过公告</span></div>
-        <div v-else class="ranking-announcement-list">
-          <article v-for="item in announcements" :key="item.id" class="ranking-announcement-row">
-            <div class="ranking-announcement-copy"><p>{{ item.text }}</p><div class="ranking-announcement-meta"><span class="ranking-status" :class="`ranking-announcement-status-${item.status.toLowerCase()}`">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">发布时间 {{ formatDateTime(item.publishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div></div>
-            <div class="ranking-row-actions"><button v-if="item.status === 'ONLINE'" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
-          </article>
-        </div>
-      </section>
 
       <section v-if="board" class="ranking-admin-summary" aria-label="排名概览">
         <article><span class="ranking-summary-icon ranking-summary-gold"><Trophy :size="20"/></span><div><strong>全量榜</strong><small>全部营期、全部班级</small></div></article>
@@ -210,6 +201,17 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         </div>
       </section>
     </template>
+
+    <section v-else-if="activeTab === 'announcements'" class="admin-panel ranking-announcement-history">
+      <div class="panel-heading ranking-toolbar"><div><h2>历史公告</h2><small>共 {{ announcements.length }} 条，支持手动上线、下线和定时发布</small></div><CalendarClock :size="19" class="ranking-history-heading-icon"/></div>
+      <div v-if="!announcements.length" class="ranking-admin-state"><Megaphone :size="25"/><span>还没有发布过公告</span></div>
+      <div v-else class="ranking-announcement-list">
+        <article v-for="item in announcements" :key="item.id" class="ranking-announcement-row">
+          <div class="ranking-announcement-copy"><p>{{ item.text }}</p><div class="ranking-announcement-meta"><span class="ranking-status" :class="`ranking-announcement-status-${item.status.toLowerCase()}`">{{ announcementStatusLabel(item.status) }}</span><span v-if="item.publishAt">发布时间 {{ formatDateTime(item.publishAt) }}</span><span>创建于 {{ formatDateTime(item.createdAt) }}</span></div></div>
+          <div class="ranking-row-actions"><button v-if="item.status === 'ONLINE'" class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, false)"><CircleOff :size="14"/>下线</button><button v-else class="button button-quiet ranking-announcement-action" type="button" @click="setAnnouncementOnline(item, true)"><CheckCircle2 :size="14"/>{{ item.status === 'SCHEDULED' ? '立即上线' : '上线' }}</button></div>
+        </article>
+      </div>
+    </section>
 
     <section v-else-if="activeTab === 'rewards'" class="admin-panel ranking-list-panel">
       <div class="panel-heading ranking-toolbar"><div><h2>奖品管理</h2><small>维护学生可兑换的奖品、图片和积分门槛</small></div><button class="button button-primary" type="button" @click="openReward()"><Plus :size="15"/>添加奖品</button></div>
