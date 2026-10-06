@@ -3835,11 +3835,12 @@ a {
 .ranking-announcement-schedule { display:flex;min-height:38px;align-items:center;gap:7px;padding:0 10px;border:1px solid #d1dcde;border-radius:6px;color:#63777d;background:#f8fbfb;font-size:11px;white-space:nowrap; }
 .ranking-announcement-schedule input { min-width:0;border:0;outline:0;color:#40545a;background:transparent;font:inherit; }
 .ranking-announcement-schedules { display:contents;min-width:0; }
-.ranking-announcement-controls { display:flex;align-items:flex-end;gap:12px; }
-.ranking-announcement-time-editor { display:flex;align-items:center;flex-wrap:wrap;gap:6px; }
-.ranking-announcement-time-editor label { display:flex;align-items:center;gap:4px;color:#718187;font-size:10px;white-space:nowrap; }
-.ranking-announcement-time-editor input { width:164px;height:30px;padding:0 6px;border:1px solid #d1dcde;border-radius:5px;color:#40545a;background:#f8fbfb;font:inherit; }
-.ranking-announcement-save { min-height:30px;padding-inline:8px;font-size:11px; }
+.ranking-announcement-controls { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center;gap:8px;width:min(100%,680px);min-width:0;flex:0 1 680px; }
+.ranking-announcement-time-editor { display:contents; }
+.ranking-announcement-time-editor label { display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px;min-width:0;color:#718187;font-size:10px;white-space:nowrap; }
+.ranking-announcement-time-editor input { width:100%;min-width:0;height:36px;padding:0 6px;border:1px solid #d1dcde;border-radius:5px;color:#40545a;background:#f8fbfb;font:inherit; }
+.ranking-announcement-save { width:100%;min-height:36px;padding-inline:8px;font-size:11px;justify-content:center; }
+.ranking-announcement-controls>.ranking-row-actions { display:contents; }
 .ranking-announcement-history { margin-bottom:16px; }
 .ranking-history-heading-icon { color:#16877f; }
 .ranking-announcement-list { display:grid; }
@@ -3852,7 +3853,7 @@ a {
 .ranking-announcement-status-online { color:#187055;background:#dcf1e9; }
 .ranking-announcement-status-scheduled { color:#815d0b;background:#fff0c8; }
 .ranking-announcement-status-offline { color:#6f7a7e;background:#edf1f2; }
-.ranking-announcement-action { min-width:76px;justify-content:center; }
+.ranking-announcement-action { width:100%;min-width:0;min-height:36px;padding-inline:8px;justify-content:center; }
 
 
 .ranking-toolbar { display:flex;align-items:center;justify-content:space-between;gap:16px; }
@@ -3908,9 +3909,10 @@ a {
   .ranking-announcement-form-row .ranking-announcement-schedule { grid-column:auto; }
   .ranking-announcement-row { align-items:flex-start;flex-direction:column;gap:12px; }
   .ranking-announcement-controls { width:100%;align-items:stretch;flex-direction:column;gap:10px; }
-  .ranking-announcement-time-editor { width:100%; }
+  .ranking-announcement-time-editor { display:flex;width:100%; }
   .ranking-announcement-time-editor label { flex:1 1 220px; }
   .ranking-announcement-time-editor input { width:100%; }
+  .ranking-announcement-controls>.ranking-row-actions { display:flex; }
   .ranking-announcement-action { width:100%; }
 
   .ranking-announcement-panel { grid-template-columns:1fr; }
