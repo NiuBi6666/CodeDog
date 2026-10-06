@@ -400,6 +400,11 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 76px;
+  gap: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed rgba(129, 106, 255, 0.56);
+}
 .auth-status {
   display: grid;
   min-height: 280px;
@@ -409,16 +414,41 @@ button {
 
 .student-login-panel {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) minmax(210px, 280px);
+  grid-template-columns: 86px minmax(0, 1fr) minmax(310px, 360px);
   align-items: center;
-  gap: 14px 20px;
-  max-width: 820px;
-  margin: 58px auto 80px;
-  padding: 28px;
-  border: 1px solid #566db6;
-  border-radius: 10px;
-  background: #111b3b;
-  box-shadow: 0 18px 50px rgba(3, 9, 28, 0.35), inset 0 0 32px rgba(58, 102, 222, 0.12);
+  gap: 14px 22px;
+  max-width: 980px;
+  min-height: 360px;
+  margin: 76px auto 112px;
+  padding: 42px 46px 46px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(67, 215, 255, 0.55);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(22, 37, 79, 0.96), rgba(10, 19, 47, 0.98) 62%);
+  box-shadow: 0 30px 90px rgba(2, 8, 29, 0.58), inset 0 0 0 1px rgba(255, 255, 255, 0.045), inset 0 0 52px rgba(44, 117, 255, 0.13);
+}
+
+.student-login-panel::before {
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(133, 158, 255, 0.18);
+  border-radius: 15px;
+  content: "";
+  pointer-events: none;
+}
+
+.student-login-panel::after {
+  position: absolute;
+  right: -90px;
+  top: -120px;
+  width: 330px;
+  height: 330px;
+  border: 1px solid rgba(67, 215, 255, 0.2);
+  border-radius: 50%;
+  box-shadow: 0 0 0 24px rgba(67, 215, 255, 0.035), 0 0 0 48px rgba(67, 215, 255, 0.025);
+  content: "";
+  pointer-events: none;
 }
 
 .login-mark {
@@ -426,32 +456,29 @@ button {
   width: 78px;
   height: 78px;
   place-items: center;
-  border: 1px solid #43d7ff;
-  border-radius: 18px;
+  z-index: 1;
+  border: 1px solid rgba(89, 224, 255, 0.9);
+  border-radius: 21px;
   color: #43d7ff;
-  background: #182c55;
-  box-shadow: 0 0 24px rgba(67, 215, 255, 0.2);
+  background: linear-gradient(145deg, #173d67, #112449);
+  box-shadow: 0 0 0 5px rgba(67, 215, 255, 0.08), 0 0 32px rgba(67, 215, 255, 0.3);
 }
 
 .login-mark svg { width: 38px; height: 38px; }
-.login-copy { min-width: 0; }
-.login-kicker { margin: 0 0 5px; color: #43d7ff; font-size: 11px; letter-spacing: 0; }
-.login-copy h1 { margin: 0; color: #f4f7ff; font-size: 24px; }
-.login-copy > p:last-child { margin: 7px 0 0; color: #8494ba; font-size: 12px; line-height: 1.5; }
-.login-field { display: grid; gap: 5px; min-width: 0; }
-.login-field span { color: #aab8d8; font-size: 11px; }
-.login-field input { box-sizing: border-box; width: 100%; height: 38px; padding: 0 11px; border: 1px solid #405789; border-radius: 5px; outline: none; color: #f4f7ff; background: #0d1631; }
-.login-field input:focus { border-color: #43d7ff; box-shadow: 0 0 0 3px rgba(67, 215, 255, 0.13); }
-.login-error { grid-column: 2 / -1; margin: 0; color: #ff91a5; font-size: 11px; }
-.login-button { grid-column: 2 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; border: 0; border-radius: 5px; color: #09142d; background: #43d7ff; font-weight: 900; }
-.login-button:hover, .login-button:focus-visible { background: #72e3ff; outline: 2px solid rgba(114, 227, 255, 0.3); outline-offset: 2px; }
-.login-button:disabled { cursor: wait; opacity: 0.7; }
-
-  min-height: 76px;
-  gap: 24px;
-  padding-bottom: 14px;
-  border-bottom: 1px dashed rgba(129, 106, 255, 0.56);
-}
+.login-copy { z-index: 1; min-width: 0; padding-right: 18px; }
+.login-kicker { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 14px; color: #55ddff; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; }
+.login-kicker::before { width: 22px; height: 2px; background: #55ddff; box-shadow: 0 0 10px rgba(85, 221, 255, 0.8); content: ""; }
+.login-copy h1 { max-width: 440px; margin: 0; color: #f4f8ff; font-size: clamp(30px, 3.2vw, 46px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; text-shadow: 0 0 25px rgba(116, 181, 255, 0.22); }
+.login-copy > p:last-child { max-width: 370px; margin: 17px 0 0; color: #91a6cd; font-size: 14px; line-height: 1.7; }
+.login-field { display: grid; grid-column: 3; gap: 7px; min-width: 0; z-index: 1; }
+.login-field span { color: #a9bbda; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
+.login-field input { box-sizing: border-box; width: 100%; height: 48px; padding: 0 15px; border: 1px solid #3f5e91; border-radius: 10px; outline: none; color: #f4f7ff; background: rgba(7, 17, 42, 0.82); font-size: 14px; transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease; }
+.login-field input::placeholder { color: #5f7096; }
+.login-field input:focus { border-color: #43d7ff; background: rgba(8, 23, 52, 0.96); box-shadow: 0 0 0 3px rgba(67, 215, 255, 0.14), 0 0 20px rgba(67, 215, 255, 0.12); }
+.login-error { grid-column: 3; z-index: 1; margin: 0; color: #ff91a5; font-size: 11px; line-height: 1.45; }
+.login-button { grid-column: 3; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border: 0; border-radius: 10px; color: #07152f; background: linear-gradient(110deg, #5ae5ff, #78c9ff 55%, #9c9aff); box-shadow: 0 8px 24px rgba(62, 186, 255, 0.25); font-weight: 900; transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease; }
+.login-button:hover, .login-button:focus-visible { filter: brightness(1.08); outline: 2px solid rgba(114, 227, 255, 0.34); outline-offset: 3px; box-shadow: 0 11px 30px rgba(62, 186, 255, 0.36); transform: translateY(-1px); }
+.login-button:disabled { cursor: wait; opacity: 0.7; transform: none; }
 
 .adventure-brand {
   display: flex;
@@ -1220,9 +1247,15 @@ button {
     height: 27px;
   }
 
-  .student-login-panel { grid-template-columns: 1fr; margin: 32px auto 48px; padding: 22px 17px; }
-  .login-mark { margin: 0 auto; }
-  .login-error, .login-button { grid-column: auto; }
+  .student-login-panel { grid-template-columns: 1fr; min-height: 0; gap: 18px; margin: 32px auto 48px; padding: 34px 23px 30px; border-radius: 18px; }
+  .student-login-panel::before { inset: 8px; }
+  .login-mark { grid-column: 1; margin: 0 auto; }
+  .login-copy { grid-column: 1; padding-right: 0; text-align: center; }
+  .login-kicker { justify-content: center; }
+  .login-copy h1 { margin-inline: auto; font-size: 30px; }
+  .login-copy > p:last-child { margin-inline: auto; font-size: 12px; }
+  .login-field, .login-error, .login-button { grid-column: 1; }
+  .login-field { width: 100%; }
 
   .player-console {
     grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
