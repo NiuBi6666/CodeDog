@@ -39,6 +39,11 @@ const authLoading = ref(false);
 const loginPhone = ref("");
 const loginPassword = ref("");
 const loginError = ref("");
+const passwordPromptOpen = ref(false);
+const newPassword = ref("");
+const confirmPassword = ref("");
+const passwordChangeError = ref("");
+const passwordChangeLoading = ref(false);
 let refreshTimer;
 
 const rows = computed(() => board.value?.rankings || []);
@@ -110,6 +115,7 @@ async function loadSession() {
     selectedStudentId.value = String(studentSession.value.studentId);
     authReady.value = true;
     await loadBoard();
+    openPasswordPrompt(studentSession.value);
     refreshTimer = window.setInterval(loadBoard, 60_000);
   } catch (failure) {
     if (failure.status !== 401) loginError.value = failure.message || "登录状态加载失败";
@@ -128,11 +134,50 @@ async function login() {
     selectedStudentId.value = String(studentSession.value.studentId);
     loginPassword.value = "";
     await loadBoard();
+    openPasswordPrompt(studentSession.value);
     refreshTimer = window.setInterval(loadBoard, 60_000);
   } catch (failure) {
     loginError.value = failure.message || "登录失败，请检查手机号和密码";
   } finally {
     authLoading.value = false;
+  }
+}
+
+function openPasswordPrompt(session) {
+  passwordPromptOpen.value = Boolean(session?.mustChangePassword);
+  passwordChangeError.value = "";
+  newPassword.value = "";
+  confirmPassword.value = "";
+}
+
+function deferPasswordChange() {
+  passwordPromptOpen.value = false;
+  passwordChangeError.value = "";
+}
+
+async function submitPasswordChange() {
+  passwordChangeError.value = "";
+  if (newPassword.value.length < 6 || newPassword.value.length > 72) {
+    passwordChangeError.value = "新密码长度应为 6-72 个字符";
+    return;
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    passwordChangeError.value = "两次输入的新密码不一致";
+    return;
+  }
+  passwordChangeLoading.value = true;
+  try {
+    studentSession.value = await api("/public/rankings/student-auth/change-password", {
+      method: "POST",
+      body: jsonBody({ password: newPassword.value })
+    });
+    passwordPromptOpen.value = false;
+    newPassword.value = "";
+    confirmPassword.value = "";
+  } catch (failure) {
+    passwordChangeError.value = failure.message || "密码修改失败，请稍后重试";
+  } finally {
+    passwordChangeLoading.value = false;
   }
 }
 
@@ -266,12 +311,31 @@ onBeforeUnmount(() => {
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
       </form>
-      <div v-else-if="announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
+      <div v-if="passwordPromptOpen" class="password-modal-backdrop" @click.self="deferPasswordChange">
+        <section class="password-modal" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle" @click.stop>
+          <div class="password-modal-mark"><Code2 aria-hidden="true" /></div>
+          <div class="password-modal-copy">
+            <p class="password-modal-kicker">账号安全提醒</p>
+            <h2 id="passwordModalTitle">请修改初始密码</h2>
+            <p>请修改初始密码，建议与上课密码一致</p>
+          </div>
+          <form class="password-change-form" @submit.prevent="submitPasswordChange">
+            <label class="login-field"><span>新密码</span><input v-model="newPassword" type="password" autocomplete="new-password" maxlength="72" placeholder="请输入新密码" /></label>
+            <label class="login-field"><span>确认新密码</span><input v-model="confirmPassword" type="password" autocomplete="new-password" maxlength="72" placeholder="请再次输入新密码" /></label>
+            <p v-if="passwordChangeError" class="login-error" role="alert">{{ passwordChangeError }}</p>
+            <div class="password-modal-actions">
+              <button class="password-later-button" type="button" @click="deferPasswordChange">暂不修改</button>
+              <button class="login-button" type="submit" :disabled="passwordChangeLoading"><RefreshCw v-if="passwordChangeLoading" class="spin" aria-hidden="true" /><span>{{ passwordChangeLoading ? "保存中…" : "保存新密码" }}</span></button>
+            </div>
+          </form>
+        </section>
+      </div>
+      <div v-if="studentSession && announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
 
       <main v-if="studentSession" class="ranking-layout" @click.stop>
         <section class="game-panel ladder-panel" aria-labelledby="ladderTitle">
           <div class="game-panel-heading">
-            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名 · 共 {{ board.studentCount }} 名学员</p></div></div>
+            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名 · 共 {{ board ? board.studentCount : 0 }} 名学员</p></div></div>
             <button class="ghost-button" type="button" :disabled="loading" @click="loadBoard"><RefreshCw :class="{ spin: loading }" aria-hidden="true" />刷新</button>
           </div>
 
@@ -1183,6 +1247,63 @@ button {
 .score-opportunity-state.error { color: #ff8da2; }
 .score-opportunities.complete { border-top-color: #2b715f; }
 
+.password-modal-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 8, 27, 0.72);
+  backdrop-filter: blur(7px);
+}
+
+.password-modal {
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 4px 16px;
+  width: min(520px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(86, 219, 255, 0.68);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #172954, #0b1536);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), inset 0 0 35px rgba(65, 143, 255, 0.14);
+}
+
+.password-modal-mark {
+  display: grid;
+  grid-row: span 2;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 1px solid #55ddff;
+  border-radius: 15px;
+  color: #55ddff;
+  background: #112b54;
+  box-shadow: 0 0 22px rgba(67, 215, 255, 0.22);
+}
+
+.password-modal-mark svg { width: 26px; height: 26px; }
+.password-modal-copy { min-width: 0; }
+.password-modal-kicker { margin: 0 0 5px; color: #55ddff; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.password-modal-copy h2 { margin: 0; color: #f4f8ff; font-size: 22px; }
+.password-modal-copy > p:last-child { margin: 7px 0 0; color: #a4b7d9; font-size: 12px; line-height: 1.55; }
+
+.password-change-form {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.password-change-form .login-field { grid-column: auto; }
+.password-change-form .login-error { grid-column: auto; }
+.password-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 3px; }
+.password-modal-actions .login-button { grid-column: auto; min-width: 130px; }
+.password-later-button { height: 48px; padding: 0 15px; border: 1px solid #405989; border-radius: 10px; color: #aab9d7; background: rgba(11, 24, 53, 0.72); font-size: 12px; font-weight: 800; }
+.password-later-button:hover, .password-later-button:focus-visible { border-color: #6b8dc9; outline: 2px solid rgba(107, 141, 201, 0.2); outline-offset: 2px; color: #f0f5ff; }
+
 .adventure-shell footer {
   display: flex;
   justify-content: center;
@@ -1253,6 +1374,12 @@ button {
   .login-copy > p:last-child { margin-inline: auto; font-size: 12px; }
   .login-field, .login-error, .login-button { grid-column: 1; }
   .login-field { width: 100%; }
+
+  .password-modal { grid-template-columns: 48px minmax(0, 1fr); padding: 22px 18px; }
+  .password-modal-mark { width: 44px; height: 44px; }
+  .password-modal-copy h2 { font-size: 19px; }
+  .password-modal-actions { flex-direction: column-reverse; }
+  .password-modal-actions button { width: 100%; }
 
   .player-console {
     grid-template-columns: 34px minmax(0, 1fr) 34px 34px;

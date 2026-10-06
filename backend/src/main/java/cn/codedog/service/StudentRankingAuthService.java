@@ -3,6 +3,7 @@ package cn.codedog.service;
 import cn.codedog.model.RankingPayload;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.sql.Timestamp;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -63,6 +64,17 @@ public class StudentRankingAuthService {
     return profile(account);
   }
 
+  public StudentSession changePassword(String passwordValue, HttpServletRequest request) {
+    StudentSession current = current(request);
+    String password = passwordValue == null ? "" : passwordValue;
+    if (password.length() < 6 || password.length() > 72)
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码长度应为 6-72 个字符");
+    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_changed_at=CURRENT_TIMESTAMP(6),updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=?",
+      passwordEncoder.encode(password), current.phone(), current.ownerUsername(), current.studentId());
+    if (updated != 1) throw unauthorized();
+    return current(request);
+  }
+
   public void logout(HttpServletRequest request) {
     HttpSession session = request.getSession(false);
     if (session != null) clear(session);
@@ -82,15 +94,15 @@ public class StudentRankingAuthService {
 
   private Account find(String phone) {
     try {
-      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,enabled FROM ranking_student_accounts WHERE phone=?",
-        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getBoolean(6)), phone);
+      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,enabled,password_changed_at FROM ranking_student_accounts WHERE phone=?",
+        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getBoolean(6), rs.getTimestamp(7)), phone);
     } catch (EmptyResultDataAccessException ignored) { return null; }
   }
 
   private Account find(String phone, String owner, String studentId) {
     try {
-      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,enabled FROM ranking_student_accounts WHERE phone=? AND owner_username=? AND student_id=?",
-        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getBoolean(6)), phone, owner, studentId);
+      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,enabled,password_changed_at FROM ranking_student_accounts WHERE phone=? AND owner_username=? AND student_id=?",
+        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getBoolean(6), rs.getTimestamp(7)), phone, owner, studentId);
     } catch (EmptyResultDataAccessException ignored) { return null; }
   }
 
@@ -109,7 +121,7 @@ public class StudentRankingAuthService {
   }
 
   private StudentSession profile(Account account) {
-    return new StudentSession(account.ownerUsername(), account.studentId(), account.studentName(), account.phone());
+    return new StudentSession(account.ownerUsername(), account.studentId(), account.studentName(), account.phone(), account.passwordChangedAt() == null);
   }
 
   private String normalizePhone(String value) {
@@ -123,6 +135,7 @@ public class StudentRankingAuthService {
   private ResponseStatusException unauthorized() { return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "学生登录已失效，请重新登录"); }
 
   private record Account(String phone, String ownerUsername, String studentId, String studentName,
-                         String passwordHash, boolean enabled) {}
-  public record StudentSession(String ownerUsername, String studentId, String studentName, String phone) {}
+                         String passwordHash, boolean enabled, Timestamp passwordChangedAt) {}
+  public record StudentSession(String ownerUsername, String studentId, String studentName, String phone,
+                               boolean mustChangePassword) {}
 }

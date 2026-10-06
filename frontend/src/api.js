@@ -29,7 +29,7 @@ export async function api(path, options = {}) {
   const send = () => fetch(`/api${path}`, { ...options, method, headers: createHeaders(), credentials: "same-origin" });
 
   let response = await send();
-  if (csrfProtected && response.status === 403 && ["/auth/login", "/auth/logout", "/auth/register", "/public/rankings/student-auth/login", "/public/rankings/student-auth/logout"].includes(path)) {
+  if (csrfProtected && response.status === 403 && ["/auth/login", "/auth/logout", "/auth/register", "/public/rankings/student-auth/login", "/public/rankings/student-auth/logout", "/public/rankings/student-auth/change-password"].includes(path)) {
     csrfToken = "";
     await loadCsrf();
     response = await send();
