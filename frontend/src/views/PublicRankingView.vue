@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import {
   CircleCheckBig,
@@ -10,15 +10,13 @@ import {
   Maximize2,
   Minimize2,
   RefreshCw,
+  LogOut,
   Sparkles,
   Trophy
 } from "@lucide/vue";
-import { api } from "../api";
+import { api, jsonBody } from "../api";
 import {
-  rankingAvatarText,
-  rankingPointsToPass,
-  rankingTrendView,
-  rankingVisibleRows
+  rankingAvatarText, rankingTrendView
 } from "../rankingAdmin.js";
 
 const board = ref(null);
@@ -35,14 +33,20 @@ const pinnedDetailId = ref("");
 const popover = ref(null);
 const popoverStyle = ref({});
 const isFullscreen = ref(false);
+const studentSession = ref(null);
+const authReady = ref(false);
+const authLoading = ref(false);
+const loginPhone = ref("");
+const loginPassword = ref("");
+const loginError = ref("");
 let refreshTimer;
 
 const rows = computed(() => board.value?.rankings || []);
 const selectedIndex = computed(() => rows.value.findIndex((row) => String(row.studentId) === String(selectedStudentId.value)));
-const visibleRows = computed(() => rankingVisibleRows(rows.value, selectedStudentId.value));
+const visibleRows = computed(() => rows.value);
 const visibleOpportunities = computed(() => opportunities.value.slice(0, 3));
 const opportunityComplete = computed(() => visibleOpportunities.value[0]?.type === "COMPLETE");
-const showsSelectedSeparately = computed(() => visibleRows.value.length > 10);
+const showsSelectedSeparately = computed(() => visibleRows.value.length > 10 && Boolean(selectedStudentId.value));
 const selectedStudent = computed(() => selectedIndex.value >= 0 ? rows.value[selectedIndex.value] : null);
 const updatedText = computed(() => {
   if (!board.value?.updatedAt) return "尚未同步";
@@ -56,17 +60,6 @@ const updatedText = computed(() => {
   }).format(new Date(board.value.updatedAt))}`;
 });
 
-function rememberSelection() {
-  if (selectedStudentId.value) localStorage.setItem("codedog-ranking-student:all", selectedStudentId.value);
-}
-
-function initializeSelection() {
-  const saved = selectedStudentId.value || localStorage.getItem("codedog-ranking-student:all") || "";
-  const match = rows.value.find((row) => String(row.studentId) === String(saved));
-  selectedStudentId.value = String(match?.studentId || rows.value[0]?.studentId || "");
-  rememberSelection();
-}
-
 let opportunityRequest = 0;
 async function loadOpportunities(studentId = selectedStudentId.value) {
   if (!studentId) return;
@@ -74,7 +67,7 @@ async function loadOpportunities(studentId = selectedStudentId.value) {
   opportunityLoading.value = true;
   opportunityError.value = "";
   try {
-    const result = await api(`/public/rankings/students/${encodeURIComponent(studentId)}/opportunities`);
+    const result = await api(`/public/rankings/student-opportunities?studentId=${encodeURIComponent(studentId)}`);
     if (request === opportunityRequest) opportunities.value = result?.opportunities || [];
   } catch (failure) {
     if (request === opportunityRequest) { opportunities.value = []; opportunityError.value = failure.message || "提分任务加载失败"; }
@@ -84,28 +77,77 @@ async function loadOpportunities(studentId = selectedStudentId.value) {
 }
 
 async function loadBoard() {
-  const previousStudentId = selectedStudentId.value;
   loading.value = true;
   error.value = "";
   try {
-    const [boardValue, announcementValue, rewardValues] = await Promise.all([api("/public/rankings/all"), api("/public/rankings/announcement"), api("/public/rankings/rewards")]);
+    const [boardValue, announcementValue, rewardValues] = await Promise.all([api("/public/rankings/student-board"), api("/public/rankings/announcement"), api("/public/rankings/rewards")]);
     board.value = boardValue;
     announcement.value = announcementValue?.text || "";
     rewards.value = rewardValues || [];
-    initializeSelection();
-    if (selectedStudentId.value === previousStudentId) loadOpportunities();
+    selectedStudentId.value = String(studentSession.value?.studentId || "");
+    loadOpportunities(selectedStudentId.value);
   } catch (failure) {
     error.value = failure.message || "排行榜加载失败";
+    if (failure.status === 401) return handleSessionExpired();
   } finally {
     loading.value = false;
   }
 }
 
-function selectStudent(row) {
-  selectedStudentId.value = String(row.studentId);
-  rememberSelection();
+
+function handleSessionExpired() {
+  studentSession.value = null;
+  board.value = null;
+  selectedStudentId.value = "";
+  authReady.value = true;
+  loginError.value = "登录已失效，请重新登录";
+  window.clearInterval(refreshTimer);
 }
 
+async function loadSession() {
+  try {
+    studentSession.value = await api("/public/rankings/student-auth/session");
+    selectedStudentId.value = String(studentSession.value.studentId);
+    authReady.value = true;
+    await loadBoard();
+    refreshTimer = window.setInterval(loadBoard, 60_000);
+  } catch (failure) {
+    if (failure.status !== 401) loginError.value = failure.message || "登录状态加载失败";
+    authReady.value = true;
+  }
+}
+
+async function login() {
+  authLoading.value = true;
+  loginError.value = "";
+  try {
+    studentSession.value = await api("/public/rankings/student-auth/login", {
+      method: "POST",
+      body: jsonBody({ phone: loginPhone.value.trim(), password: loginPassword.value })
+    });
+    selectedStudentId.value = String(studentSession.value.studentId);
+    loginPassword.value = "";
+    await loadBoard();
+    refreshTimer = window.setInterval(loadBoard, 60_000);
+  } catch (failure) {
+    loginError.value = failure.message || "登录失败，请检查手机号和密码";
+  } finally {
+    authLoading.value = false;
+  }
+}
+
+async function logout() {
+  try { await api("/public/rankings/student-auth/logout", { method: "POST" }); }
+  catch (_failure) { /* 清理本地学生会话仍然安全 */ }
+  handleSessionExpired();
+}
+
+function validateLogin(event) {
+  if (!loginPhone.value.trim() || !loginPassword.value) {
+    event.preventDefault();
+    loginError.value = "请输入手机号和密码";
+  }
+}
 function positionPopover(anchor) {
   if (!anchor) return;
   const rect = anchor.getBoundingClientRect();
@@ -137,7 +179,6 @@ function closeDetails() {
 }
 
 function toggleRowDetails(row, event) {
-  selectStudent(row);
   if (pinnedDetailId.value === String(row.studentId)) {
     closeDetails();
     return;
@@ -171,11 +212,9 @@ function handleFullscreenChange() {
   isFullscreen.value = Boolean(document.fullscreenElement);
 }
 
-watch(selectedStudentId, (studentId) => loadOpportunities(studentId));
 
 onMounted(() => {
-  loadBoard();
-  refreshTimer = window.setInterval(loadBoard, 60_000);
+  loadSession();
   document.addEventListener("click", handleOutsideClick);
   document.addEventListener("keydown", handleEscape);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -200,14 +239,12 @@ onBeforeUnmount(() => {
           <span>C++ 冒险者积分中心</span>
         </RouterLink>
 
-        <div class="player-console">
+        <div v-if="studentSession" class="player-console">
           <span class="player-avatar">{{ rankingAvatarText(selectedStudent?.studentName) }}</span>
-          <label>
+          <div class="player-identity">
             <span>当前学员</span>
-            <select v-model="selectedStudentId" aria-label="选择我的姓名" @change="rememberSelection">
-              <option v-for="row in rows" :key="row.studentId" :value="String(row.studentId)">{{ row.studentName }} · 第 {{ row.rank }} 名</option>
-            </select>
-          </label>
+            <strong>{{ studentSession.studentName }}</strong><small>ID {{ studentSession.studentId }}</small>
+          </div>
           <div class="player-score">
             <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
             <strong>{{ selectedStudent ? `${selectedStudent.totalPoints} 积分` : "0 积分" }}</strong>
@@ -216,15 +253,25 @@ onBeforeUnmount(() => {
             <Minimize2 v-if="isFullscreen" aria-hidden="true" />
             <Maximize2 v-else aria-hidden="true" />
           </button>
+          <button class="logout-button" type="button" title="退出学生登录" aria-label="退出学生登录" @click="logout"><LogOut aria-hidden="true" /></button>
         </div>
       </header>
 
-      <div v-if="announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
+      <div v-if="!authReady" class="auth-status" role="status">正在检查学生登录状态…</div>
+      <form v-else-if="!studentSession" class="student-login-panel" @submit.prevent="login">
+        <div class="login-mark"><Gamepad2 aria-hidden="true" /></div>
+        <div class="login-copy"><p class="login-kicker">C++ 冒险者积分中心</p><h1>登录查看你的排名</h1><p>使用老师登记的手机号进入专属积分榜。</p></div>
+        <label class="login-field"><span>手机号</span><input v-model="loginPhone" inputmode="numeric" autocomplete="username" maxlength="11" placeholder="请输入手机号" /></label>
+        <label class="login-field"><span>密码</span><input v-model="loginPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入密码" /></label>
+        <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
+        <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
+      </form>
+      <div v-else-if="announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
 
-      <main class="ranking-layout" @click.stop>
+      <main v-if="studentSession" class="ranking-layout" @click.stop>
         <section class="game-panel ladder-panel" aria-labelledby="ladderTitle">
           <div class="game-panel-heading">
-            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名 · 共 {{ rows.length }} 名学员</p></div></div>
+            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名 · 共 {{ board.studentCount }} 名学员</p></div></div>
             <button class="ghost-button" type="button" :disabled="loading" @click="loadBoard"><RefreshCw :class="{ spin: loading }" aria-hidden="true" />刷新</button>
           </div>
 
@@ -277,7 +324,7 @@ onBeforeUnmount(() => {
         </section>
       </main>
 
-      <footer><span>{{ updatedText }}</span><span>前 10 名与我的排名 · 每 60 秒自动刷新</span></footer>
+      <footer v-if="studentSession"><span>{{ updatedText }}</span><span>前 10 名与我的排名 · 每 60 秒自动刷新</span></footer>
     </div>
 
     <aside v-if="detailRow" ref="popover" class="score-popover" :style="popoverStyle" role="tooltip" @click.stop>
@@ -353,6 +400,53 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+.auth-status {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+  color: #9aa9c7;
+}
+
+.student-login-panel {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) minmax(210px, 280px);
+  align-items: center;
+  gap: 14px 20px;
+  max-width: 820px;
+  margin: 58px auto 80px;
+  padding: 28px;
+  border: 1px solid #566db6;
+  border-radius: 10px;
+  background: #111b3b;
+  box-shadow: 0 18px 50px rgba(3, 9, 28, 0.35), inset 0 0 32px rgba(58, 102, 222, 0.12);
+}
+
+.login-mark {
+  display: grid;
+  width: 78px;
+  height: 78px;
+  place-items: center;
+  border: 1px solid #43d7ff;
+  border-radius: 18px;
+  color: #43d7ff;
+  background: #182c55;
+  box-shadow: 0 0 24px rgba(67, 215, 255, 0.2);
+}
+
+.login-mark svg { width: 38px; height: 38px; }
+.login-copy { min-width: 0; }
+.login-kicker { margin: 0 0 5px; color: #43d7ff; font-size: 11px; letter-spacing: 0; }
+.login-copy h1 { margin: 0; color: #f4f7ff; font-size: 24px; }
+.login-copy > p:last-child { margin: 7px 0 0; color: #8494ba; font-size: 12px; line-height: 1.5; }
+.login-field { display: grid; gap: 5px; min-width: 0; }
+.login-field span { color: #aab8d8; font-size: 11px; }
+.login-field input { box-sizing: border-box; width: 100%; height: 38px; padding: 0 11px; border: 1px solid #405789; border-radius: 5px; outline: none; color: #f4f7ff; background: #0d1631; }
+.login-field input:focus { border-color: #43d7ff; box-shadow: 0 0 0 3px rgba(67, 215, 255, 0.13); }
+.login-error { grid-column: 2 / -1; margin: 0; color: #ff91a5; font-size: 11px; }
+.login-button { grid-column: 2 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; border: 0; border-radius: 5px; color: #09142d; background: #43d7ff; font-weight: 900; }
+.login-button:hover, .login-button:focus-visible { background: #72e3ff; outline: 2px solid rgba(114, 227, 255, 0.3); outline-offset: 2px; }
+.login-button:disabled { cursor: wait; opacity: 0.7; }
+
   min-height: 76px;
   gap: 24px;
   padding-bottom: 14px;
@@ -377,7 +471,7 @@ button {
 
 .player-console {
   display: grid;
-  grid-template-columns: 38px minmax(118px, 1fr) auto 36px;
+  grid-template-columns: 38px minmax(118px, 1fr) auto 36px 36px;
   align-items: center;
   min-width: 430px;
   min-height: 54px;
@@ -402,6 +496,23 @@ button {
   font-weight: 900;
 }
 
+.player-identity { display: grid; min-width: 0; gap: 2px; }
+.player-identity > span { color: #aab2d1; font-size: 10px; }
+.player-identity strong { overflow: hidden; color: #f4f6ff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.player-identity small { color: #7f91b9; font-size: 9px; }
+
+.logout-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #455680;
+  border-radius: 6px;
+  color: #b9c7ef;
+  background: #1d2648;
+}
+.logout-button:hover, .logout-button:focus-visible { border-color: #ff7891; outline: none; color: #ff9aad; }
+.logout-button svg { width: 16px; height: 16px; }
 .player-console label {
   display: grid;
   min-width: 0;
@@ -1109,8 +1220,12 @@ button {
     height: 27px;
   }
 
+  .student-login-panel { grid-template-columns: 1fr; margin: 32px auto 48px; padding: 22px 17px; }
+  .login-mark { margin: 0 auto; }
+  .login-error, .login-button { grid-column: auto; }
+
   .player-console {
-    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
   }
 
   .player-score {

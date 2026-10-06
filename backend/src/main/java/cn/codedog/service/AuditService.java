@@ -30,7 +30,7 @@ public class AuditService {
     private static final ZoneId CHINA = ZoneId.of("Asia/Shanghai");
     private static final Set<String> RESULTS = Set.of("success", "failed");
     private static final Map<String, List<String>> MODULE_PATTERNS = Map.of(
-        "auth", List.of("login_%", "registration_%"),
+        "auth", List.of("login_%", "student_login_%", "registration_%"),
         "account", List.of("password_%", "permissions_%", "crm_teacher_mapping_%"),
         "documents", List.of("document_%"),
         "students", List.of("student_%"),
@@ -63,6 +63,19 @@ public class AuditService {
               AND created_at >= ?
               AND id > COALESCE((SELECT MAX(id) FROM audit_log
                 WHERE action = 'login_succeeded' AND ip_address = ?), 0)
+            """, Integer.class, ip, Timestamp.from(Instant.now().minus(15, ChronoUnit.MINUTES)), ip);
+        return count == null ? 0 : count;
+    }
+
+    public int recentStudentLoginFailures(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        String ip = forwarded == null || forwarded.isBlank()
+            ? request.getRemoteAddr() : forwarded.split(",", 2)[0].trim();
+        Integer count = jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_log
+            WHERE action = 'student_login_failed' AND ip_address = ? AND created_at >= ?
+              AND id > COALESCE((SELECT MAX(id) FROM audit_log
+                WHERE action = 'student_login_succeeded' AND ip_address = ?), 0)
             """, Integer.class, ip, Timestamp.from(Instant.now().minus(15, ChronoUnit.MINUTES)), ip);
         return count == null ? 0 : count;
     }

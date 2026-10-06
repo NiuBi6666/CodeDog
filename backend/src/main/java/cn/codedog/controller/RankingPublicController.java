@@ -4,14 +4,16 @@ import cn.codedog.model.RankingPayload;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
+import jakarta.servlet.http.HttpServletRequest;
 @RestController @RequestMapping("/api/public/rankings")
 public class RankingPublicController {
   private final RankingService service;
-  public RankingPublicController(RankingService service){this.service=service;}
+  private final StudentRankingAuthService studentAuth;
+  public RankingPublicController(RankingService service, StudentRankingAuthService studentAuth){this.service=service;this.studentAuth=studentAuth;}
   @GetMapping("/catalog") public RankingPayload.Catalog catalog(@RequestParam(required=false)String teacherId){return service.catalog(teacherId);}
   @GetMapping public RankingPayload.Board board(@RequestParam String campId,@RequestParam(required=false)String classId,@RequestParam(defaultValue="class")String scope,@RequestParam(required=false)String teacherId){return service.board(teacherId,campId,classId,scope);}
-  @GetMapping("/all") public RankingPayload.Board all(){return service.allBoard();}
-  @GetMapping("/students/{studentId}/opportunities") public RankingPayload.OpportunitySummary opportunities(@PathVariable String studentId){return service.opportunities(studentId);}
+  @GetMapping("/all") public RankingPayload.Board all(HttpServletRequest request){return studentAuth.board(request);}
+  @GetMapping("/students/{studentId}/opportunities") public RankingPayload.OpportunitySummary opportunities(@PathVariable String studentId, HttpServletRequest request){return studentAuth.opportunities(request, studentId);}
   @GetMapping("/extension/status")
   public RankingPayload.ExtensionStatus status(){return new RankingPayload.ExtensionStatus(true,Instant.now());}
   @GetMapping("/extension/session")

@@ -195,8 +195,25 @@ public class RankingService {
     return new RankingPayload.Board("", "全部学员", "", "全部学员", "all", entries.size(), latestUpdate(owner), null, List.copyOf(entries));
   }
 
+  public RankingPayload.Board studentBoard(String ownerValue, String studentValue) {
+    RankingPayload.Board full = allBoardForOwner(ownerValue);
+    String studentId = text(studentValue, "学员 ID", 100);
+    List<RankingPayload.Entry> visible = new ArrayList<>(full.rankings().stream().limit(10).toList());
+    if (visible.stream().noneMatch(row -> row.studentId().equals(studentId))) {
+      full.rankings().stream().filter(row -> row.studentId().equals(studentId)).findFirst().ifPresent(visible::add);
+    }
+    if (visible.isEmpty() || visible.stream().noneMatch(row -> row.studentId().equals(studentId)))
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不在当前排行榜中");
+    return new RankingPayload.Board(full.campId(), full.campName(), full.classId(), full.className(), full.scope(),
+      full.studentCount(), full.updatedAt(), full.trendBaselineDate(), List.copyOf(visible));
+  }
+
   public RankingPayload.OpportunitySummary opportunities(String studentValue) {
-    String owner = resolveTeacher(null).username();
+    return opportunitiesForOwner(resolveTeacher(null).username(), studentValue);
+  }
+
+  public RankingPayload.OpportunitySummary opportunitiesForOwner(String ownerValue, String studentValue) {
+    String owner = text(ownerValue, "数据所属用户", 50);
     String studentId = text(studentValue, "学员 ID", 100);
     Integer studentCount = jdbc.queryForObject("SELECT COUNT(*) FROM ranking_students WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
     if (studentCount == null || studentCount == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在");
