@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { Link2, Save, Search, ShieldCheck, Unlink, X } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
+import { auth, hasPermission } from "../auth";
 import { formatDateTime } from "../utils";
 
 const users = ref([]);
@@ -16,6 +17,8 @@ const draft = ref(new Set());
 const mappingSelected = ref(null);
 const mappingDraft = ref("");
 const mappingSaving = ref(false);
+const canManagePermissions = computed(() => hasPermission("users.permissions.manage"));
+const canManageCrm = computed(() => hasPermission("users.crm.manage"));
 
 const filteredUsers = computed(() => {
   const value = keyword.value.trim().toLowerCase();
@@ -41,7 +44,7 @@ async function load() {
 }
 
 function openPermissions(user) {
-  if (user.admin) return;
+  if (user.admin || !canManagePermissions.value || (!auth.user?.admin && user.username === auth.user?.username)) return;
   selected.value = user;
   draft.value = new Set(user.permissions);
 }
@@ -53,6 +56,7 @@ function closePermissions() {
 }
 
 function openMapping(user) {
+  if (!canManageCrm.value || (user.admin && !auth.user?.admin)) return;
   mappingSelected.value = user;
   mappingDraft.value = user.crmTeacherId || "";
 }
@@ -64,6 +68,7 @@ function closeMapping() {
 }
 
 function toggle(group, permission) {
+  if (!canChangePermission(permission)) return;
   const next = new Set(draft.value);
   const page = group.permissions.find((item) => item.type === "page");
   if (next.has(permission.code)) {
@@ -79,11 +84,18 @@ function toggle(group, permission) {
 function groupSelected(group) {
   return group.permissions.every((permission) => draft.value.has(permission.code));
 }
+function canChangePermission(permission) {
+  return Boolean(auth.user?.admin || (selected.value?.username !== auth.user?.username && hasPermission(permission.code)));
+}
+function editablePermissions(group) {
+  return group.permissions.filter(canChangePermission);
+}
 
 function toggleGroup(group) {
   const next = new Set(draft.value);
-  const enable = !groupSelected(group);
-  group.permissions.forEach((permission) => enable ? next.add(permission.code) : next.delete(permission.code));
+  const editable = editablePermissions(group);
+  const enable = !editable.every((permission) => next.has(permission.code));
+  editable.forEach((permission) => enable ? next.add(permission.code) : next.delete(permission.code));
   draft.value = next;
 }
 
@@ -154,8 +166,8 @@ onMounted(load);
             <td>{{ formatDateTime(user.updatedAt) }}</td>
             <td>
               <div class="button-row permission-actions">
-                <button class="button button-quiet button-small" type="button" @click="openMapping(user)"><Link2 :size="14"/>绑定 CRM</button>
-                <button v-if="!user.admin" class="button button-quiet button-small" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button>
+                <button v-if="canManageCrm && (auth.user?.admin || !user.admin)" class="button button-quiet button-small" type="button" @click="openMapping(user)"><Link2 :size="14"/>绑定 CRM</button>
+                <button v-if="canManagePermissions && !user.admin && (auth.user?.admin || user.username !== auth.user?.username)" class="button button-quiet button-small" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button>
               </div>
             </td>
           </tr>
@@ -193,10 +205,10 @@ onMounted(load);
           </header>
           <div class="permission-groups">
             <section v-for="group in catalog" :key="group.key" class="permission-group">
-              <label class="permission-group-title"><input type="checkbox" :checked="groupSelected(group)" @change="toggleGroup(group)"><strong>{{ group.label }}</strong><span>全选</span></label>
+              <label class="permission-group-title"><input type="checkbox" :checked="groupSelected(group)" :disabled="!editablePermissions(group).length" @change="toggleGroup(group)"><strong>{{ group.label }}</strong><span>全选</span></label>
               <div class="permission-options">
                 <label v-for="permission in group.permissions" :key="permission.code">
-                  <input type="checkbox" :checked="draft.has(permission.code)" @change="toggle(group, permission)">
+                  <input type="checkbox" :checked="draft.has(permission.code)" :disabled="!canChangePermission(permission)" @change="toggle(group, permission)">
                   <span><strong>{{ permission.label }}</strong><small>{{ permission.type === "page" ? "页面" : permission.type === "data" ? "数据" : "按钮" }}</small></span>
                 </label>
               </div>

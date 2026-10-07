@@ -20,7 +20,7 @@ import PublicExamView from "./views/PublicExamView.vue";
 const PublicRankingView = () => import("./views/PublicRankingView.vue");
 
 const routes = [
-  { path: "/exams", component: ExamManageView, meta: { auth: true, admin: true, bodyClass: "admin-layout", title: "成绩管理 - CodeDog" } },
+  { path: "/exams", component: ExamManageView, meta: { auth: true, permission: "exams.view", bodyClass: "admin-layout", title: "成绩管理 - CodeDog" } },
   { path: "/exam/:token", component: PublicExamView, meta: { bodyClass: "exam-public-page", title: "考试成绩查询" } },
   { path: "/ranking-board", component: PublicRankingView, meta: { bodyClass: "ranking-public-page", title: "C++积分中心" } },
   { path: "/rankings.html", redirect: "/ranking-board" },
@@ -33,10 +33,10 @@ const routes = [
   { path: "/student/query", component: StudentQueryView, meta: { auth: true, permission: "students.view", bodyClass: "admin-layout", title: "查询学生 - CodeDog" } },
   { path: "/class/progress", component: ClassProgressView, meta: { auth: true, permission: "class_progress.view", bodyClass: "admin-layout", title: "课堂完成情况 - CodeDog" } },
   { path: "/questionnaire", component: QuestionnaireView, meta: { auth: true, permission: "questionnaire.view", bodyClass: "admin-layout", title: "问卷与作业 - CodeDog" } },
-  { path: "/rankings", component: RankingView, meta: { auth: true, bodyClass: "admin-layout", title: "学生排名 - CodeDog" } },
+  { path: "/rankings", component: RankingView, meta: { auth: true, permission: "rankings.view", bodyClass: "admin-layout", title: "学生排名 - CodeDog" } },
   { path: "/doc/list", component: DocumentListView, meta: { auth: true, permission: "documents.view", bodyClass: "admin-layout", title: "文档管理 - CodeDog" } },
   { path: "/logs", component: LogListView, meta: { auth: true, permission: "logs.view", bodyClass: "admin-layout", title: "操作日志 - CodeDog" } },
-  { path: "/users", component: UserPermissionsView, meta: { auth: true, admin: true, bodyClass: "admin-layout", title: "用户与权限 - CodeDog" } },
+  { path: "/users", component: UserPermissionsView, meta: { auth: true, permission: "users.view", bodyClass: "admin-layout", title: "用户与权限 - CodeDog" } },
   { path: "/forbidden", component: ForbiddenView, meta: { auth: true, bodyClass: "admin-layout", title: "无访问权限 - CodeDog" } },
   { path: "/system/logs", redirect: "/logs" },
   { path: "/admin/documents", redirect: "/doc/list" },

@@ -4,6 +4,7 @@ import cn.codedog.model.User;
 import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
 import cn.codedog.service.AuditService;
+import cn.codedog.service.PermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -27,11 +29,14 @@ public class UserAdminController {
     private final UserRepository users;
     private final AuditService audit;
     private final JdbcTemplate jdbc;
+    private final PermissionService permissions;
 
-    public UserAdminController(UserRepository users, AuditService audit, JdbcTemplate jdbc) {
+    public UserAdminController(UserRepository users, AuditService audit, JdbcTemplate jdbc,
+                               PermissionService permissions) {
         this.users = users;
         this.audit = audit;
         this.jdbc = jdbc;
+        this.permissions = permissions;
     }
 
     @GetMapping("/permissions")
@@ -53,6 +58,7 @@ public class UserAdminController {
     @Transactional
     public UserResponse updatePermissions(@PathVariable long id,
                                           @Valid @RequestBody PermissionRequest body,
+                                          Authentication authentication,
                                           HttpServletRequest request) {
         User user = findUser(id);
         if (user.isAdmin())
@@ -61,6 +67,7 @@ public class UserAdminController {
         LinkedHashSet<String> requested = new LinkedHashSet<>(body.permissions());
         if (!PermissionCatalog.allCodes().containsAll(requested))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "包含未知权限");
+        enforcePermissionDelegation(authentication, user, requested);
         for (PermissionCatalog.Group group : PermissionCatalog.groups()) {
             String page = group.permissions().stream()
                 .filter(permission -> permission.type().equals("page"))
@@ -83,8 +90,11 @@ public class UserAdminController {
     @Transactional
     public UserResponse updateCrmTeacher(@PathVariable long id,
                                          @RequestBody CrmTeacherRequest body,
+                                         Authentication authentication,
                                          HttpServletRequest request) {
         User user = findUser(id);
+        if (user.isAdmin() && !permissions.isAdmin(authentication))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "普通用户不能修改系统管理员的 CRM 绑定");
         String crmTeacherId = normalizeCrmTeacherId(body == null ? null : body.crmTeacherId());
         if (crmTeacherId != null) {
             String existingOwner = jdbc.query(
@@ -108,6 +118,19 @@ public class UserAdminController {
         audit.record((crmTeacherId == null ? "crm_teacher_mapping_removed:" : "crm_teacher_mapping_updated:")
             + saved.getUsername() + (crmTeacherId == null ? "" : ":" + crmTeacherId), request);
         return UserResponse.from(saved, crmTeacherId);
+    }
+
+    private void enforcePermissionDelegation(Authentication authentication, User target, Set<String> requested) {
+        if (permissions.isAdmin(authentication)) return;
+        if (authentication == null || authentication.getName().equals(target.getUsername()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "不能修改自己的权限");
+        LinkedHashSet<String> changed = new LinkedHashSet<>(target.getPermissions());
+        changed.removeAll(requested);
+        LinkedHashSet<String> added = new LinkedHashSet<>(requested);
+        added.removeAll(target.getPermissions());
+        changed.addAll(added);
+        if (!permissions.permissions(authentication).containsAll(changed))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只能授予或撤销自己拥有的权限");
     }
 
     private User findUser(long id) {

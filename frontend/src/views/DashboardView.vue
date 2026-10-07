@@ -9,7 +9,8 @@ import { formatDateTime } from "../utils";
 const data = ref(null);
 const error = ref("");
 const quickPermissions = [
-  "students.view", "class_progress.view", "documents.view", "documents.create", "logs.view"
+  "students.view", "class_progress.view", "questionnaire.view", "rankings.view", "exams.view",
+  "documents.view", "documents.create", "logs.view", "users.view"
 ];
 const hasQuickActions = computed(() =>
   Boolean(auth.user?.admin || quickPermissions.some((permission) => hasPermission(permission))));
@@ -42,12 +43,12 @@ onMounted(async () => {
             <RouterLink v-if="hasPermission('students.view')" to="/student/query"><span><Search :size="18"/></span><div><strong>查询学生</strong><small>按姓名查询 ID，或按 ID 查询姓名</small></div><b>›</b></RouterLink>
             <RouterLink v-if="hasPermission('class_progress.view')" to="/class/progress"><span><ClipboardCheck :size="18"/></span><div><strong>课堂完成情况</strong><small>按班级和课次查看每道题完成情况</small></div><b>›</b></RouterLink>
             <RouterLink v-if="hasPermission('questionnaire.view')" to="/questionnaire"><span><ListChecks :size="18"/></span><div><strong>问卷与作业</strong><small>查看问卷和作业任务</small></div><b>›</b></RouterLink>
-            <RouterLink to="/rankings"><span><Trophy :size="18"/></span><div><strong>学生排名</strong><small>查看学员积分排行榜</small></div><b>›</b></RouterLink>
-            <RouterLink v-if="auth.user?.admin" to="/exams"><span><FileSpreadsheet :size="18"/></span><div><strong>成绩管理</strong><small>上传成绩并生成查询链接</small></div><b>›</b></RouterLink>
+            <RouterLink v-if="hasPermission('rankings.view')" to="/rankings"><span><Trophy :size="18"/></span><div><strong>学生排名</strong><small>查看学员积分排行榜</small></div><b>›</b></RouterLink>
+            <RouterLink v-if="hasPermission('exams.view')" to="/exams"><span><FileSpreadsheet :size="18"/></span><div><strong>成绩管理</strong><small>上传成绩并生成查询链接</small></div><b>›</b></RouterLink>
             <RouterLink v-if="hasPermission('documents.view')" to="/doc/list"><span><FileText :size="18"/></span><div><strong>文档管理</strong><small>搜索、编辑、下线和恢复文档</small></div><b>›</b></RouterLink>
             <RouterLink v-if="hasPermission('documents.create')" to="/doc/create"><span><FilePlus2 :size="18"/></span><div><strong>新建文档</strong><small>创建一篇新的公开文档</small></div><b>›</b></RouterLink>
             <RouterLink v-if="hasPermission('logs.view')" to="/logs"><span><ScrollText :size="18"/></span><div><strong>操作日志</strong><small>查看登录和后台功能的操作记录</small></div><b>›</b></RouterLink>
-            <RouterLink v-if="auth.user?.admin" to="/users"><span><ShieldCheck :size="18"/></span><div><strong>用户与权限</strong><small>为注册用户设置页面和按钮权限</small></div><b>›</b></RouterLink>
+            <RouterLink v-if="hasPermission('users.view')" to="/users"><span><ShieldCheck :size="18"/></span><div><strong>用户与权限</strong><small>为注册用户设置页面和按钮权限</small></div><b>›</b></RouterLink>
           </div>
         </section>
         <section v-if="showLatestDocument" class="admin-panel">

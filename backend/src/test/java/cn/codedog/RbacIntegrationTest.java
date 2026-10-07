@@ -215,6 +215,49 @@ class RbacIntegrationTest {
             .andExpect(status().isForbidden());
     }
 
+
+    @Test
+    void managementEndpointsRequireTheirExactConfiguredPermission() throws Exception {
+        String username = uniqueUsername("manager");
+        String password = "member-password-123";
+        User manager = users.saveAndFlush(user(username, password));
+        User target = users.saveAndFlush(user(uniqueUsername("target"), password));
+        MockHttpSession session = login(username, password);
+
+        mvc.perform(get("/api/admin/users").session(session)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/exams").session(session)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/rankings/admin/board").session(session)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/rankings/admin/announcements").session(session).with(csrf())
+                .contentType(APPLICATION_JSON).content("{\"text\":\"test\"}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/rankings/admin/rewards/1").session(session).with(csrf()))
+            .andExpect(status().isForbidden());
+
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of(
+            PermissionCatalog.DASHBOARD_VIEW,
+            PermissionCatalog.USERS_VIEW,
+            PermissionCatalog.USERS_PERMISSIONS_MANAGE)));
+        users.saveAndFlush(manager);
+
+        mvc.perform(get("/api/admin/users").session(session)).andExpect(status().isOk());
+        mvc.perform(get("/api/admin/permissions").session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.key == 'rankings')].permissions[?(@.code == 'rankings.rewards.delete')]").exists())
+            .andExpect(jsonPath("$[?(@.key == 'exams')].permissions[?(@.code == 'exams.create')]").exists());
+
+        mvc.perform(put("/api/admin/users/{id}/permissions", target.getId()).session(session).with(csrf())
+                .contentType(APPLICATION_JSON)
+                .content("{\"permissions\":[\"dashboard.view\"]}"))
+            .andExpect(status().isOk());
+        mvc.perform(put("/api/admin/users/{id}/permissions", manager.getId()).session(session).with(csrf())
+                .contentType(APPLICATION_JSON)
+                .content("{\"permissions\":[\"dashboard.view\"]}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(put("/api/admin/users/{id}/permissions", target.getId()).session(session).with(csrf())
+                .contentType(APPLICATION_JSON)
+                .content("{\"permissions\":[\"dashboard.view\",\"rankings.view\"]}"))
+            .andExpect(status().isForbidden());
+    }
     @Test
     void questionnaireSsoMarksNormalUsersAsNonAdministrators() throws Exception {
         String username = uniqueUsername("survey");
@@ -422,7 +465,7 @@ class RbacIntegrationTest {
         MockHttpSession member = login(memberName, memberPassword);
         mvc.perform(get("/api/rankings/admin/students/{studentId}/password", studentId).session(member))
             .andExpect(status().isForbidden())
-            .andExpect(jsonPath("$.error").value("仅系统管理员可以查看或重置学生密码"));
+            .andExpect(jsonPath("$.error").value("无权限执行此操作"));
 
         MockHttpSession admin = login("Liam", "test-only-password");
         mvc.perform(get("/api/rankings/admin/students/{studentId}/password", studentId).session(admin))

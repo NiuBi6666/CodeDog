@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { FileSpreadsheet, Copy, ExternalLink } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
+import { hasPermission } from "../auth";
 import { formatDateTime } from "../utils";
 import { displayResultScore, isAbsentSubmission, suggestExamColumns, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
 
@@ -30,7 +31,7 @@ const chosen = computed(() => {
   if (inspection.value?.template) return inspection.value.template.scoreColumns.map(index => inspection.value.columns.find(c => c.index === index));
   return inspection.value?.columns.filter(c => selected.value.includes(c.index)) || [];
 });
-const canCreate = computed(() => mappingCurrent.value && chosen.value.length > 0 && chosen.value.length <= (inspection.value?.template ? 256 : 20) && !chosen.value.some(c => c.index === nameColumn.value || !labels.value[c.index]?.trim()) && title.value.trim());
+const canCreate = computed(() => hasPermission("exams.create") && mappingCurrent.value && chosen.value.length > 0 && chosen.value.length <= (inspection.value?.template ? 256 : 20) && !chosen.value.some(c => c.index === nameColumn.value || !labels.value[c.index]?.trim()) && title.value.trim());
 const selectableColumns = computed(() => (inspection.value?.columns || []).filter(c => c.index !== nameColumn.value).slice().sort((a, b) => Number(selected.value.includes(b.index)) - Number(selected.value.includes(a.index)) || a.index - b.index));
 const sampleRows = computed(() => inspection.value?.samples.filter(row => row[nameColumn.value]?.trim()).slice(0, 5) || []);
 const absentSample = row => inspection.value?.template && isAbsentSubmission(row[inspection.value.template.submissionColumn]);
@@ -42,6 +43,7 @@ const sampleScore = (value, column) => {
 const link = exam => examUrl(exam.queryPath);
 
 async function load(page = 0) {
+  if (!hasPermission("exams.read")) return;
   loadingList.value = true; listError.value = "";
   try { exams.value = await api("/admin/exams?page=" + page); }
   catch (failure) { listError.value = failure.status ? failure.message : "连接未成功，请检查网络后重试。"; }
@@ -78,6 +80,7 @@ async function saveLink(exam) {
   } finally { savingLink.value = null; }
 }
 async function chooseFile(event) {
+  if (!hasPermission("exams.inspect")) return;
   file.value = event.target.files?.[0] || null;
   inspection.value = null; created.value = null; error.value = "";
   sheetIndex.value = 0; headerRow.value = 1; selected.value = [];
@@ -87,7 +90,7 @@ async function chooseFile(event) {
   await inspectFile();
 }
 async function inspectFile() {
-  if (!file.value) return;
+  if (!file.value || !hasPermission("exams.inspect")) return;
   busy.value = true; error.value = ""; created.value = null;
   const body = new FormData();
   body.append("file", file.value);
@@ -106,7 +109,7 @@ async function inspectFile() {
   finally { busy.value = false; }
 }
 async function createExam() {
-  if (!canCreate.value || busy.value || created.value) return;
+  if (!hasPermission("exams.create") || !canCreate.value || busy.value || created.value) return;
   busy.value = true; error.value = "";
   const body = new FormData();
   body.append("file", file.value);
@@ -140,13 +143,13 @@ async function toggle(exam) {
   } catch (failure) { listError.value = failure.status ? failure.message : "连接未成功，请检查网络后重试。"; }
   finally { changing.value = null; }
 }
-onMounted(() => load());
+onMounted(() => { if (hasPermission("exams.read")) load(); });
 </script>
 
 <template>
   <AdminLayout page-title="成绩管理" active-page="exams">
     <div class="admin-page-heading"><div><h1>成绩管理</h1><p>上传赛考成绩表，自动识别成绩并生成查询链接。</p></div></div>
-    <form class="exam-panel" @submit.prevent="createExam">
+    <form v-if="hasPermission('exams.inspect') || hasPermission('exams.create')" class="exam-panel" @submit.prevent="createExam">
       <h2><FileSpreadsheet :size="21"/>上传成绩</h2>
       <fieldset :disabled="busy || Boolean(created)">
         <div class="exam-form-grid">
@@ -188,7 +191,7 @@ onMounted(() => load());
         </div>
       </fieldset>
       <p v-if="error" class="notice notice-error" role="alert">{{ error }}</p>
-      <div v-if="!created" class="exam-form-actions"><button class="button button-primary" type="submit" :disabled="busy || !canCreate">{{ busy ? '正在处理…' : '生成查询链接' }}</button></div>
+      <div v-if="!created && hasPermission('exams.create')" class="exam-form-actions"><button class="button button-primary" type="submit" :disabled="busy || !canCreate">{{ busy ? '正在处理…' : '生成查询链接' }}</button></div>
       <div v-else class="exam-created" role="status">
         <strong>“{{ created.title }}”已导入 {{ created.studentCount }} 名学员</strong>
         <label>家长查询链接<input :value="link(created)" readonly @focus="$event.target.select()"></label>
@@ -196,7 +199,7 @@ onMounted(() => load());
       </div>
     </form>
 
-    <section class="exam-panel exam-history">
+    <section v-if="hasPermission('exams.read')" class="exam-panel exam-history">
       <h2>已上传的考试 <small>{{ exams.total }} 场</small></h2>
       <p class="exam-hint">查询后缀为 8 位，须包含大写字母、小写字母和数字，区分大小写。修改后点击“保存”，再复制新链接。</p>
       <p v-if="listError" class="notice notice-error" role="alert">{{ listError }}</p>
@@ -218,10 +221,10 @@ onMounted(() => load());
                 <button class="button button-quiet button-small" :disabled="savingLink === exam.id" @click="cancelLink(exam)">取消</button>
                 <small :id="'link-hint-' + exam.id">仅可修改后缀</small>
               </div>
-              <button v-else class="button button-quiet button-small exam-edit-link" @click="editLink(exam)">修改后缀</button>
+              <button v-else-if="hasPermission('exams.link.edit')" class="button button-quiet button-small exam-edit-link" @click="editLink(exam)">修改后缀</button>
               <p v-if="linkErrors[exam.id]" class="exam-link-error" role="alert">{{ linkErrors[exam.id] }}</p>
             </td>
-            <td><div class="row-actions"><button class="button button-quiet button-small" @click="copy(exam)">复制链接</button><a class="button button-quiet button-small" :href="link(exam)" target="_blank" rel="noopener">查看</a><button class="button button-quiet button-small" :disabled="changing !== null" @click="toggle(exam)">{{ changing === exam.id ? '处理中…' : exam.enabled ? '暂停查询' : '恢复查询' }}</button></div></td>
+            <td><div class="row-actions"><button class="button button-quiet button-small" @click="copy(exam)">复制链接</button><a class="button button-quiet button-small" :href="link(exam)" target="_blank" rel="noopener">查看</a><button v-if="hasPermission('exams.status')" class="button button-quiet button-small" :disabled="changing !== null" @click="toggle(exam)">{{ changing === exam.id ? '处理中…' : exam.enabled ? '暂停查询' : '恢复查询' }}</button></div></td>
           </tr>
           <tr v-if="!exams.exams.length"><td colspan="7" class="empty-table">{{ loadingList ? '正在加载…' : '还没有上传考试，请先上传 Excel 成绩表。' }}</td></tr>
         </tbody>

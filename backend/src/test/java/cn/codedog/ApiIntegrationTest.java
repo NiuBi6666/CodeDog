@@ -196,7 +196,7 @@ class ApiIntegrationTest {
             .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.error").value("bad.xlsx：文件损坏或不是有效的 Excel 文件"));
         mvc.perform(get("/api/class-progress/bootstrap").session(session))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isForbidden());
     }
 
     private Student student(String id, String name) {
