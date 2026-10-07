@@ -75,6 +75,10 @@ public class RankingRewardPublicController {
     }
     try {
       var value = rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id);
+      audit.change("REDEMPTION", value.id(), java.util.Map.of(), java.util.Map.of(
+        "studentId", value.studentId(), "rewardId", value.rewardId(), "rewardName", value.rewardName(),
+        "pointsSpent", value.pointsSpent(), "balanceBefore", value.balanceBefore(),
+        "balanceAfter", value.balanceAfter(), "status", value.status()));
       audit.record("student_reward_redeemed:owner=" + student.ownerUsername()
         + ":student_id=" + student.studentId() + ":redemption_id=" + value.id()
         + ":reward_id=" + id + ":points=" + value.pointsSpent()

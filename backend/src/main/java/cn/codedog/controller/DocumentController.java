@@ -63,23 +63,33 @@ public class DocumentController {
     @ResponseStatus(HttpStatus.CREATED)
     public DocumentDto create(@Valid @RequestBody SaveRequest body, HttpServletRequest request) {
         Document document = service.create(body.title(), body.content());
+        audit.change("DOCUMENT", document.getPublicId(), Map.of(), documentAudit(document));
         audit.record("document_created:" + document.getPublicId(), request);
         return DocumentDto.from(document, true);
     }
 
     @PutMapping("/documents/{id}")
     public DocumentDto update(@PathVariable String id, @Valid @RequestBody SaveRequest body, HttpServletRequest request) {
+        Map<String,Object> before = documentAudit(service.require(id));
         Document document = service.update(id, body.version(), body.title(), body.content());
+        audit.change("DOCUMENT", id, before, documentAudit(document));
         audit.record("document_updated:" + id, request);
         return DocumentDto.from(document, true);
     }
 
     @PatchMapping("/documents/{id}/status")
     public DocumentDto status(@PathVariable String id, @Valid @RequestBody StatusRequest body, HttpServletRequest request) {
+        Map<String,Object> before = documentAudit(service.require(id));
         DocumentStatus status = DocumentStatus.valueOf(body.status().toUpperCase(Locale.ROOT));
         Document document = service.changeStatus(id, status);
+        audit.change("DOCUMENT", id, before, documentAudit(document));
         audit.record("document_" + body.status().toLowerCase() + ":" + id, request);
         return DocumentDto.from(document, false);
+    }
+
+    private Map<String,Object> documentAudit(Document document) {
+        return Map.of("title", document.getTitle(), "content", document.getContent(),
+            "status", document.getStatus().name(), "version", document.getVersion());
     }
 
     public record SaveRequest(@NotBlank String title, @NotNull String content, @NotNull Long version) {}

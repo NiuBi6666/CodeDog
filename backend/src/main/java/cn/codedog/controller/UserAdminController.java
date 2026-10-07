@@ -64,6 +64,7 @@ public class UserAdminController {
         if (user.isAdmin())
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "系统管理员始终拥有全部权限");
 
+        Set<String> previous = Set.copyOf(user.getPermissions());
         LinkedHashSet<String> requested = new LinkedHashSet<>(body.permissions());
         if (!PermissionCatalog.allCodes().containsAll(requested))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "包含未知权限");
@@ -82,6 +83,8 @@ public class UserAdminController {
         user.setPermissions(requested);
         user.setUpdatedAt(Instant.now());
         User saved = users.save(user);
+        audit.change("TEACHER", saved.getUsername(), Map.of("permissions", previous),
+            Map.of("permissions", requested));
         audit.record("permissions_updated:" + saved.getUsername() + ":" + requested.size(), request);
         return UserResponse.from(saved, mappingFor(saved.getUsername()));
     }
@@ -95,6 +98,7 @@ public class UserAdminController {
         User user = findUser(id);
         if (user.isAdmin() && !permissions.isAdmin(authentication))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "普通用户不能修改系统管理员的 CRM 绑定");
+        String previousCrmTeacherId = mappingFor(user.getUsername());
         String crmTeacherId = normalizeCrmTeacherId(body == null ? null : body.crmTeacherId());
         if (crmTeacherId != null) {
             String existingOwner = jdbc.query(
@@ -115,6 +119,10 @@ public class UserAdminController {
         }
         user.setUpdatedAt(Instant.now());
         User saved = users.save(user);
+        Map<String,Object> before = new java.util.LinkedHashMap<>();
+        Map<String,Object> after = new java.util.LinkedHashMap<>();
+        before.put("crmTeacherId", previousCrmTeacherId); after.put("crmTeacherId", crmTeacherId);
+        audit.change("TEACHER", saved.getUsername(), before, after);
         audit.record((crmTeacherId == null ? "crm_teacher_mapping_removed:" : "crm_teacher_mapping_updated:")
             + saved.getUsername() + (crmTeacherId == null ? "" : ":" + crmTeacherId), request);
         return UserResponse.from(saved, crmTeacherId);

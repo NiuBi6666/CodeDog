@@ -81,12 +81,23 @@ public class StudentRankingAuthService {
       passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(current.ownerUsername(), current.studentId())),
       current.phone(), current.ownerUsername(), current.studentId());
     if (updated != 1) throw unauthorized();
+    audit.change("STUDENT", current.studentId(), java.util.Map.of("credentialState", "existing"),
+      java.util.Map.of("credentialState", "rotated"));
+    audit.record("student_password_changed", request);
     return current(request);
   }
 
   public void logout(HttpServletRequest request) {
     HttpSession session = request.getSession(false);
-    if (session != null) clear(session);
+    if (session != null) {
+      String owner=value(session.getAttribute(OWNER_ATTRIBUTE));
+      String studentId=value(session.getAttribute(STUDENT_ID_ATTRIBUTE));
+      String studentName=value(session.getAttribute(STUDENT_NAME_ATTRIBUTE));
+      if(!owner.isEmpty()&&!studentId.isEmpty()) {
+        audit.owner(owner);audit.actor("STUDENT",studentId,studentName);audit.record("student_logout",request);
+      }
+      clear(session);
+    }
   }
 
   public RankingPayload.Board board(HttpServletRequest request) {

@@ -4,6 +4,7 @@ import cn.codedog.model.User;
 import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
 import cn.codedog.service.PermissionService;
+import cn.codedog.service.AuditContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -101,7 +102,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/students/query").access(permission(permissions, PermissionCatalog.STUDENTS_QUERY))
                 .requestMatchers(HttpMethod.POST, "/api/class-progress/import").access(permission(permissions, PermissionCatalog.CLASS_PROGRESS_IMPORT))
                 .requestMatchers(HttpMethod.GET, "/api/questionnaire/sso").access(permission(permissions, PermissionCatalog.QUESTIONNAIRE_VIEW))
-                .requestMatchers(HttpMethod.GET, "/api/logs").access(permission(permissions, PermissionCatalog.LOGS_VIEW))
+                .requestMatchers(HttpMethod.GET, "/api/logs/export")
+                    .access(permission(permissions, PermissionCatalog.LOGS_EXPORT))
+                .requestMatchers(HttpMethod.GET, "/api/logs", "/api/logs/*")
+                    .access(permission(permissions, PermissionCatalog.LOGS_VIEW))
                 .requestMatchers(HttpMethod.GET, "/api/documents").access(permission(permissions, PermissionCatalog.DOCUMENTS_VIEW))
                 .requestMatchers(HttpMethod.GET, "/api/documents/*").access(permission(permissions, PermissionCatalog.DOCUMENTS_EDIT))
                 .requestMatchers(HttpMethod.POST, "/api/documents").access(permission(permissions, PermissionCatalog.DOCUMENTS_CREATE))
@@ -140,6 +144,7 @@ public class SecurityConfig {
 
     private static void writeError(HttpServletResponse response, ObjectMapper objectMapper,
                                    int status, String message) throws java.io.IOException {
+        AuditContext.error(message);
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");

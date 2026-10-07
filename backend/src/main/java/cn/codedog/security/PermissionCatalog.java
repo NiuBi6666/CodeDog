@@ -48,6 +48,7 @@ public final class PermissionCatalog {
     public static final String DOCUMENTS_SHARE = "documents.share";
     public static final String DOCUMENTS_STATUS = "documents.status";
     public static final String LOGS_VIEW = "logs.view";
+    public static final String LOGS_EXPORT = "logs.export";
     public static final String USERS_VIEW = "users.view";
     public static final String USERS_PERMISSIONS_MANAGE = "users.permissions.manage";
     public static final String USERS_CRM_MANAGE = "users.crm.manage";
@@ -112,7 +113,8 @@ public final class PermissionCatalog {
             action(DOCUMENTS_STATUS, "上线或下线文档")
         )),
         new Group("logs", "操作日志", List.of(
-            page(LOGS_VIEW, "访问操作日志")
+            page(LOGS_VIEW, "访问操作日志"),
+            action(LOGS_EXPORT, "导出操作日志")
         )),
         new Group("users", "用户与权限", List.of(
             page(USERS_VIEW, "访问用户与权限页面"),

@@ -85,6 +85,9 @@ public class AuthController {
             audit.record("registration_failed:" + username, request);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名或教师 ID 已存在");
         }
+        audit.change("TEACHER", username, Map.of(), Map.of("username", username,
+            "teacherId", user.getTeacherPublicId(), "admin", false,
+            "permissions", user.getPermissions()));
         audit.record("registration_succeeded:" + username, request);
         return new RegistrationResponse(true, username, user.getTeacherPublicId());
     }
@@ -103,9 +106,11 @@ public class AuthController {
             context.setAuthentication(authentication);
             SecurityContextHolder.setContext(context);
             contextRepository.saveContext(context, request, response);
+            audit.actor("TEACHER", authentication.getName(), authentication.getName());
             audit.record("login_succeeded", request);
             return profile(authentication.getName());
         } catch (AuthenticationException error) {
+            audit.actor("ANONYMOUS", null, body.username().trim());
             audit.record("login_failed", request);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码不正确");
         }
@@ -126,6 +131,8 @@ public class AuthController {
         user.setPasswordCiphertext(passwordRecovery.encrypt(body.newPassword(), userPasswordContext(user.getUsername())));
         user.setUpdatedAt(Instant.now());
         users.save(user);
+        audit.change("TEACHER", user.getUsername(), Map.of("credentialState", "existing"),
+            Map.of("credentialState", "rotated"));
         audit.record("password_changed", request);
         return Map.of("ok", true);
     }

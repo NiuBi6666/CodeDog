@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/logs")
+@RequestMapping("/api/internal/legacy-logs")
 public class AuditLogController {
     private final AuditService service;
 

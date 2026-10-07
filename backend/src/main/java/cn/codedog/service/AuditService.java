@@ -38,58 +38,36 @@ public class AuditService {
     );
     private final JdbcTemplate jdbc;
     private final AuditLogRepository repository;
+    private final StructuredAuditService structured;
 
-    public AuditService(JdbcTemplate jdbc, AuditLogRepository repository) {
+    public AuditService(JdbcTemplate jdbc, AuditLogRepository repository, StructuredAuditService structured) {
         this.jdbc = jdbc;
         this.repository = repository;
+        this.structured = structured;
     }
 
     public void record(String action, HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String ip = forwarded == null || forwarded.isBlank()
-            ? request.getRemoteAddr() : forwarded.split(",", 2)[0].trim();
-        if (ip.length() > 80) ip = ip.substring(0, 80);
-        jdbc.update("INSERT INTO audit_log(action, ip_address, created_at) VALUES (?, ?, ?)",
-            action, ip, Timestamp.from(Instant.now()));
+        structured.record(action, request);
     }
 
     public int recentLoginFailures(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String ip = forwarded == null || forwarded.isBlank()
-            ? request.getRemoteAddr() : forwarded.split(",", 2)[0].trim();
-        Integer count = jdbc.queryForObject("""
-            SELECT COUNT(*) FROM audit_log
-            WHERE action = 'login_failed' AND ip_address = ?
-              AND created_at >= ?
-              AND id > COALESCE((SELECT MAX(id) FROM audit_log
-                WHERE action = 'login_succeeded' AND ip_address = ?), 0)
-            """, Integer.class, ip, Timestamp.from(Instant.now().minus(15, ChronoUnit.MINUTES)), ip);
-        return count == null ? 0 : count;
+        return structured.recentFailures("login_failed", request, 15, "login_succeeded");
     }
 
     public int recentStudentLoginFailures(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String ip = forwarded == null || forwarded.isBlank()
-            ? request.getRemoteAddr() : forwarded.split(",", 2)[0].trim();
-        Integer count = jdbc.queryForObject("""
-            SELECT COUNT(*) FROM audit_log
-            WHERE action = 'student_login_failed' AND ip_address = ? AND created_at >= ?
-              AND id > COALESCE((SELECT MAX(id) FROM audit_log
-                WHERE action = 'student_login_succeeded' AND ip_address = ?), 0)
-            """, Integer.class, ip, Timestamp.from(Instant.now().minus(15, ChronoUnit.MINUTES)), ip);
-        return count == null ? 0 : count;
+        return structured.recentFailures("student_login_failed", request, 15, "student_login_succeeded");
     }
 
     public int recentRegistrations(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String ip = forwarded == null || forwarded.isBlank()
-            ? request.getRemoteAddr() : forwarded.split(",", 2)[0].trim();
-        Integer count = jdbc.queryForObject("""
-            SELECT COUNT(*) FROM audit_log
-            WHERE action LIKE 'registration_%' AND ip_address = ? AND created_at >= ?
-            """, Integer.class, ip, Timestamp.from(Instant.now().minus(1, ChronoUnit.HOURS)));
-        return count == null ? 0 : count;
+        return structured.recentRegistrations(request);
     }
+    public void event(String module,String type,String code) { structured.event(module,type,code); }
+    public void owner(String username) { structured.owner(username); }
+    public void actor(String type,String id,String name) { structured.actor(type,id,name); }
+    public void target(String type,Object id) { structured.target(type,id); }
+    public void detail(Map<String,?> values) { structured.detail(values); }
+    public void change(String type,Object id,Map<String,?> before,Map<String,?> after) { structured.change(type,id,before,after); }
+    public Map<String,Object> fileMetadata(org.springframework.web.multipart.MultipartFile file) { return structured.fileMetadata(file); }
 
     public Page<AuditLog> list(LocalDate startDate, LocalDate endDate, String module,
                                String result, String keyword, int page) {

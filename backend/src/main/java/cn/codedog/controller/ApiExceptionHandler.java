@@ -3,6 +3,7 @@ package cn.codedog.controller;
 import cn.codedog.service.DocumentService;
 import cn.codedog.service.ClassProgressService;
 import cn.codedog.service.ClassProgressImportService;
+import cn.codedog.service.AuditContext;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,11 +47,13 @@ public class ApiExceptionHandler {
     ResponseEntity<?> badRequest(Exception error) {
         String message = error instanceof MethodArgumentNotValidException validation && validation.getBindingResult().getFieldError() != null
             ? validation.getBindingResult().getFieldError().getDefaultMessage() : "请求参数无效";
+        AuditContext.error(message);
         return ResponseEntity.badRequest().body(Map.of("error", message));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<?> status(ResponseStatusException error) {
+        AuditContext.error(error.getReason() == null ? "请求失败" : error.getReason());
         return ResponseEntity.status(error.getStatusCode()).body(Map.of("error", error.getReason() == null ? "请求失败" : error.getReason()));
     }
 

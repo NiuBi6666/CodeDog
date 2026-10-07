@@ -19,8 +19,10 @@ public class ExamAdminController {
     @GetMapping
     public ExamService.ExamList list(@RequestParam(defaultValue="0") int page){return service.list(page);}
     @PostMapping(value="/inspect",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ExamExcelReader.Inspection inspect(@RequestParam MultipartFile file,@RequestParam(defaultValue="0") int sheetIndex,@RequestParam(defaultValue="1") int headerRow){
-        return reader.inspect(file,sheetIndex,headerRow);
+    public ExamExcelReader.Inspection inspect(@RequestParam MultipartFile file,@RequestParam(defaultValue="0") int sheetIndex,@RequestParam(defaultValue="1") int headerRow,HttpServletRequest request){
+        var result=reader.inspect(file,sheetIndex,headerRow);
+        audit.detail(java.util.Map.of("file",audit.fileMetadata(file),"sheetIndex",sheetIndex,"headerRow",headerRow));
+        return result;
     }
     @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
@@ -29,6 +31,8 @@ public class ExamAdminController {
         try{parsed=json.readValue(mapping,ExamExcelReader.Mapping.class);}
         catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"导入配置无效，请重新选择姓名和成绩列。");}
         var result=service.create(file,parsed,principal.getName());
+        audit.target("EXAM",result.id());
+        audit.detail(java.util.Map.of("file",audit.fileMetadata(file),"studentCount",result.studentCount()));
         audit.record("exam_created:"+result.id()+":"+result.studentCount(),request);
         return result;
     }

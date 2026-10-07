@@ -6,7 +6,7 @@ import DocumentEditView from "./views/DocumentEditView.vue";
 import DocumentListView from "./views/DocumentListView.vue";
 import ForbiddenView from "./views/ForbiddenView.vue";
 import LoginView from "./views/LoginView.vue";
-import LogListView from "./views/LogListView.vue";
+import LogListView from "./views/StructuredLogListView.vue";
 import PasswordView from "./views/PasswordView.vue";
 import PublicDocumentView from "./views/PublicDocumentView.vue";
 import QuestionnaireView from "./views/QuestionnaireView.vue";
