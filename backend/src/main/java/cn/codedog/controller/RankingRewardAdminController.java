@@ -135,7 +135,10 @@ public class RankingRewardAdminController {
   public RankingRewardPayload.Redemption createRedemption(@RequestBody RankingRewardPayload.RedemptionRequest body,
       Principal principal, HttpServletRequest request) {
     var value = rewards.createRedemption(principal.getName(), body);
-    audit.record("ranking_redemption_created:" + value.id(), request); return value;
+    audit.record("ranking_redemption_created:" + value.id() + ":student_id=" + value.studentId()
+      + ":reward_id=" + value.rewardId() + ":points=" + value.pointsSpent()
+      + ":balance_before=" + value.balanceBefore() + ":balance_after=" + value.balanceAfter(), request);
+    return value;
   }
 
   @PatchMapping("/redemptions/{id}/fulfillment")

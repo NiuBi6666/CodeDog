@@ -176,14 +176,14 @@ public class RankingRewardService {
   }
 
   public List<RankingRewardPayload.Redemption> redemptions(String owner) {
-    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? ORDER BY redeemed_at DESC,id DESC",
-      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getString(7), instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9)), rs.getString(10)), owner);
+    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? ORDER BY redeemed_at DESC,id DESC",
+      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getString(9), instant(rs.getTimestamp(10)), instant(rs.getTimestamp(11)), rs.getString(12)), owner);
   }
 
   public List<RankingRewardPayload.Redemption> studentRedemptions(String owner, String studentValue) {
     String studentId = text(studentValue, "学员 ID", 100);
-    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=? ORDER BY redeemed_at DESC,id DESC",
-      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getString(7), instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9)), null), owner, studentId);
+    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=? ORDER BY redeemed_at DESC,id DESC",
+      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getString(9), instant(rs.getTimestamp(10)), instant(rs.getTimestamp(11)), null), owner, studentId);
   }
 
   public RankingRewardPayload.Balance balance(String owner, String studentValue) {
@@ -217,8 +217,11 @@ public class RankingRewardService {
     if (current.availablePoints() < reward.points()) throw invalid("可用积分不足，当前可用 " + current.availablePoints() + " 分");
     GeneratedKeyHolder key = new GeneratedKeyHolder();
     jdbc.update(connection -> {
-      PreparedStatement statement = connection.prepareStatement("INSERT INTO ranking_reward_redemptions(owner_username,student_id,student_name,reward_id,reward_name,points_spent) VALUES(?,?,?,?,?,?)", new String[]{"id"});
-      statement.setString(1, owner); statement.setString(2, studentId); statement.setString(3, names.getFirst()); statement.setLong(4, reward.id()); statement.setString(5, reward.name()); statement.setInt(6, reward.points()); return statement;
+      PreparedStatement statement = connection.prepareStatement("INSERT INTO ranking_reward_redemptions(owner_username,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after) VALUES(?,?,?,?,?,?,?,?)", new String[]{"id"});
+      statement.setString(1, owner); statement.setString(2, studentId); statement.setString(3, names.getFirst());
+      statement.setLong(4, reward.id()); statement.setString(5, reward.name()); statement.setInt(6, reward.points());
+      statement.setInt(7, current.availablePoints()); statement.setInt(8, current.availablePoints() - reward.points());
+      return statement;
     }, key);
     return redemptionById(owner, Objects.requireNonNull(key.getKey()).longValue());
   }

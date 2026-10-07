@@ -77,7 +77,8 @@ public class RankingRewardPublicController {
       var value = rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id);
       audit.record("student_reward_redeemed:owner=" + student.ownerUsername()
         + ":student_id=" + student.studentId() + ":redemption_id=" + value.id()
-        + ":reward_id=" + id + ":points=" + value.pointsSpent(), request);
+        + ":reward_id=" + id + ":points=" + value.pointsSpent()
+        + ":balance_before=" + value.balanceBefore() + ":balance_after=" + value.balanceAfter(), request);
       return value;
     } catch (org.springframework.web.server.ResponseStatusException error) {
       audit.record("student_reward_redeem_failed:owner=" + student.ownerUsername()

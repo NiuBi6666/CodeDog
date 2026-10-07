@@ -74,7 +74,7 @@ class RankingRewardPublicControllerTest {
     assertThat(controller.redeem(11, request)).isEqualTo(redemption);
 
     verify(audit).record(
-      "student_reward_redeemed:owner=teacher-a:student_id=student-1:redemption_id=23:reward_id=11:points=180",
+      "student_reward_redeemed:owner=teacher-a:student_id=student-1:redemption_id=23:reward_id=11:points=180:balance_before=500:balance_after=320",
       request);
   }
 
@@ -95,7 +95,7 @@ class RankingRewardPublicControllerTest {
 
   private RankingRewardPayload.Redemption redemption(long id, long rewardId, int points) {
     return new RankingRewardPayload.Redemption(
-      id, "student-1", "张同学", rewardId, "测试奖品", points,
+      id, "student-1", "张同学", rewardId, "测试奖品", points, 500, 500 - points,
       "PENDING", Instant.parse("2026-10-07T04:34:00Z"), null, null);
   }
 }

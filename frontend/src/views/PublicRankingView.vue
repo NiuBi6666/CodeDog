@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
+  ArrowRight,
   CircleCheckBig,
   EllipsisVertical,
   Gift,
@@ -494,6 +495,11 @@ onBeforeUnmount(() => {
                 <div class="redemption-copy">
                   <strong>{{ item.rewardName }}</strong>
                   <time :datetime="item.redeemedAt">{{ rankingRedemptionTime(item.redeemedAt) }}</time>
+                  <div class="redemption-balance" :aria-label="`兑换前 ${item.balanceBefore} 积分，兑换后 ${item.balanceAfter} 积分`">
+                    <span>兑换前 <b>{{ item.balanceBefore }}</b></span>
+                    <ArrowRight aria-hidden="true" />
+                    <span>兑换后 <b>{{ item.balanceAfter }}</b></span>
+                  </div>
                 </div>
                 <div class="redemption-meta">
                   <strong>-{{ item.pointsSpent }} 积分</strong>
@@ -1283,7 +1289,7 @@ button {
 
 .redemption-list li {
   min-width: 0;
-  min-height: 58px;
+  min-height: 72px;
   gap: 10px;
   padding: 9px 2px;
   border-bottom: 1px solid #263a59;
@@ -1308,6 +1314,18 @@ button {
 
 .redemption-mark svg { width: 16px; height: 16px; }
 .redemption-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.redemption-balance {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #899bbb;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.redemption-balance svg { width: 10px; height: 10px; color: #5c7198; }
+.redemption-balance b { color: #c9d7ed; font-family: Consolas, "SFMono-Regular", monospace; font-weight: 800; }
+.redemption-balance span:last-child b { color: #55ddff; }
 .redemption-copy strong { overflow: hidden; color: #edf3ff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .redemption-copy time { color: #7689ad; font-family: Consolas, "SFMono-Regular", monospace; font-size: 9px; font-variant-numeric: tabular-nums; }
 .redemption-meta { display: grid; flex: 0 0 auto; gap: 5px; text-align: right; }

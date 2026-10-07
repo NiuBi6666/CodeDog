@@ -17,7 +17,7 @@ public final class RankingRewardPayload {
   public record Balance(int earnedPoints, int spentPoints, int availablePoints) {}
   public record RewardImage(byte[] data, String contentType) {}
   public record Redemption(long id, String studentId, String studentName, Long rewardId,
-                           String rewardName, int pointsSpent, String status,
+                           String rewardName, int pointsSpent, int balanceBefore, int balanceAfter, String status,
                            Instant redeemedAt, Instant fulfilledAt, String fulfilledBy) {}
   public record RedemptionRequest(String studentId, long rewardId) {}
   public record FulfillmentRequest(boolean fulfilled) {}

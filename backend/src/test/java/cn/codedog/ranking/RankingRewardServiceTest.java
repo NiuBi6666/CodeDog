@@ -60,6 +60,7 @@ class RankingRewardServiceTest {
       CREATE TABLE ranking_reward_redemptions(
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,
         student_name VARCHAR(100) NOT NULL,reward_id BIGINT,reward_name VARCHAR(100) NOT NULL,points_spent INT NOT NULL,
+        balance_before INT NOT NULL,balance_after INT NOT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'PENDING',redeemed_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         fulfilled_at TIMESTAMP(6),fulfilled_by VARCHAR(50),
         FOREIGN KEY(reward_id) REFERENCES ranking_rewards(id) ON DELETE SET NULL)
@@ -117,6 +118,8 @@ class RankingRewardServiceTest {
     var redemption = service.createRedemption("teacher-a", new RankingRewardPayload.RedemptionRequest("student-1", reward.id()));
     assertThat(redemption.status()).isEqualTo("PENDING");
     assertThat(redemption.pointsSpent()).isEqualTo(300);
+    assertThat(redemption.balanceBefore()).isEqualTo(500);
+    assertThat(redemption.balanceAfter()).isEqualTo(200);
 
     service.deleteReward("teacher-a", reward.id());
     var retained = service.redemptions("teacher-a").getFirst();
@@ -147,6 +150,8 @@ class RankingRewardServiceTest {
     var large = service.createReward("teacher-a", "大奖品", 250, true, null);
     var redemption = service.createRedemption("teacher-a", new RankingRewardPayload.RedemptionRequest("student-1", small.id()));
 
+    assertThat(redemption.balanceBefore()).isEqualTo(500);
+    assertThat(redemption.balanceAfter()).isEqualTo(200);
     assertThatThrownBy(() -> service.createRedemption("teacher-a", new RankingRewardPayload.RedemptionRequest("student-1", large.id())))
       .isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> {
@@ -199,6 +204,10 @@ class RankingRewardServiceTest {
       .containsExactly("FULFILLED", "PENDING");
     assertThat(values.getFirst().fulfilledAt()).isNotNull();
     assertThat(values.getFirst().fulfilledBy()).isNull();
+    assertThat(values).extracting(RankingRewardPayload.Redemption::balanceBefore)
+      .containsExactly(450, 500);
+    assertThat(values).extracting(RankingRewardPayload.Redemption::balanceAfter)
+      .containsExactly(390, 450);
   }
 
   private void addStudent(String owner, String id, String name, int points) {
