@@ -48,14 +48,14 @@ class ExamIntegrationTest {
     }
     JsonNode create(String title,double score)throws Exception{
         var file=file(false,new Object[][]{{"姓名","成绩","手机号"},{"同名学员",score,"不应公开"},{"另一学员",80,"不应公开"}});
-        var result=mvc.perform(multipart("/api/admin/exams").file(file).param("mapping",mapping(title,0,List.of(1),List.of("总成绩"))).with(user("admin")).with(csrf()))
+        var result=mvc.perform(multipart("/api/admin/exams").file(file).param("mapping",mapping(title,0,List.of(1),List.of("总成绩"))).with(user("Liam")).with(csrf()))
             .andExpect(status().isCreated()).andReturn();
         return json.readTree(result.getResponse().getContentAsString());
     }
     @Test void requiresAdminAndCsrf()throws Exception{
         mvc.perform(get("/api/admin/exams")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/admin/exams").with(user("ordinary"))).andExpect(status().isForbidden());
-        mvc.perform(multipart("/api/admin/exams/inspect").file(file(false,new Object[][]{{"姓名","成绩"},{"学员",90}})).with(user("admin")))
+        mvc.perform(multipart("/api/admin/exams/inspect").file(file(false,new Object[][]{{"姓名","成绩"},{"学员",90}})).with(user("Liam")))
             .andExpect(status().isForbidden());
     }
     @Test void eachUploadCreatesIsolatedQueryEvenWithSameTitleAndName()throws Exception{
@@ -78,7 +78,7 @@ class ExamIntegrationTest {
     @Test void duplicatesOrMissingNameDoNotCreatePartialExam()throws Exception{
         Long before=jdbc.queryForObject("select count(*) from exam_sessions",Long.class);
         for(Object[][] rows:List.of(new Object[][]{{"姓名","成绩"},{"重复",1},{"重复",2}},new Object[][]{{"姓名","成绩"},{null,2}})){
-            mvc.perform(multipart("/api/admin/exams").file(file(false,rows)).param("mapping",mapping("错误表",0,List.of(1),List.of("分数"))).with(user("admin")).with(csrf()))
+            mvc.perform(multipart("/api/admin/exams").file(file(false,rows)).param("mapping",mapping("错误表",0,List.of(1),List.of("分数"))).with(user("Liam")).with(csrf()))
                 .andExpect(status().isUnprocessableEntity());
         }
         assertThat(jdbc.queryForObject("select count(*) from exam_sessions",Long.class)).isEqualTo(before);
@@ -99,15 +99,15 @@ class ExamIntegrationTest {
     @Test void supportsXlsAndRejectsInvalidMapping()throws Exception{
         var file=file(true,new Object[][]{{"姓名","得分"},{"学员",75}});
         assertThat(reader.parse(file,new ExamExcelReader.Mapping("XLS考试",0,1,0,List.of(1),List.of("得分"))).students().get("学员")).containsExactly("75");
-        mvc.perform(multipart("/api/admin/exams").file(file).param("mapping",mapping("错列",0,List.of(0),List.of("分数"))).with(user("admin")).with(csrf())).andExpect(status().isUnprocessableEntity());
-        mvc.perform(multipart("/api/admin/exams/inspect").file(new MockMultipartFile("file","bad.xlsx","application/octet-stream",new byte[]{1,2,3})).with(user("admin")).with(csrf())).andExpect(status().isUnprocessableEntity());
+        mvc.perform(multipart("/api/admin/exams").file(file).param("mapping",mapping("错列",0,List.of(0),List.of("分数"))).with(user("Liam")).with(csrf())).andExpect(status().isUnprocessableEntity());
+        mvc.perform(multipart("/api/admin/exams/inspect").file(new MockMultipartFile("file","bad.xlsx","application/octet-stream",new byte[]{1,2,3})).with(user("Liam")).with(csrf())).andExpect(status().isUnprocessableEntity());
     }
     @Test void canPauseAndResumeSameLink()throws Exception{
         var exam=create("暂停考试",60);String token=exam.get("publicId").asText();long id=exam.get("id").asLong();
-        mvc.perform(patch("/api/admin/exams/"+id+"/status").with(user("admin")).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
+        mvc.perform(patch("/api/admin/exams/"+id+"/status").with(user("Liam")).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
         mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isGone());
         mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content("{\"name\":\"同名学员\"}")).andExpect(status().isGone());
-        mvc.perform(patch("/api/admin/exams/"+id+"/status").with(user("admin")).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":true}")).andExpect(status().isOk()).andExpect(jsonPath("$.publicId").value(token));
+        mvc.perform(patch("/api/admin/exams/"+id+"/status").with(user("Liam")).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":true}")).andExpect(status().isOk()).andExpect(jsonPath("$.publicId").value(token));
         mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isOk());
     }
     @Test void shortLinksAreEightCharactersAndLegacyLinksStillWork()throws Exception{
@@ -124,7 +124,7 @@ class ExamIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.scores[0]").value("88.5"));
         }
         mvc.perform(get("/api/public/exams/"+token.substring(1))).andExpect(status().isNotFound());
-        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/status").with(user("admin")).with(csrf())
+        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/status").with(user("Liam")).with(csrf())
             .contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
         for(String link:List.of(token,legacy))mvc.perform(get("/api/public/exams/"+link)).andExpect(status().isGone());
     }
@@ -138,7 +138,7 @@ class ExamIntegrationTest {
         return json.writeValueAsString(Map.of("suffix",suffix,"expectedSuffix",expected));
     }
     void rename(JsonNode exam,String suffix,String expected,int expectedStatus)throws Exception{
-        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/link").with(user("admin")).with(csrf())
+        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/link").with(user("Liam")).with(csrf())
             .contentType(APPLICATION_JSON).content(linkBody(suffix,expected))).andExpect(status().is(expectedStatus));
     }
     @Test void editingRequiresAdminAndCsrf()throws Exception{
@@ -146,12 +146,12 @@ class ExamIntegrationTest {
         String body=linkBody("Test123a",exam.get("publicId").asText());
         mvc.perform(patch(path).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
         mvc.perform(patch(path).with(user("ordinary")).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
-        mvc.perform(patch(path).with(user("admin")).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        mvc.perform(patch(path).with(user("Liam")).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
     }
     @Test void savedLinkIsCanonicalAndHistoricalLinksRemainBoundToTheirExam()throws Exception{
         var exam=create("链接测试",91.5);String original=exam.get("publicId").asText();
         rename(exam,"Abcd1234",original,200);
-        mvc.perform(get("/api/admin/exams").with(user("admin"))).andExpect(status().isOk())
+        mvc.perform(get("/api/admin/exams").with(user("Liam"))).andExpect(status().isOk())
             .andExpect(jsonPath("$.exams[0].queryPath").value("/exam/Abcd1234"));
         rename(exam,"Next123a","Abcd1234",200);
         for(String code:List.of(original,"Abcd1234","Next123a"))
@@ -162,7 +162,7 @@ class ExamIntegrationTest {
         rename(other,"Next123a",other.get("publicId").asText(),409);
         rename(exam,"Abcd1234","Next123a",200);
         rename(exam,"Test123a",original,409);
-        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/status").with(user("admin")).with(csrf())
+        mvc.perform(patch("/api/admin/exams/"+exam.get("id").asLong()+"/status").with(user("Liam")).with(csrf())
             .contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
         for(String code:List.of(original,"Abcd1234","Next123a"))
             mvc.perform(get("/api/public/exams/"+code)).andExpect(status().isGone());
@@ -180,7 +180,7 @@ class ExamIntegrationTest {
     }
     @Test void existingEightDigitAndUuidLinksSurviveIdempotentBackfill()throws Exception{
         String uuid=UUID.randomUUID().toString().replace("-","");
-        jdbc.update("insert into exam_sessions(public_id,title,score_labels,student_count,enabled,created_by,created_at,result_mode) values(?,?,?,0,true,'admin',CURRENT_TIMESTAMP,'legacy')",uuid,"旧考试","[\"成绩\"]");
+        jdbc.update("insert into exam_sessions(public_id,title,score_labels,student_count,enabled,created_by,created_at,result_mode) values(?,?,?,0,true,'Liam',CURRENT_TIMESTAMP,'legacy')",uuid,"旧考试","[\"成绩\"]");
         Long id=jdbc.queryForObject("select id from exam_sessions where public_id=?",Long.class,uuid);
         String numeric=String.format("%08x",id);
         service.initializeLinks();
@@ -245,7 +245,7 @@ class ExamIntegrationTest {
     JsonNode createTemplate(boolean full)throws Exception{
         var result=mvc.perform(multipart("/api/admin/exams").file(file(false,templateRows(full)))
             .param("mapping",mapping(full?"全量模板测试":"简单模板测试",0,List.of(2),List.of("老师姓名")))
-            .with(user("admin")).with(csrf())).andExpect(status().isCreated()).andReturn();
+            .with(user("Liam")).with(csrf())).andExpect(status().isCreated()).andReturn();
         return json.readTree(result.getResponse().getContentAsString());
     }
     @Test void fullTemplateSelectsAllTwentyQuestionsPlusTotalByHeaderAndQuestionNumber()throws Exception{
@@ -307,7 +307,7 @@ class ExamIntegrationTest {
             new Object[]{"用户姓名","提交时间","总得分","总得分"},
             new Object[]{"用户姓名","提交时间","总得分","第1题得分","第1题得分"},
             new Object[]{"用户姓名","姓名","提交时间","总得分"})){
-            mvc.perform(multipart("/api/admin/exams/inspect").file(file(false,new Object[][]{header})).with(user("admin")).with(csrf()))
+            mvc.perform(multipart("/api/admin/exams/inspect").file(file(false,new Object[][]{header})).with(user("Liam")).with(csrf()))
                 .andExpect(status().isUnprocessableEntity());
         }
     }

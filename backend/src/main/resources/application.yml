@@ -44,7 +44,7 @@ management:
         enabled: true
 
 codedog:
-  admin-username: ${ADMIN_USERNAME:admin}
+  admin-username: ${ADMIN_USERNAME:Liam}
   admin-password: ${ADMIN_PASSWORD:}
   legacy-import-enabled: ${LEGACY_IMPORT_ENABLED:false}
   password-recovery-key: ${CODEDOG_PASSWORD_RECOVERY_KEY:}

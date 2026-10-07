@@ -18,7 +18,7 @@ describe("permission checks", () => {
   });
 
   it("grants every permission to administrators", () => {
-    auth.user = { username: "admin", admin: true, permissions: [] };
+    auth.user = { username: "Liam", admin: true, permissions: [] };
     expect(hasPermission("documents.edit")).toBe(true);
   });
 });

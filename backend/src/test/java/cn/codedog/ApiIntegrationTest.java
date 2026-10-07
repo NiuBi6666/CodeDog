@@ -35,7 +35,7 @@ class ApiIntegrationTest {
     void login() throws Exception {
         var result = mvc.perform(post("/api/auth/login").with(csrf())
                 .contentType(APPLICATION_JSON)
-                .content("{\"username\":\"admin\",\"password\":\"test-only-password\"}"))
+                .content("{\"username\":\"Liam\",\"password\":\"test-only-password\"}"))
             .andExpect(status().isOk()).andReturn();
         session = (MockHttpSession) result.getRequest().getSession(false);
     }
@@ -114,13 +114,27 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void administratorUsesLiamAndLegacyAdminLoginIsRejected() throws Exception {
+        mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
+                .content("{\"username\":\"Liam\",\"password\":\"test-only-password\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.username").value("Liam"))
+            .andExpect(jsonPath("$.displayName").value("Liam"))
+            .andExpect(jsonPath("$.admin").value(true));
+
+        mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
+                .content("{\"username\":\"admin\",\"password\":\"test-only-password\"}"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void invalidLoginAndCsrfAreRejected() throws Exception {
         mvc.perform(post("/api/auth/login").contentType(APPLICATION_JSON)
-                .content("{\"username\":\"admin\",\"password\":\"wrong\"}"))
+                .content("{\"username\":\"Liam\",\"password\":\"wrong\"}"))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error").value("安全令牌已失效，请重试"));
         mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
-                .content("{\"username\":\"admin\",\"password\":\"wrong\"}"))
+                .content("{\"username\":\"Liam\",\"password\":\"wrong\"}"))
             .andExpect(status().isUnauthorized());
     }
 

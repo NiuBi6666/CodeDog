@@ -112,11 +112,11 @@ class RankingServiceTest {
         PRIMARY KEY (snapshot_date, owner_username, camp_id, scope_type, class_id, student_id)
       )
       """);
-    jdbc.update("INSERT INTO users(username,teacher_public_id,is_admin) VALUES('admin','CD-ADMIN001',TRUE)");
+    jdbc.update("INSERT INTO users(username,teacher_public_id,is_admin) VALUES('Liam','CD-ADMIN001',TRUE)");
     jdbc.update("INSERT INTO users(username,teacher_public_id,is_admin) VALUES('teacher-b','CD-TEACHER2',FALSE)");
-    jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES('29413','admin')");
+    jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES('29413','Liam')");
     jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES('555','teacher-b')");
-    addScope("admin", "测试营", "测试班");
+    addScope("Liam", "测试营", "测试班");
     addScope("teacher-b", "B老师营", "B老师班");
     service = new RankingBoardService(jdbc);
     devices = new RankingDeviceService(jdbc);
@@ -124,10 +124,10 @@ class RankingServiceTest {
 
   @Test
   void ordersTiesDeterministicallyButAssignsCompetitionRanks() {
-    addStudent("admin", "early-low", "先到", "2026-01-01T10:00:00Z", 100, 50, 50);
-    addStudent("admin", "late-high", "后到", "2026-01-01T11:00:00Z", 0, 100, 100);
-    addStudent("admin", "a-low", "低正确率", "2026-01-01T12:00:00Z", 100, 25, 25);
-    addStudent("admin", "z-high", "高正确率", "2026-01-01T12:00:00Z", 0, 75, 75);
+    addStudent("Liam", "early-low", "先到", "2026-01-01T10:00:00Z", 100, 50, 50);
+    addStudent("Liam", "late-high", "后到", "2026-01-01T11:00:00Z", 0, 100, 100);
+    addStudent("Liam", "a-low", "低正确率", "2026-01-01T12:00:00Z", 100, 25, 25);
+    addStudent("Liam", "z-high", "高正确率", "2026-01-01T12:00:00Z", 0, 75, 75);
 
     RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
 
@@ -141,10 +141,10 @@ class RankingServiceTest {
 
   @Test
   void skipsFollowingRanksAfterThreeStudentsTieForFirst() {
-    addStudent("admin", "one", "甲", "2026-01-01T10:00:00Z", 100, 0, 0);
-    addStudent("admin", "two", "乙", "2026-01-01T11:00:00Z", 0, 50, 50);
-    addStudent("admin", "three", "丙", "2026-01-01T12:00:00Z", 40, 30, 30);
-    addStudent("admin", "four", "丁", "2026-01-01T13:00:00Z", 30, 30, 30);
+    addStudent("Liam", "one", "甲", "2026-01-01T10:00:00Z", 100, 0, 0);
+    addStudent("Liam", "two", "乙", "2026-01-01T11:00:00Z", 0, 50, 50);
+    addStudent("Liam", "three", "丙", "2026-01-01T12:00:00Z", 40, 30, 30);
+    addStudent("Liam", "four", "丁", "2026-01-01T13:00:00Z", 30, 30, 30);
 
     RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
 
@@ -156,14 +156,14 @@ class RankingServiceTest {
 
   @Test
   void reportsUpDownSameAndNewAgainstMostRecentEarlierSnapshot() {
-    addStudent("admin", "up", "上升", "2026-01-01T10:00:00Z", 200, 100, 100);
-    addStudent("admin", "down", "下降", "2026-01-01T10:00:00Z", 100, 100, 100);
-    addStudent("admin", "same", "持平", "2026-01-01T10:00:00Z", 0, 100, 100);
-    addStudent("admin", "new", "新增", "2026-01-01T10:00:00Z", 0, 50, 50);
+    addStudent("Liam", "up", "上升", "2026-01-01T10:00:00Z", 200, 100, 100);
+    addStudent("Liam", "down", "下降", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudent("Liam", "same", "持平", "2026-01-01T10:00:00Z", 0, 100, 100);
+    addStudent("Liam", "new", "新增", "2026-01-01T10:00:00Z", 0, 50, 50);
     LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
-    addSnapshot("admin", yesterday, "up", 2, 300);
-    addSnapshot("admin", yesterday, "down", 1, 400);
-    addSnapshot("admin", yesterday, "same", 3, 200);
+    addSnapshot("Liam", yesterday, "up", 2, 300);
+    addSnapshot("Liam", yesterday, "down", 1, 400);
+    addSnapshot("Liam", yesterday, "same", 3, 200);
 
     RankingPayload.Board board = service.board("CD-ADMIN001", "camp", "class", "class");
 
@@ -176,7 +176,7 @@ class RankingServiceTest {
 
   @Test
   void isolatesIdenticalRankingKeysByMappedTeacher() {
-    addStudent("admin", "same-student", "A老师学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudent("Liam", "same-student", "A老师学员", "2026-01-01T10:00:00Z", 100, 100, 100);
     addStudent("teacher-b", "same-student", "B老师学员", "2026-01-01T10:00:00Z", 10, 20, 30);
 
     RankingPayload.Board boardA = service.board("CD-ADMIN001", "camp", "class", "class");
@@ -194,10 +194,10 @@ class RankingServiceTest {
 
   @Test
   void combinesAllTeacherStudentsAcrossCampsAndMergesStableStudentIds() {
-    addScopeAt("admin", "camp-2", "class-2", "第二营", "第二班");
-    addStudent("admin", "shared", "跨营学员", "2026-01-01T10:00:00Z", 100, 100, 100);
-    addStudentAt("admin", "camp-2", "class-2", "shared", "跨营学员", "2026-02-01T10:00:00Z", 50, 50, 50);
-    addStudentAt("admin", "camp-2", "class-2", "other", "普通学员", "2026-02-01T11:00:00Z", 80, 80, 80);
+    addScopeAt("Liam", "camp-2", "class-2", "第二营", "第二班");
+    addStudent("Liam", "shared", "跨营学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudentAt("Liam", "camp-2", "class-2", "shared", "跨营学员", "2026-02-01T10:00:00Z", 50, 50, 50);
+    addStudentAt("Liam", "camp-2", "class-2", "other", "普通学员", "2026-02-01T11:00:00Z", 80, 80, 80);
     addStudent("teacher-b", "hidden", "其他老师学员", "2026-01-01T09:00:00Z", 200, 200, 200);
 
     RankingPayload.Board board = service.allBoard("CD-ADMIN001");
@@ -215,12 +215,12 @@ class RankingServiceTest {
 
   @Test
   void suggestsRealIncompleteAndIncorrectWorkInPriorityOrder() {
-    addStudent("admin", "needs-work", "待提升学员", "2026-01-01T10:00:00Z", 50, 50, 50);
+    addStudent("Liam", "needs-work", "待提升学员", "2026-01-01T10:00:00Z", 50, 50, 50);
     jdbc.update("""
       UPDATE ranking_lesson_results SET completion_rate=0.5,
       homework_total=5,homework_submitted=3,homework_passed=2,
       inclass_total=4,inclass_submitted=3,inclass_passed=2
-      WHERE owner_username='admin' AND student_id='needs-work'
+      WHERE owner_username='Liam' AND student_id='needs-work'
       """);
 
     RankingPayload.OpportunitySummary summary = service.opportunities("needs-work");
@@ -233,7 +233,7 @@ class RankingServiceTest {
 
   @Test
   void congratulatesStudentsWithNoRemainingWork() {
-    addStudent("admin", "complete", "已完成学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+    addStudent("Liam", "complete", "已完成学员", "2026-01-01T10:00:00Z", 100, 100, 100);
 
     RankingPayload.OpportunitySummary summary = service.opportunities("complete");
 
@@ -245,10 +245,10 @@ class RankingServiceTest {
   void bootstrapsMappedCrmTeacherAndAuthenticatesIssuedToken() {
     RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 测试设备");
 
-    assertThat(connection.username()).isEqualTo("admin");
+    assertThat(connection.username()).isEqualTo("Liam");
     assertThat(connection.teacherId()).isEqualTo("CD-ADMIN001");
     assertThat(connection.crmTeacherId()).isEqualTo("29413");
-    assertThat(devices.authenticateToken("Bearer " + connection.token())).isEqualTo("admin");
+    assertThat(devices.authenticateToken("Bearer " + connection.token())).isEqualTo("Liam");
   }
 
   @Test
@@ -258,7 +258,7 @@ class RankingServiceTest {
     RankingPayload.ExtensionSession session = devices.session("Bearer " + connection.token());
 
     assertThat(session.deviceId()).isEqualTo(connection.deviceId());
-    assertThat(session.username()).isEqualTo("admin");
+    assertThat(session.username()).isEqualTo("Liam");
     assertThat(session.teacherId()).isEqualTo("CD-ADMIN001");
     assertThat(session.crmTeacherId()).isEqualTo("29413");
   }

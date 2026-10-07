@@ -137,7 +137,7 @@ class RbacIntegrationTest {
         String password = "member-password-123";
         User member = users.saveAndFlush(user(username, password));
         MockHttpSession memberSession = login(username, password);
-        MockHttpSession admin = login("admin", "test-only-password");
+        MockHttpSession admin = login("Liam", "test-only-password");
 
         mvc.perform(put("/api/admin/users/{id}/permissions", member.getId()).session(admin).with(csrf())
                 .contentType(APPLICATION_JSON)
@@ -178,7 +178,7 @@ class RbacIntegrationTest {
         User member = user(username, password);
         users.saveAndFlush(member);
 
-        MockHttpSession admin = login("admin", "test-only-password");
+        MockHttpSession admin = login("Liam", "test-only-password");
         mvc.perform(get("/api/admin/permissions").session(admin))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[1].permissions[0].type").value("page"))
@@ -238,8 +238,8 @@ class RbacIntegrationTest {
     void permissionAdministrationRejectsUnknownCodesAndAdminMutation() throws Exception {
         String username = uniqueUsername("invalid");
         User member = users.saveAndFlush(user(username, "member-password-123"));
-        User adminUser = users.findByUsername("admin").orElseThrow();
-        MockHttpSession admin = login("admin", "test-only-password");
+        User adminUser = users.findByUsername("Liam").orElseThrow();
+        MockHttpSession admin = login("Liam", "test-only-password");
 
         mvc.perform(put("/api/admin/users/{id}/permissions", member.getId()).session(admin).with(csrf())
                 .contentType(APPLICATION_JSON)
@@ -297,7 +297,7 @@ class RbacIntegrationTest {
     void administratorMapsCrmTeacherAndBootstrapUsesMappedOwner() throws Exception {
         String username = uniqueUsername("mapped");
         User member = users.saveAndFlush(user(username, "member-password-123"));
-        MockHttpSession admin = login("admin", "test-only-password");
+        MockHttpSession admin = login("Liam", "test-only-password");
         String crmTeacherId = "crm" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
 
         mvc.perform(put("/api/admin/users/{id}/crm-teacher", member.getId()).session(admin).with(csrf())
@@ -415,7 +415,7 @@ class RbacIntegrationTest {
         String phone = "1" + String.format("%010d", Math.abs(UUID.randomUUID().getLeastSignificantBits()) % 10_000_000_000L);
         String otherPhone = "1" + String.format("%010d", Math.abs(UUID.randomUUID().getMostSignificantBits()) % 10_000_000_000L);
         jdbc.update("INSERT INTO ranking_student_accounts(phone,owner_username,student_id,student_name,password_hash,enabled) VALUES(?,?,?,?,?,TRUE)",
-            phone, "admin", studentId, "测试学生", encoder.encode("123456"));
+            phone, "Liam", studentId, "测试学生", encoder.encode("123456"));
         jdbc.update("INSERT INTO ranking_student_accounts(phone,owner_username,student_id,student_name,password_hash,enabled) VALUES(?,?,?,?,?,TRUE)",
             otherPhone, memberName, otherStudentId, "其他老师学生", encoder.encode("123456"));
 
@@ -424,7 +424,7 @@ class RbacIntegrationTest {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error").value("仅系统管理员可以查看或重置学生密码"));
 
-        MockHttpSession admin = login("admin", "test-only-password");
+        MockHttpSession admin = login("Liam", "test-only-password");
         mvc.perform(get("/api/rankings/admin/students/{studentId}/password", studentId).session(admin))
             .andExpect(status().isOk())
             .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
@@ -441,8 +441,8 @@ class RbacIntegrationTest {
             .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
             .andExpect(jsonPath("$.password").value(resetPassword));
 
-        String hash = jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username='admin' AND student_id=?", String.class, studentId);
-        String ciphertext = jdbc.queryForObject("SELECT password_ciphertext FROM ranking_student_accounts WHERE owner_username='admin' AND student_id=?", String.class, studentId);
+        String hash = jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username='Liam' AND student_id=?", String.class, studentId);
+        String ciphertext = jdbc.queryForObject("SELECT password_ciphertext FROM ranking_student_accounts WHERE owner_username='Liam' AND student_id=?", String.class, studentId);
         assertThat(encoder.matches(resetPassword, hash)).isTrue();
         assertThat(ciphertext).startsWith("v1:").doesNotContain(resetPassword);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action=?", Integer.class,

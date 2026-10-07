@@ -26,7 +26,7 @@ class QuestionnaireSsoControllerTest {
 
     @Test
     void authenticatedUserReceivesShortLivedSignedRedirect() throws Exception {
-        mvc.perform(get("/api/questionnaire/sso").with(user("admin")))
+        mvc.perform(get("/api/questionnaire/sso").with(user("Liam")))
             .andExpect(status().isFound())
             .andExpect(header().string("Location", startsWith("https://tduck.test/tduck-api/codedog/sso?token=")))
             .andExpect(header().string("Location", containsString(".")))
