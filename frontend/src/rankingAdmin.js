@@ -31,6 +31,27 @@ export function rankingTrendView(row = {}) {
   return { direction: "same", label: "-", title: "排名持平" };
 }
 
+export function rankingRedemptionStatus(status) {
+  return status === "FULFILLED"
+    ? { label: "已发放", tone: "fulfilled" }
+    : { label: "待老师发放", tone: "pending" };
+}
+
+export function rankingRedemptionTime(value) {
+  if (!value) return "时间未知";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false
+  }).formatToParts(date).reduce((values, part) => {
+    values[part.type] = part.value;
+    return values;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
 export function rankingShareUrl({ origin }) {
   const url = new URL("/ranking-board", origin);
   return url.href;

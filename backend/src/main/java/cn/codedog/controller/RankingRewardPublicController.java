@@ -1,6 +1,7 @@
 package cn.codedog.controller;
 
 import cn.codedog.model.RankingRewardPayload;
+import cn.codedog.service.AuditService;
 import cn.codedog.service.RankingAnnouncementBroadcaster;
 import cn.codedog.service.StudentRankingAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,9 +24,10 @@ public class RankingRewardPublicController {
   private final RankingRewardService rewards;
   private final StudentRankingAuthService studentAuth;
   private final RankingAnnouncementBroadcaster announcements;
+  private final AuditService audit;
   public RankingRewardPublicController(RankingRewardService rewards, StudentRankingAuthService studentAuth,
-                                       RankingAnnouncementBroadcaster announcements) {
-    this.rewards = rewards; this.studentAuth = studentAuth; this.announcements = announcements;
+                                       RankingAnnouncementBroadcaster announcements, AuditService audit) {
+    this.rewards = rewards; this.studentAuth = studentAuth; this.announcements = announcements; this.audit = audit;
   }
 
   @GetMapping("/announcement")
@@ -47,10 +49,42 @@ public class RankingRewardPublicController {
     return rewards.balance(student.ownerUsername(), student.studentId());
   }
 
+  @GetMapping("/student-redemptions")
+  public List<RankingRewardPayload.Redemption> studentRedemptions(HttpServletRequest request) {
+    try {
+      var student = studentAuth.current(request);
+      var values = rewards.studentRedemptions(student.ownerUsername(), student.studentId());
+      audit.record("student_redemptions_viewed:owner=" + student.ownerUsername()
+        + ":student_id=" + student.studentId() + ":count=" + values.size(), request);
+      return values;
+    } catch (org.springframework.web.server.ResponseStatusException error) {
+      audit.record("student_redemptions_view_failed:status=" + error.getStatusCode().value(), request);
+      throw error;
+    }
+  }
+
   @PostMapping("/rewards/{id}/redeem")
   public RankingRewardPayload.Redemption redeem(@PathVariable long id, HttpServletRequest request) {
-    var student = studentAuth.current(request);
-    return rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id);
+    StudentRankingAuthService.StudentSession student;
+    try {
+      student = studentAuth.current(request);
+    } catch (org.springframework.web.server.ResponseStatusException error) {
+      audit.record("student_reward_redeem_failed:reward_id=" + id
+        + ":status=" + error.getStatusCode().value(), request);
+      throw error;
+    }
+    try {
+      var value = rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id);
+      audit.record("student_reward_redeemed:owner=" + student.ownerUsername()
+        + ":student_id=" + student.studentId() + ":redemption_id=" + value.id()
+        + ":reward_id=" + id + ":points=" + value.pointsSpent(), request);
+      return value;
+    } catch (org.springframework.web.server.ResponseStatusException error) {
+      audit.record("student_reward_redeem_failed:owner=" + student.ownerUsername()
+        + ":student_id=" + student.studentId() + ":reward_id=" + id
+        + ":status=" + error.getStatusCode().value(), request);
+      throw error;
+    }
   }
 
   @GetMapping("/rewards/{id}/image")

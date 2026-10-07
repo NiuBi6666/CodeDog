@@ -180,6 +180,12 @@ public class RankingRewardService {
       (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getString(7), instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9)), rs.getString(10)), owner);
   }
 
+  public List<RankingRewardPayload.Redemption> studentRedemptions(String owner, String studentValue) {
+    String studentId = text(studentValue, "学员 ID", 100);
+    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=? ORDER BY redeemed_at DESC,id DESC",
+      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getString(7), instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9)), null), owner, studentId);
+  }
+
   public RankingRewardPayload.Balance balance(String owner, String studentValue) {
     String studentId = text(studentValue, "学员 ID", 100);
     Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM ranking_students WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);

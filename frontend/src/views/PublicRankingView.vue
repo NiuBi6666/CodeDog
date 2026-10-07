@@ -4,6 +4,7 @@ import {
   CircleCheckBig,
   EllipsisVertical,
   Gift,
+  History,
   Code2,
   Megaphone,
   RefreshCw,
@@ -14,12 +15,13 @@ import {
 } from "@lucide/vue";
 import { api, jsonBody } from "../api";
 import {
-  rankingAvatarText, rankingTrendView
+  rankingAvatarText, rankingRedemptionStatus, rankingRedemptionTime, rankingTrendView
 } from "../rankingAdmin.js";
 
 const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
+const redemptions = ref([]);
 const balance = ref({ earnedPoints: 0, spentPoints: 0, availablePoints: 0 });
 const redeemOpen = ref(false);
 const selectedReward = ref(null);
@@ -89,12 +91,14 @@ async function loadBoard() {
   loading.value = true;
   error.value = "";
   try {
-    const [boardValue, rewardValues, balanceValue] = await Promise.all([
-      api("/public/rankings/student-board"), api("/public/rankings/rewards"), api("/public/rankings/student-balance")
+    const [boardValue, rewardValues, balanceValue, redemptionValues] = await Promise.all([
+      api("/public/rankings/student-board"), api("/public/rankings/rewards"),
+      api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions")
     ]);
     board.value = boardValue;
     rewards.value = rewardValues || [];
     balance.value = balanceValue || { earnedPoints: 0, spentPoints: 0, availablePoints: 0 };
+    redemptions.value = redemptionValues || [];
     selectedStudentId.value = String(studentSession.value?.studentId || "");
     loadOpportunities(selectedStudentId.value);
   } catch (failure) {
@@ -144,6 +148,7 @@ function connectAnnouncementStream() {
 function handleSessionExpired() {
   studentSession.value = null;
   board.value = null;
+  redemptions.value = [];
   selectedStudentId.value = "";
   authReady.value = true;
   loginError.value = "登录已失效，请重新登录";
@@ -294,10 +299,24 @@ async function redeemReward() {
   redeemSaving.value = true;
   redeemError.value = "";
   try {
-    await api(`/public/rankings/rewards/${selectedReward.value.id}/redeem`, { method: "POST" });
-    balance.value = await api("/public/rankings/student-balance");
+    const created = await api(`/public/rankings/rewards/${selectedReward.value.id}/redeem`, { method: "POST" });
+    redemptions.value = [created, ...redemptions.value.filter((item) => item.id !== created.id)];
+    balance.value = {
+      ...balance.value,
+      spentPoints: Number(balance.value.spentPoints || 0) + Number(created.pointsSpent || 0),
+      availablePoints: Math.max(0, Number(balance.value.availablePoints || 0) - Number(created.pointsSpent || 0))
+    };
     redeemNotice.value = `已兑换“${selectedReward.value.name}”，请联系老师领取。`;
     closeRewardRedeem(true);
+    try {
+      const [balanceValue, redemptionValues] = await Promise.all([
+        api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions")
+      ]);
+      balance.value = balanceValue;
+      redemptions.value = redemptionValues || [];
+    } catch (refreshFailure) {
+      if (refreshFailure.status === 401) handleSessionExpired();
+    }
   } catch (failure) {
     redeemError.value = failure.message || "兑换失败，请刷新后重试";
   } finally {
@@ -460,6 +479,30 @@ onBeforeUnmount(() => {
               </article>
             </div>
             <div v-else class="reward-empty"><Gift aria-hidden="true" /><span><strong>奖品正在补货</strong><small>老师添加奖品后会显示在这里</small></span></div>
+
+          <section class="redemption-history" aria-labelledby="redemptionHistoryTitle">
+            <div class="redemption-history-heading">
+              <div><History aria-hidden="true" /><div><h3 id="redemptionHistoryTitle">我的兑换</h3><p>历史商品按兑换时间倒序</p></div></div>
+              <small>{{ redemptions.length }} 条记录</small>
+            </div>
+            <ol v-if="redemptions.length" class="redemption-list">
+              <li v-for="item in redemptions" :key="item.id">
+                <span class="redemption-mark" :class="rankingRedemptionStatus(item.status).tone">
+                  <CircleCheckBig v-if="item.status === 'FULFILLED'" aria-hidden="true" />
+                  <Gift v-else aria-hidden="true" />
+                </span>
+                <div class="redemption-copy">
+                  <strong>{{ item.rewardName }}</strong>
+                  <time :datetime="item.redeemedAt">{{ rankingRedemptionTime(item.redeemedAt) }}</time>
+                </div>
+                <div class="redemption-meta">
+                  <strong>-{{ item.pointsSpent }} 积分</strong>
+                  <span :class="rankingRedemptionStatus(item.status).tone">{{ rankingRedemptionStatus(item.status).label }}</span>
+                </div>
+              </li>
+            </ol>
+            <div v-else class="redemption-empty"><History aria-hidden="true" /><span>还没有兑换记录</span></div>
+          </section>
         </section>
       </main>
 
@@ -1199,6 +1242,91 @@ button {
 .reward-empty small { display: block; }
 .reward-empty strong { color: #a9b5ce; font-size: 12px; }
 .reward-empty small { margin-top: 3px; font-size: 10px; }
+
+.redemption-history {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed #3e5477;
+}
+
+.redemption-history-heading,
+.redemption-history-heading > div,
+.redemption-list li,
+.redemption-mark,
+.redemption-empty {
+  display: flex;
+  align-items: center;
+}
+
+.redemption-history-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.redemption-history-heading > div { min-width: 0; gap: 9px; }
+.redemption-history-heading svg { width: 19px; height: 19px; flex: 0 0 auto; color: #55ddff; }
+.redemption-history-heading h3 { margin: 0; color: #f3f6ff; font-size: 15px; }
+.redemption-history-heading p { margin: 3px 0 0; color: #7483a9; font-size: 10px; }
+.redemption-history-heading > small { color: #8fa0c2; font-size: 10px; white-space: nowrap; }
+
+.redemption-list {
+  max-height: 330px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border-top: 1px solid #263a59;
+  list-style: none;
+  scrollbar-color: #3e5d85 transparent;
+  scrollbar-width: thin;
+}
+
+.redemption-list li {
+  min-width: 0;
+  min-height: 58px;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid #263a59;
+}
+
+.redemption-mark {
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 202, 37, 0.34);
+  border-radius: 50%;
+  color: #ffca25;
+  background: rgba(255, 202, 37, 0.08);
+}
+
+.redemption-mark.fulfilled {
+  border-color: rgba(85, 221, 180, 0.38);
+  color: #55ddb4;
+  background: rgba(85, 221, 180, 0.09);
+}
+
+.redemption-mark svg { width: 16px; height: 16px; }
+.redemption-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.redemption-copy strong { overflow: hidden; color: #edf3ff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.redemption-copy time { color: #7689ad; font-family: Consolas, "SFMono-Regular", monospace; font-size: 9px; font-variant-numeric: tabular-nums; }
+.redemption-meta { display: grid; flex: 0 0 auto; gap: 5px; text-align: right; }
+.redemption-meta > strong { color: #b7c7e4; font-family: Consolas, "SFMono-Regular", monospace; font-size: 10px; font-variant-numeric: tabular-nums; }
+.redemption-meta > span { color: #ffca25; font-size: 10px; font-weight: 800; }
+.redemption-meta > span.fulfilled { color: #55ddb4; }
+
+.redemption-empty {
+  min-height: 70px;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed #354b6e;
+  border-radius: 7px;
+  color: #7082a7;
+  background: #111c33;
+  font-size: 11px;
+}
+
+.redemption-empty svg { width: 18px; height: 18px; }
 
 .score-popover {
   position: fixed;

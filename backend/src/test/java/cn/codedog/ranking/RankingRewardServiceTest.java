@@ -176,6 +176,31 @@ class RankingRewardServiceTest {
       .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(404));
   }
 
+  @Test
+  void returnsOnlyTheCurrentStudentsRedemptionsNewestFirst() {
+    addStudent("teacher-a", "student-2", "王同学", 500);
+    var firstReward = service.createReward("teacher-a", "第一件奖品", 50, true, null);
+    var secondReward = service.createReward("teacher-a", "第二件奖品", 60, true, null);
+    var otherTeacherReward = service.createReward("teacher-b", "其他老师奖品", 70, true, null);
+
+    var first = service.createStudentRedemption("teacher-a", "student-1", firstReward.id());
+    var second = service.createStudentRedemption("teacher-a", "student-1", secondReward.id());
+    service.createStudentRedemption("teacher-a", "student-2", firstReward.id());
+    service.createStudentRedemption("teacher-b", "student-1", otherTeacherReward.id());
+    service.setFulfilled("teacher-a", second.id(), true, "teacher-a");
+
+    var values = service.studentRedemptions("teacher-a", "student-1");
+
+    assertThat(values).extracting(RankingRewardPayload.Redemption::id)
+      .containsExactly(second.id(), first.id());
+    assertThat(values).extracting(RankingRewardPayload.Redemption::studentName)
+      .containsOnly("张同学");
+    assertThat(values).extracting(RankingRewardPayload.Redemption::status)
+      .containsExactly("FULFILLED", "PENDING");
+    assertThat(values.getFirst().fulfilledAt()).isNotNull();
+    assertThat(values.getFirst().fulfilledBy()).isNull();
+  }
+
   private void addStudent(String owner, String id, String name, int points) {
     jdbc.update("INSERT INTO ranking_students(owner_username,camp_id,class_id,student_id,student_name) VALUES(?,'camp','class',?,?)", owner, id, name);
     jdbc.update("INSERT INTO ranking_lesson_results(owner_username,camp_id,class_id,lesson_id,student_id,total_points) VALUES(?,'camp','class','lesson',?,?)", owner, id, points);
