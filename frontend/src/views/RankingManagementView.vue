@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ArrowDown, ArrowUp, Award, CalendarClock, CheckCircle2, CircleOff, Copy, ExternalLink, Gift, ImagePlus,
-  Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2,
+  Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
+import { auth } from "../auth";
 import { rankingShareUrl, rankingSummary, rankingTrendView } from "../rankingAdmin.js";
 import { formatDateTime } from "../utils";
 
@@ -26,6 +27,14 @@ const error = ref("");
 const shareOpen = ref(false);
 const rewardOpen = ref(false);
 const redemptionOpen = ref(false);
+const passwordOpen = ref(false);
+const passwordLoading = ref(false);
+const passwordSaving = ref(false);
+const passwordVisible = ref(false);
+const passwordError = ref("");
+const passwordStudent = ref(null);
+const recoveredPassword = ref("");
+const resetPasswordValue = ref("");
 const rewardSaving = ref(false);
 const redemptionSaving = ref(false);
 const rewardForm = ref(emptyRewardForm());
@@ -198,7 +207,30 @@ async function setFulfilled(item, fulfilled) {
   } catch (failure) { notify(failure.message); }
 }
 async function copyShareLink() { await writeClipboard(shareUrl.value); notify("学生排行榜链接已复制"); shareOpen.value = false; }
-function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; } }
+async function openStudentPassword(row) {
+  passwordOpen.value = true; passwordStudent.value = row; passwordLoading.value = true;
+  passwordVisible.value = false; passwordError.value = ""; recoveredPassword.value = ""; resetPasswordValue.value = "";
+  try {
+    const value = await api(`/rankings/admin/students/${encodeURIComponent(row.studentId)}/password`);
+    recoveredPassword.value = value?.password || "";
+  } catch (failure) { passwordError.value = failure.message || "密码读取失败"; }
+  finally { passwordLoading.value = false; }
+}
+function closeStudentPassword() {
+  if (passwordSaving.value) return;
+  passwordOpen.value = false; passwordStudent.value = null; recoveredPassword.value = ""; resetPasswordValue.value = ""; passwordError.value = "";
+}
+async function resetStudentPassword() {
+  if (!passwordStudent.value || resetPasswordValue.value.length < 6) { passwordError.value = "新密码至少 6 个字符"; return; }
+  passwordSaving.value = true; passwordError.value = "";
+  try {
+    const value = await api(`/rankings/admin/students/${encodeURIComponent(passwordStudent.value.studentId)}/password`, { method: "PUT", body: jsonBody({ password: resetPasswordValue.value }) });
+    recoveredPassword.value = value.password || ""; passwordVisible.value = true; resetPasswordValue.value = ""; notify("学生密码已重置");
+  } catch (failure) { passwordError.value = failure.message || "密码重置失败"; }
+  finally { passwordSaving.value = false; }
+}
+async function copyStudentPassword() { await writeClipboard(recoveredPassword.value); notify("学生密码已复制"); }
+function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); } }
 
 onMounted(() => { document.addEventListener("keydown", closeOnEscape); loadAll(); });
 onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
@@ -237,7 +269,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
         <div v-else-if="board && !filteredRows.length" class="ranking-admin-state"><Search :size="23"/><span>没有找到匹配的学员</span></div>
         <div v-else-if="board" class="ranking-admin-table-wrap">
-          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>总积分</th><th>可用积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th></tr></thead>
+          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>总积分</th><th>可用积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="auth.user?.admin">密码</th></tr></thead>
             <tbody><tr v-for="row in filteredRows" :key="row.studentId">
               <td><span class="ranking-number" :class="`rank-${Math.min(row.rank, 4)}`">{{ row.rank }}</span></td>
               <td><div class="ranking-student"><img class="ranking-student-avatar" src="/favicon-dog-20260913.png" alt="" width="38" height="38"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
@@ -246,6 +278,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
               <td><div class="ranking-score-parts"><span>完课 {{ row.completionPoints }}</span><span>课上 {{ row.inclassPoints }}</span><span>课后 {{ row.homeworkPoints }}</span></div></td>
               <td>{{ Number(row.accuracyRate || 0).toFixed(1) }}%</td><td><span class="ranking-level" :class="`ranking-level-${row.level}`">{{ row.levelName }}</span></td>
               <td><span class="ranking-trend" :class="`ranking-trend-${rankingTrendView(row).direction}`" :title="rankingTrendView(row).title"><ArrowUp v-if="rankingTrendView(row).direction === 'up'" :size="14"/><ArrowDown v-else-if="rankingTrendView(row).direction === 'down'" :size="14"/><Minus v-else :size="14"/>{{ rankingTrendView(row).direction === 'same' ? '' : Math.abs(row.rankChange) }}</span></td>
+              <td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
             </tr></tbody>
           </table>
         </div>
@@ -314,6 +347,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       </table></div>
     </section>
 
+    <div v-if="passwordOpen && passwordStudent" class="ranking-share-backdrop" @click.self="closeStudentPassword">
+      <section class="ranking-share-dialog ranking-form-dialog"><header><div><span><Eye :size="18"/></span><div><h2>学生密码</h2><p>{{ passwordStudent.studentName }} · ID {{ passwordStudent.studentId }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeStudentPassword"><X :size="17"/></button></header>
+        <div class="ranking-password-body"><p class="ranking-password-warning">仅系统管理员可查看。每次查看和重置都会写入操作日志。</p><div v-if="passwordLoading" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="20"/><span>正在读取密码</span></div><template v-else><div v-if="recoveredPassword" class="ranking-password-value"><span>{{ passwordVisible ? recoveredPassword : '••••••••' }}</span><button class="icon-button" type="button" :title="passwordVisible ? '隐藏密码' : '显示密码'" @click="passwordVisible = !passwordVisible"><EyeOff v-if="passwordVisible" :size="16"/><Eye v-else :size="16"/></button><button class="button button-quiet button-small" type="button" @click="copyStudentPassword"><Copy :size="14"/>复制</button></div><p v-else class="ranking-password-empty">现有密码尚未保存为可恢复密文。学生成功登录一次后即可查看，也可以在下方直接重置。</p><p v-if="passwordError" class="notice notice-error">{{ passwordError }}</p><label class="ranking-password-reset"><span>重置新密码</span><input v-model="resetPasswordValue" type="text" minlength="6" maxlength="72" placeholder="请输入 6-72 个字符"><button class="button button-primary" type="button" :disabled="passwordSaving || resetPasswordValue.length < 6" @click="resetStudentPassword">{{ passwordSaving ? '重置中' : '重置密码' }}</button></label></template></div>
+      </section>
+    </div>
     <div v-if="rewardOpen" class="ranking-share-backdrop" @click.self="closeReward">
       <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
         <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="1000000"></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>

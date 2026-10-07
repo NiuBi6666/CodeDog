@@ -3938,3 +3938,76 @@ a {
   .ranking-form-body { grid-template-columns:1fr; }
   .ranking-image-field,.ranking-checkbox,.ranking-redemption-check { grid-column:auto; }
 }
+
+
+.ranking-password-body {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.ranking-password-warning {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid #f1d38b;
+  border-radius: 6px;
+  color: #725313;
+  background: #fff9e9;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ranking-password-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.ranking-password-value > span {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+  background: #f7f8fa;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.ranking-password-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ranking-password-reset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.ranking-password-reset > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ranking-password-reset input {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .ranking-password-value,
+  .ranking-password-reset {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ranking-password-value .button,
+  .ranking-password-reset .button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

@@ -20,13 +20,15 @@ public class InitialDataService implements ApplicationRunner {
     private final UserRepository users;
     private final DocumentRepository documents;
     private final PasswordEncoder encoder;
+    private final PasswordRecoveryCipher passwordRecovery;
     private final String username;
     private final String password;
 
     public InitialDataService(UserRepository users, DocumentRepository documents, PasswordEncoder encoder,
+        PasswordRecoveryCipher passwordRecovery,
         @Value("${codedog.admin-username}") String username,
         @Value("${codedog.admin-password}") String password) {
-        this.users = users; this.documents = documents; this.encoder = encoder;
+        this.users = users; this.documents = documents; this.encoder = encoder; this.passwordRecovery = passwordRecovery;
         this.username = username; this.password = password;
     }
 
@@ -35,7 +37,9 @@ public class InitialDataService implements ApplicationRunner {
             if (password == null || password.isBlank()) throw new IllegalStateException("ADMIN_PASSWORD is required");
             User user = new User();
             user.setUsername(username);
+            user.setDisplayName("Liam");
             user.setPasswordHash(encoder.encode(password));
+            user.setPasswordCiphertext(passwordRecovery.encrypt(password, "user:" + username.toLowerCase(java.util.Locale.ROOT)));
             user.setAdmin(true);
             users.save(user);
         }

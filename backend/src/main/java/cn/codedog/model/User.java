@@ -14,10 +14,14 @@ public class User {
     private Long id;
     @Column(nullable = false, unique = true, length = 50)
     private String username;
+    @Column(name = "display_name", length = 100)
+    private String displayName;
     @Column(name = "teacher_public_id", nullable = false, unique = true, length = 11)
     private String teacherPublicId = "CD-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
+    @Column(name = "password_ciphertext", columnDefinition = "TEXT")
+    private String passwordCiphertext;
     @Column(name = "is_admin", nullable = false)
     private boolean admin;
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -33,10 +37,14 @@ public class User {
     public Long getId() { return id; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
     public String getTeacherPublicId() { return teacherPublicId; }
     public void setTeacherPublicId(String teacherPublicId) { this.teacherPublicId = teacherPublicId; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public String getPasswordCiphertext() { return passwordCiphertext; }
+    public void setPasswordCiphertext(String passwordCiphertext) { this.passwordCiphertext = passwordCiphertext; }
     public boolean isAdmin() { return admin; }
     public void setAdmin(boolean admin) { this.admin = admin; }
     public Instant getCreatedAt() { return createdAt; }

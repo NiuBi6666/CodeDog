@@ -5,6 +5,8 @@ import cn.codedog.model.RankingRewardPayload;
 import cn.codedog.service.AuditService;
 import cn.codedog.service.RankingBoardService;
 import cn.codedog.service.RankingRewardService;
+import cn.codedog.service.StudentRankingAuthService;
+import cn.codedog.service.PermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -21,13 +23,35 @@ public class RankingRewardAdminController {
   private final RankingBoardService rankings;
   private final RankingRewardService rewards;
   private final AuditService audit;
+  private final StudentRankingAuthService studentAuth;
+  private final PermissionService permissions;
 
-  public RankingRewardAdminController(RankingBoardService rankings, RankingRewardService rewards, AuditService audit) {
+  public RankingRewardAdminController(RankingBoardService rankings, RankingRewardService rewards, AuditService audit,
+      StudentRankingAuthService studentAuth, PermissionService permissions) {
     this.rankings = rankings; this.rewards = rewards; this.audit = audit;
+    this.studentAuth = studentAuth; this.permissions = permissions;
   }
 
   @GetMapping("/board")
   public RankingPayload.Board board(Principal principal) { return rankings.allBoardForOwner(principal.getName()); }
+
+  @GetMapping("/students/{studentId}/password")
+  public ResponseEntity<StudentRankingAuthService.RecoveredPassword> studentPassword(@PathVariable String studentId,
+      Principal principal, HttpServletRequest request) {
+    requireSystemAdmin(principal);
+    var value = studentAuth.recoveredPassword(principal.getName(), studentId);
+    audit.record("student_password_viewed:" + studentId, request);
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value);
+  }
+
+  @PutMapping("/students/{studentId}/password")
+  public ResponseEntity<StudentRankingAuthService.RecoveredPassword> resetStudentPassword(@PathVariable String studentId,
+      @RequestBody StudentPasswordRequest body, Principal principal, HttpServletRequest request) {
+    requireSystemAdmin(principal);
+    var value = studentAuth.resetPassword(principal.getName(), studentId, body == null ? null : body.password());
+    audit.record("student_password_reset:" + studentId, request);
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value);
+  }
 
   @GetMapping("/announcement")
   public RankingRewardPayload.Announcement announcement(Principal principal) { return rewards.announcement(principal.getName()); }
@@ -121,5 +145,12 @@ public class RankingRewardAdminController {
     audit.record("ranking_redemption_fulfillment:" + id + ":" + value.status(), request); return value;
   }
 
+  private void requireSystemAdmin(Principal principal) {
+    if (principal == null || !permissions.isAdmin(principal.getName()))
+      throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN,
+        "仅系统管理员可以查看或重置学生密码");
+  }
+
   public record AnnouncementRequest(String text) {}
+  public record StudentPasswordRequest(String password) {}
 }

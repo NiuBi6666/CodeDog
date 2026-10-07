@@ -147,7 +147,7 @@ onMounted(load);
         <thead><tr><th>用户</th><th>账号类型</th><th>CRM 教师 ID</th><th>已授权</th><th>最近修改</th><th class="actions-column">操作</th></tr></thead>
         <tbody>
           <tr v-for="user in filteredUsers" :key="user.id">
-            <td><strong>{{ user.username }}</strong><span class="teacher-public-id">{{ user.teacherId }}</span></td>
+            <td><strong>{{ user.displayName || user.username }}</strong><span class="teacher-public-id">{{ user.teacherId }}</span></td>
             <td><span class="status-badge" :class="user.admin ? 'status-normal' : 'status-warning'">{{ user.admin ? "系统管理员" : "普通用户" }}</span></td>
             <td><span v-if="user.crmTeacherId" class="mapping-value">{{ user.crmTeacherId }}</span><span v-else class="permission-locked">未绑定</span></td>
             <td>{{ user.admin ? "全部权限" : `${user.permissions.length} 项` }}</td>
@@ -169,7 +169,7 @@ onMounted(load);
       <div v-if="mappingSelected" class="permission-dialog-backdrop" role="presentation">
         <section class="permission-dialog mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="mapping-dialog-title">
           <header>
-            <div><h2 id="mapping-dialog-title">绑定 {{ mappingSelected.username }}</h2><p>{{ mappingSelected.teacherId }}</p></div>
+            <div><h2 id="mapping-dialog-title">绑定 {{ mappingSelected.displayName || mappingSelected.username }}</h2><p>{{ mappingSelected.teacherId }}</p></div>
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="mappingSaving" @click="closeMapping"><X :size="18"/></button>
           </header>
           <form class="mapping-form" @submit.prevent="saveMapping(false)">
@@ -188,7 +188,7 @@ onMounted(load);
       <div v-if="selected" class="permission-dialog-backdrop" role="presentation">
         <section class="permission-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-dialog-title">
           <header>
-            <div><h2 id="permission-dialog-title">设置 {{ selected.username }} 的权限</h2><p>页面、数据和操作权限分别控制可见内容及后端接口。</p></div>
+            <div><h2 id="permission-dialog-title">设置 {{ selected.displayName || selected.username }} 的权限</h2><p>页面、数据和操作权限分别控制可见内容及后端接口。</p></div>
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="saving" @click="closePermissions"><X :size="18"/></button>
           </header>
           <div class="permission-groups">

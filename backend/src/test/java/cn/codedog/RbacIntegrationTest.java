@@ -56,6 +56,22 @@ class RbacIntegrationTest {
             )
             """);
         jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS ranking_student_accounts (
+              id BIGINT AUTO_INCREMENT PRIMARY KEY,
+              phone VARCHAR(20) NOT NULL UNIQUE,
+              owner_username VARCHAR(50) NOT NULL,
+              student_id VARCHAR(100) NOT NULL,
+              student_name VARCHAR(100) NOT NULL,
+              password_hash VARCHAR(100) NOT NULL,
+              password_ciphertext CLOB,
+              enabled BOOLEAN NOT NULL DEFAULT TRUE,
+              created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              password_changed_at TIMESTAMP(6),
+              UNIQUE(owner_username, student_id)
+            )
+            """);
+        jdbc.execute("""
             CREATE TABLE IF NOT EXISTS crm_external_contacts (
               owner_username VARCHAR(50) NOT NULL,
               crm_user_id VARCHAR(100) NOT NULL,
@@ -387,6 +403,52 @@ class RbacIntegrationTest {
             "SELECT external_userid FROM crm_external_contacts WHERE owner_username=? AND crm_user_id=?",
             String.class, member.getUsername(), "1965973887"
         )).isEqualTo("wmKdjSDAAAl1NkxWHoKwGK-yTm1GJmcQ");
+    }
+
+    @Test
+    void onlyAdministratorCanRecoverAndResetOwnedStudentPasswords() throws Exception {
+        String memberName = uniqueUsername("passwordviewer");
+        String memberPassword = "member-password-123";
+        users.saveAndFlush(user(memberName, memberPassword));
+        String studentId = "student-" + UUID.randomUUID().toString().substring(0, 8);
+        String otherStudentId = "other-" + UUID.randomUUID().toString().substring(0, 8);
+        String phone = "1" + String.format("%010d", Math.abs(UUID.randomUUID().getLeastSignificantBits()) % 10_000_000_000L);
+        String otherPhone = "1" + String.format("%010d", Math.abs(UUID.randomUUID().getMostSignificantBits()) % 10_000_000_000L);
+        jdbc.update("INSERT INTO ranking_student_accounts(phone,owner_username,student_id,student_name,password_hash,enabled) VALUES(?,?,?,?,?,TRUE)",
+            phone, "admin", studentId, "测试学生", encoder.encode("123456"));
+        jdbc.update("INSERT INTO ranking_student_accounts(phone,owner_username,student_id,student_name,password_hash,enabled) VALUES(?,?,?,?,?,TRUE)",
+            otherPhone, memberName, otherStudentId, "其他老师学生", encoder.encode("123456"));
+
+        MockHttpSession member = login(memberName, memberPassword);
+        mvc.perform(get("/api/rankings/admin/students/{studentId}/password", studentId).session(member))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error").value("仅系统管理员可以查看或重置学生密码"));
+
+        MockHttpSession admin = login("admin", "test-only-password");
+        mvc.perform(get("/api/rankings/admin/students/{studentId}/password", studentId).session(admin))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.studentName").value("测试学生"))
+            .andExpect(jsonPath("$.password").value(org.hamcrest.Matchers.nullValue()));
+
+        mvc.perform(get("/api/rankings/admin/students/{studentId}/password", otherStudentId).session(admin))
+            .andExpect(status().isNotFound());
+
+        String resetPassword = "new-student-password";
+        mvc.perform(put("/api/rankings/admin/students/{studentId}/password", studentId).session(admin).with(csrf())
+                .contentType(APPLICATION_JSON).content("{\"password\":\"" + resetPassword + "\"}"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.password").value(resetPassword));
+
+        String hash = jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username='admin' AND student_id=?", String.class, studentId);
+        String ciphertext = jdbc.queryForObject("SELECT password_ciphertext FROM ranking_student_accounts WHERE owner_username='admin' AND student_id=?", String.class, studentId);
+        assertThat(encoder.matches(resetPassword, hash)).isTrue();
+        assertThat(ciphertext).startsWith("v1:").doesNotContain(resetPassword);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action=?", Integer.class,
+            "student_password_viewed:" + studentId)).isPositive();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action=?", Integer.class,
+            "student_password_reset:" + studentId)).isPositive();
     }
 
     @Test

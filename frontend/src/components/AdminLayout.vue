@@ -27,7 +27,7 @@ async function signOut() {
       <div class="admin-profile">
         <img class="admin-avatar" src="/favicon-dog-20260913.png" alt="默认头像" width="46" height="46">
         <div>
-          <strong>{{ auth.user?.username }}</strong>
+          <strong>{{ auth.user?.displayName || auth.user?.username }}</strong>
           <small class="admin-teacher-id">{{ auth.user?.teacherId }}</small>
           <span><i></i>{{ auth.user?.admin ? "系统管理员" : "普通用户" }}</span>
         </div>

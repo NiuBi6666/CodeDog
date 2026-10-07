@@ -131,10 +131,12 @@ public class UserAdminController {
 
     public record PermissionRequest(@NotNull Set<String> permissions) {}
     public record CrmTeacherRequest(String crmTeacherId) {}
-    public record UserResponse(long id, String username, String teacherId, String crmTeacherId,
+    public record UserResponse(long id, String username, String displayName, String teacherId, String crmTeacherId,
                                boolean admin, Set<String> permissions, Instant createdAt, Instant updatedAt) {
         static UserResponse from(User user, String crmTeacherId) {
-            return new UserResponse(user.getId(), user.getUsername(), user.getTeacherPublicId(), crmTeacherId,
+            String displayName = user.getDisplayName() == null || user.getDisplayName().isBlank()
+                ? user.getUsername() : user.getDisplayName();
+            return new UserResponse(user.getId(), user.getUsername(), displayName, user.getTeacherPublicId(), crmTeacherId,
                 user.isAdmin(), user.isAdmin() ? PermissionCatalog.allCodes() : Set.copyOf(user.getPermissions()),
                 user.getCreatedAt(), user.getUpdatedAt());
         }

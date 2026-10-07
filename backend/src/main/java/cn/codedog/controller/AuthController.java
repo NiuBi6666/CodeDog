@@ -4,6 +4,7 @@ import cn.codedog.model.User;
 import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
 import cn.codedog.service.PermissionService;
+import cn.codedog.service.PasswordRecoveryCipher;
 import cn.codedog.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -39,15 +40,18 @@ public class AuthController {
     private final PasswordEncoder encoder;
     private final AuditService audit;
     private final PermissionService permissions;
+    private final PasswordRecoveryCipher passwordRecovery;
     private final HttpSessionSecurityContextRepository contextRepository = new HttpSessionSecurityContextRepository();
 
     public AuthController(AuthenticationManager authenticationManager, UserRepository users,
-                          PasswordEncoder encoder, AuditService audit, PermissionService permissions) {
+                          PasswordEncoder encoder, AuditService audit, PermissionService permissions,
+                          PasswordRecoveryCipher passwordRecovery) {
         this.authenticationManager = authenticationManager;
         this.users = users;
         this.encoder = encoder;
         this.audit = audit;
         this.permissions = permissions;
+        this.passwordRecovery = passwordRecovery;
     }
 
     @GetMapping("/csrf")
@@ -70,6 +74,7 @@ public class AuthController {
         User user = new User();
         user.setUsername(username);
         user.setPasswordHash(encoder.encode(body.password()));
+        user.setPasswordCiphertext(passwordRecovery.encrypt(body.password(), userPasswordContext(username)));
         user.setAdmin(false);
         user.setPermissions(new LinkedHashSet<>(PermissionCatalog.DEFAULT_PERMISSIONS));
         user.setCreatedAt(Instant.now());
@@ -118,15 +123,19 @@ public class AuthController {
         if (!body.newPassword().equals(body.confirmation()))
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "两次输入的新密码不一致");
         user.setPasswordHash(encoder.encode(body.newPassword()));
+        user.setPasswordCiphertext(passwordRecovery.encrypt(body.newPassword(), userPasswordContext(user.getUsername())));
         user.setUpdatedAt(Instant.now());
         users.save(user);
         audit.record("password_changed", request);
         return Map.of("ok", true);
     }
 
+    private String userPasswordContext(String username) { return "user:" + username.toLowerCase(java.util.Locale.ROOT); }
+
     private AuthResponse profile(String username) {
         User user = users.findByUsername(username).orElseThrow();
-        return new AuthResponse(user.getUsername(), user.getTeacherPublicId(), user.isAdmin(), permissions.permissions(user));
+        String displayName = user.getDisplayName() == null || user.getDisplayName().isBlank() ? user.getUsername() : user.getDisplayName();
+        return new AuthResponse(user.getUsername(), displayName, user.getTeacherPublicId(), user.isAdmin(), permissions.permissions(user));
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
@@ -137,7 +146,7 @@ public class AuthController {
         @NotBlank @Size(min = 8, max = 72, message = "密码长度需为 8-72 个字符") String password,
         @NotBlank String confirmation) {}
     public record RegistrationResponse(boolean ok, String username, String teacherId) {}
-    public record AuthResponse(String username, String teacherId, boolean admin, Set<String> permissions) {}
+    public record AuthResponse(String username, String displayName, String teacherId, boolean admin, Set<String> permissions) {}
     public record PasswordRequest(@NotBlank String currentPassword,
                                   @NotBlank @Size(min = 12, max = 72, message = "新密码长度需为 12-72 个字符") String newPassword,
                                   @NotBlank String confirmation) {}
