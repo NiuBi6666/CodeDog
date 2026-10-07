@@ -41,8 +41,8 @@ async function signOut() {
         <RouterLink v-if="hasPermission('rankings.view')" :class="{ active: activePage === 'rankings' }" to="/rankings"><Trophy class="nav-icon" :size="17"/><span>学生排名</span></RouterLink>
         <RouterLink v-if="hasPermission('exams.view')" :class="{ active: activePage === 'exams' }" to="/exams"><FileSpreadsheet class="nav-icon" :size="17"/><span>成绩管理</span></RouterLink>
         <RouterLink v-if="hasPermission('documents.view')" :class="{ active: activePage === 'documents' }" to="/doc/list"><FileText class="nav-icon" :size="17"/><span>文档管理</span></RouterLink>
-        <RouterLink v-if="hasPermission('logs.view')" :class="{ active: activePage === 'logs' }" to="/logs"><ScrollText class="nav-icon" :size="17"/><span>操作日志</span></RouterLink>
         <RouterLink v-if="hasPermission('users.view')" :class="{ active: activePage === 'users' }" to="/users"><ShieldCheck class="nav-icon" :size="17"/><span>用户与权限</span></RouterLink>
+        <RouterLink v-if="hasPermission('logs.view')" :class="{ active: activePage === 'logs' }" to="/logs"><ScrollText class="nav-icon" :size="17"/><span>操作日志</span></RouterLink>
       </nav>
       <div class="admin-sidebar-footer">CodeDog Admin</div>
     </aside>
