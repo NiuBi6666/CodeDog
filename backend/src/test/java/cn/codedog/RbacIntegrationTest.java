@@ -107,6 +107,19 @@ class RbacIntegrationTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.username").value(username));
 
+        for (String duplicate : java.util.List.of(username, username.toUpperCase(java.util.Locale.ROOT))) {
+            mvc.perform(post("/api/auth/register").with(csrf())
+                    .contentType(APPLICATION_JSON)
+                    .content("""
+                        {"username":"%s","password":"%s","confirmation":"%s"}
+                        """.formatted(duplicate, password, password)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("用户名已存在"));
+        }
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM users WHERE LOWER(username)=LOWER(?)", Integer.class, username
+        )).isEqualTo(1);
+
         User registered = users.findByUsername(username).orElseThrow();
         assertThat(registered.isAdmin()).isFalse();
         assertThat(registered.getPermissions()).containsExactly(PermissionCatalog.DASHBOARD_VIEW);
