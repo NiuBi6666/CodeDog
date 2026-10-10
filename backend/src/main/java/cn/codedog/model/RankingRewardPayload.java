@@ -14,7 +14,7 @@ public final class RankingRewardPayload {
   public record AnnouncementStatusRequest(boolean online) {}
   public record Reward(long id, String name, int requiredPoints, boolean enabled,
                        boolean hasImage, String imageUrl, Instant createdAt, Instant updatedAt) {}
-  public record Balance(int earnedPoints, int spentPoints, int availablePoints) {}
+  public record Balance(int earnedPoints, int spentPoints, int availablePoints, int adjustmentPoints) {}
   public record RewardImage(byte[] data, String contentType) {}
   public record Redemption(long id, String studentId, String studentName, Long rewardId,
                            String rewardName, int pointsSpent, int balanceBefore, int balanceAfter, String status,

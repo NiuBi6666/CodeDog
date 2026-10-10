@@ -63,6 +63,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").denyAll()
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/students/*/password").access(admin(permissions))
                 .requestMatchers(HttpMethod.PUT, "/api/rankings/admin/students/*/password").access(admin(permissions))
+                .requestMatchers(HttpMethod.PUT, "/api/rankings/admin/students/*/points")
+                    .access(permission(permissions, PermissionCatalog.RANKINGS_POINTS_EDIT))
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/board")
                     .access(permission(permissions, PermissionCatalog.RANKINGS_BOARD_READ))
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/announcement", "/api/rankings/admin/announcements")

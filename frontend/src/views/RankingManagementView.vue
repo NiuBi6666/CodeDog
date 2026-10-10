@@ -35,6 +35,12 @@ const passwordError = ref("");
 const passwordStudent = ref(null);
 const recoveredPassword = ref("");
 const resetPasswordValue = ref("");
+const pointsOpen = ref(false);
+const pointsSaving = ref(false);
+const pointsStudent = ref(null);
+const pointsTarget = ref("");
+const pointsReason = ref("");
+const pointsError = ref("");
 const rewardSaving = ref(false);
 const redemptionSaving = ref(false);
 const rewardForm = ref(emptyRewardForm());
@@ -48,6 +54,7 @@ const canAnnouncementsCreate = computed(() => hasPermission("rankings.announceme
 const canAnnouncementsEdit = computed(() => hasPermission("rankings.announcements.edit"));
 const canAnnouncementsStatus = computed(() => hasPermission("rankings.announcements.status"));
 const canRewardsRead = computed(() => hasPermission("rankings.rewards.read"));
+const canPointsEdit = computed(() => hasPermission("rankings.points.edit"));
 const canRewardsCreate = computed(() => hasPermission("rankings.rewards.create"));
 const canRewardsEdit = computed(() => hasPermission("rankings.rewards.edit"));
 const canRewardsDelete = computed(() => hasPermission("rankings.rewards.delete"));
@@ -77,7 +84,7 @@ const selectedReward = computed(() => rewards.value.find((reward) => String(rewa
 const spentByStudent = computed(() => redemptions.value.reduce((map, item) => {
   map[item.studentId] = (map[item.studentId] || 0) + Number(item.pointsSpent || 0); return map;
 }, {}));
-const availablePoints = computed(() => Math.max(0, Number(selectedStudent.value?.totalPoints || 0) - Number(spentByStudent.value[selectedStudent.value?.studentId] || 0)));
+const availablePoints = computed(() => Math.max(0, Number(selectedStudent.value?.availablePoints ?? selectedStudent.value?.totalPoints ?? 0)));
 const redemptionAllowed = computed(() => selectedStudent.value && selectedReward.value && selectedReward.value.requiredPoints <= availablePoints.value);
 const shareUrl = computed(() => rankingShareUrl({ origin: window.location.origin }));
 const pendingCount = computed(() => redemptions.value.filter((item) => item.status === "PENDING").length);
@@ -227,6 +234,7 @@ async function createRedemption() {
   try {
     await api("/rankings/admin/redemptions", { method: "POST", body: jsonBody({ studentId: redemptionForm.value.studentId, rewardId: Number(redemptionForm.value.rewardId) }) });
     if (canRedemptionsRead.value) redemptions.value = await api("/rankings/admin/redemptions");
+    board.value = await api("/rankings/admin/board");
     redemptionOpen.value = false; notify("兑换已登记，等待老师发放");
   } catch (failure) { notify(failure.message); }
   finally { redemptionSaving.value = false; }
@@ -260,8 +268,21 @@ async function resetStudentPassword() {
   } catch (failure) { passwordError.value = failure.message || "密码重置失败"; }
   finally { passwordSaving.value = false; }
 }
+function openPoints(row) { pointsStudent.value = row; pointsTarget.value = String(row.availablePoints ?? row.totalPoints ?? 0); pointsReason.value = ""; pointsError.value = ""; pointsOpen.value = true; }
+function closePoints() { if (pointsSaving.value) return; pointsOpen.value = false; pointsStudent.value = null; pointsError.value = ""; }
+async function savePoints() {
+  const target = Number(pointsTarget.value);
+  if (!pointsStudent.value || !Number.isInteger(target) || target < 0 || target > 1000000) { pointsError.value = "目标积分必须是 0 至 1000000 的整数"; return; }
+  if (!pointsReason.value.trim()) { pointsError.value = "请填写调整原因"; return; }
+  pointsSaving.value = true; pointsError.value = "";
+  try {
+    await api(`/rankings/admin/students/${encodeURIComponent(pointsStudent.value.studentId)}/points`, { method: "PUT", body: jsonBody({ campId: pointsStudent.value.campId, classId: pointsStudent.value.classId, targetPoints: target, reason: pointsReason.value.trim() }) });
+    board.value = await api("/rankings/admin/board"); closePoints(); notify("学生积分已更新，排名已刷新");
+  } catch (failure) { pointsError.value = failure.message || "积分调整失败"; }
+  finally { pointsSaving.value = false; }
+}
 async function copyStudentPassword() { await writeClipboard(recoveredPassword.value); notify("学生密码已复制"); }
-function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); } }
+function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); } }
 
 onMounted(() => { document.addEventListener("keydown", closeOnEscape); activeTab.value = firstAllowedTab(); loadAll(); });
 onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
@@ -291,7 +312,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <section v-if="board" class="ranking-admin-summary" aria-label="排名概览">
         <article><span class="ranking-summary-icon ranking-summary-gold"><Trophy :size="20"/></span><div><strong>全量榜</strong><small>全部营期、全部班级</small></div></article>
         <article><span class="ranking-summary-icon ranking-summary-blue"><UsersRound :size="20"/></span><div><strong>{{ summary.studentCount }}</strong><small>学员总数</small></div></article>
-        <article><span class="ranking-summary-icon ranking-summary-teal">Σ</span><div><strong>{{ numberText(summary.totalPoints) }}</strong><small>累计积分</small></div></article>
+        <article><span class="ranking-summary-icon ranking-summary-teal">Σ</span><div><strong>{{ numberText(summary.totalPoints) }}</strong><small>累计获得积分</small></div></article>
         <article><span class="ranking-summary-icon ranking-summary-gray">Ø</span><div><strong>{{ numberText(summary.averagePoints) }}</strong><small>平均积分</small></div></article>
       </section>
 
@@ -300,16 +321,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
         <div v-else-if="board && !filteredRows.length" class="ranking-admin-state"><Search :size="23"/><span>没有找到匹配的学员</span></div>
         <div v-else-if="board" class="ranking-admin-table-wrap">
-          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>总积分</th><th>可用积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="auth.user?.admin">密码</th></tr></thead>
+          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>总获得积分</th><th>排名积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit">积分调整</th><th v-if="auth.user?.admin">密码</th></tr></thead>
             <tbody><tr v-for="row in filteredRows" :key="row.studentId">
               <td><span class="ranking-number" :class="`rank-${Math.min(row.rank, 4)}`">{{ row.rank }}</span></td>
               <td><div class="ranking-student"><img class="ranking-student-avatar" src="/favicon-dog-20260913.png" alt="" width="38" height="38"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
               <td><span class="ranking-class-name">{{ row.className || '—' }}</span></td><td><strong class="ranking-total-points">{{ numberText(row.totalPoints) }}</strong></td>
-              <td>{{ numberText(Math.max(0, row.totalPoints - Number(spentByStudent[row.studentId] || 0))) }}</td>
+              <td>{{ numberText(row.availablePoints ?? row.totalPoints) }}</td>
               <td><div class="ranking-score-parts"><span>完课 {{ row.completionPoints }}</span><span>课上 {{ row.inclassPoints }}</span><span>课后 {{ row.homeworkPoints }}</span></div></td>
               <td>{{ Number(row.accuracyRate || 0).toFixed(1) }}%</td><td><span class="ranking-level" :class="`ranking-level-${row.level}`">{{ row.levelName }}</span></td>
               <td><span class="ranking-trend" :class="`ranking-trend-${rankingTrendView(row).direction}`" :title="rankingTrendView(row).title"><ArrowUp v-if="rankingTrendView(row).direction === 'up'" :size="14"/><ArrowDown v-else-if="rankingTrendView(row).direction === 'down'" :size="14"/><Minus v-else :size="14"/>{{ rankingTrendView(row).direction === 'same' ? '' : Math.abs(row.rankChange) }}</span></td>
-              <td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
+              <td v-if="canPointsEdit"><button class="button button-quiet button-small" type="button" @click="openPoints(row)"><Pencil :size="14"/>调整积分</button></td><td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
             </tr></tbody>
           </table>
         </div>
@@ -385,6 +406,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <div class="ranking-password-body"><p class="ranking-password-warning">仅系统管理员可查看。每次查看和重置都会写入操作日志。</p><div v-if="passwordLoading" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="20"/><span>正在读取密码</span></div><template v-else><div v-if="recoveredPassword" class="ranking-password-value"><span>{{ passwordVisible ? recoveredPassword : '••••••••' }}</span><button class="icon-button" type="button" :title="passwordVisible ? '隐藏密码' : '显示密码'" @click="passwordVisible = !passwordVisible"><EyeOff v-if="passwordVisible" :size="16"/><Eye v-else :size="16"/></button><button class="button button-quiet button-small" type="button" @click="copyStudentPassword"><Copy :size="14"/>复制</button></div><p v-else class="ranking-password-empty">现有密码尚未保存为可恢复密文。学生成功登录一次后即可查看，也可以在下方直接重置。</p><p v-if="passwordError" class="notice notice-error">{{ passwordError }}</p><label class="ranking-password-reset"><span>重置新密码</span><input v-model="resetPasswordValue" type="text" minlength="6" maxlength="72" placeholder="请输入 6-72 个字符"><button class="button button-primary" type="button" :disabled="passwordSaving || resetPasswordValue.length < 6" @click="resetStudentPassword">{{ passwordSaving ? '重置中' : '重置密码' }}</button></label></template></div>
       </section>
     </div>
+    <div v-if="pointsOpen && canPointsEdit && pointsStudent" class="ranking-share-backdrop" @click.self="closePoints">
+      <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前排名积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
+        <div class="ranking-form-body"><label><span>调整后排名积分</span><input v-model.number="pointsTarget" type="number" min="0" max="1000000" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>将按目标积分计算差额并写入积分调整记录。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p></div>
+        <footer><button class="button button-quiet" type="button" @click="closePoints">取消</button><button class="button button-primary" type="submit" :disabled="pointsSaving">{{ pointsSaving ? '保存中' : '保存积分' }}</button></footer>
+      </form>
+    </div>
     <div v-if="rewardOpen && (rewardForm.id ? canRewardsEdit : canRewardsCreate)" class="ranking-share-backdrop" @click.self="closeReward">
       <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
         <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="1000000"></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>
@@ -394,7 +421,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
 
     <div v-if="redemptionOpen && canRedemptionsCreate" class="ranking-share-backdrop" @click.self="redemptionOpen = false">
       <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="createRedemption"><header><div><span><Award :size="18"/></span><div><h2>登记奖品兑换</h2><p>确认后立即占用学员积分，记录默认为待发放</p></div></div><button class="icon-button" type="button" title="关闭" @click="redemptionOpen = false"><X :size="17"/></button></header>
-        <div class="ranking-form-body"><label><span>兑换学员</span><select v-model="redemptionForm.studentId" required><option v-for="row in rows" :key="row.studentId" :value="row.studentId">{{ row.studentName }} · 第 {{ row.rank }} 名 · 可用 {{ Math.max(0, row.totalPoints - Number(spentByStudent[row.studentId] || 0)) }} 分</option></select></label><label><span>兑换奖品</span><select v-model="redemptionForm.rewardId" required><option v-for="reward in enabledRewards" :key="reward.id" :value="reward.id">{{ reward.name }} · {{ reward.requiredPoints }} 分</option></select></label><div class="ranking-redemption-check" :class="{ invalid: selectedReward && !redemptionAllowed }"><span>当前可用积分</span><strong>{{ numberText(availablePoints) }}</strong><small v-if="selectedReward">兑换后剩余 {{ numberText(Math.max(0, availablePoints - selectedReward.requiredPoints)) }} 分</small></div></div>
+        <div class="ranking-form-body"><label><span>兑换学员</span><select v-model="redemptionForm.studentId" required><option v-for="row in rows" :key="row.studentId" :value="row.studentId">{{ row.studentName }} · 第 {{ row.rank }} 名 · 可用 {{ row.availablePoints ?? row.totalPoints }} 分</option></select></label><label><span>兑换奖品</span><select v-model="redemptionForm.rewardId" required><option v-for="reward in enabledRewards" :key="reward.id" :value="reward.id">{{ reward.name }} · {{ reward.requiredPoints }} 分</option></select></label><div class="ranking-redemption-check" :class="{ invalid: selectedReward && !redemptionAllowed }"><span>当前可用积分</span><strong>{{ numberText(availablePoints) }}</strong><small v-if="selectedReward">兑换后剩余 {{ numberText(Math.max(0, availablePoints - selectedReward.requiredPoints)) }} 分</small></div></div>
         <footer><button class="button button-quiet" type="button" @click="redemptionOpen = false">取消</button><button class="button button-primary" type="submit" :disabled="redemptionSaving || !redemptionAllowed">{{ redemptionSaving ? '登记中' : '确认兑换' }}</button></footer>
       </form>
     </div>

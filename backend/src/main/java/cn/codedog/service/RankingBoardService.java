@@ -15,6 +15,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -75,13 +76,14 @@ public class RankingBoardService {
     for (RankedRow rankedRow : rankRows(rows)) {
       AggregateRow row = rankedRow.row();
       int rank = rankedRow.rank();
-      int level = level(row.totalPoints());
+      int level = level(row.availablePoints());
       Integer previousRank = previousRanks.get(row.studentId());
       int rankChange = previousRank == null ? 0 : previousRank - rank;
       entries.add(new RankingPayload.Entry(rank, row.studentId(), row.studentName(), row.classId(), row.className(),
           row.totalPoints(), row.completionPoints(), row.inclassPoints(), row.homeworkPoints(), row.lessonCount(),
           level, levelName(level), row.scoreReachedAt(), row.accuracyBasisPoints() / 100.0, previousRank, rankChange,
-          previousRank == null ? "NEW" : rankChange > 0 ? "UP" : rankChange < 0 ? "DOWN" : "SAME"));
+          previousRank == null ? "NEW" : rankChange > 0 ? "UP" : rankChange < 0 ? "DOWN" : "SAME",
+          row.availablePoints(), row.adjustmentPoints(), row.spentPoints(), row.campId()));
     }
     return new RankingPayload.Board(campId, campName, classId, className, scope, entries.size(), latestUpdate(owner),
         baselineDate, List.copyOf(entries));
@@ -100,10 +102,11 @@ public class RankingBoardService {
     List<RankingPayload.Entry> entries = new ArrayList<>();
     for (RankedRow rankedRow : rankRows(aggregateAllRows(owner))) {
       AggregateRow row = rankedRow.row();
-      int level = level(row.totalPoints());
+      int level = level(row.availablePoints());
       entries.add(new RankingPayload.Entry(rankedRow.rank(), row.studentId(), row.studentName(), row.classId(), row.className(),
           row.totalPoints(), row.completionPoints(), row.inclassPoints(), row.homeworkPoints(), row.lessonCount(),
-          level, levelName(level), row.scoreReachedAt(), row.accuracyBasisPoints() / 100.0, null, 0, "NEW"));
+          level, levelName(level), row.scoreReachedAt(), row.accuracyBasisPoints() / 100.0, null, 0, "NEW",
+          row.availablePoints(), row.adjustmentPoints(), row.spentPoints(), row.campId()));
     }
     return new RankingPayload.Board("", "全部学员", "", "全部学员", "all", entries.size(), latestUpdate(owner), null,
         List.copyOf(entries));
@@ -189,7 +192,9 @@ public class RankingBoardService {
 
   private List<AggregateRow> aggregateAllRows(String owner) {
     String sql = """
-        SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
+        SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.camp_id) camp_id,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
+        COALESCE(MAX(a.adjustment_points),0) adjustment_points,COALESCE(MAX(p.spent_points),0) spent_points,
+        GREATEST(0,COALESCE(SUM(r.total_points),0)+COALESCE(MAX(a.adjustment_points),0)-COALESCE(MAX(p.spent_points),0)) available_points,
         COALESCE(SUM(r.total_points),0) total_points,COALESCE(SUM(r.completion_points),0) completion_points,
         COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
         COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
@@ -199,9 +204,13 @@ public class RankingBoardService {
         JOIN ranking_classes c ON c.owner_username=s.owner_username AND c.camp_id=s.camp_id AND c.class_id=s.class_id
         LEFT JOIN ranking_lesson_results r ON r.owner_username=s.owner_username AND r.camp_id=s.camp_id
           AND r.class_id=s.class_id AND r.student_id=s.student_id
+        LEFT JOIN (SELECT owner_username,student_id,SUM(points) adjustment_points FROM ranking_point_adjustments
+          GROUP BY owner_username,student_id) a ON a.owner_username=s.owner_username AND a.student_id=s.student_id
+        LEFT JOIN (SELECT owner_username,student_id,SUM(points_spent) spent_points FROM ranking_reward_redemptions
+          GROUP BY owner_username,student_id) p ON p.owner_username=s.owner_username AND p.student_id=s.student_id
         WHERE s.owner_username=?
         GROUP BY s.student_id
-        ORDER BY total_points DESC,score_reached_at ASC,accuracy_basis_points DESC,homework_points DESC,
+        ORDER BY available_points DESC,score_reached_at ASC,accuracy_basis_points DESC,homework_points DESC,
           inclass_points DESC,completion_points DESC,s.student_id
         """;
     return jdbc.query(sql, (rs, n) -> aggregateRow(rs), owner);
@@ -214,7 +223,9 @@ public class RankingBoardService {
       args.add(classId);
     }
     String sql = """
-        SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
+        SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.camp_id) camp_id,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
+        COALESCE(MAX(a.adjustment_points),0) adjustment_points,COALESCE(MAX(p.spent_points),0) spent_points,
+        GREATEST(0,COALESCE(SUM(r.total_points),0)+COALESCE(MAX(a.adjustment_points),0)-COALESCE(MAX(p.spent_points),0)) available_points,
         COALESCE(SUM(r.total_points),0) total_points,COALESCE(SUM(r.completion_points),0) completion_points,
         COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
         COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
@@ -224,15 +235,21 @@ public class RankingBoardService {
         JOIN ranking_classes c ON c.owner_username=s.owner_username AND c.camp_id=s.camp_id AND c.class_id=s.class_id
         LEFT JOIN ranking_lesson_results r ON r.owner_username=s.owner_username AND r.camp_id=s.camp_id
           AND r.class_id=s.class_id AND r.student_id=s.student_id
+        LEFT JOIN (SELECT owner_username,camp_id,class_id,student_id,SUM(points) adjustment_points FROM ranking_point_adjustments
+          GROUP BY owner_username,camp_id,class_id,student_id) a ON a.owner_username=s.owner_username AND a.camp_id=s.camp_id
+          AND a.class_id=s.class_id AND a.student_id=s.student_id
+        LEFT JOIN (SELECT owner_username,student_id,SUM(points_spent) spent_points FROM ranking_reward_redemptions
+          GROUP BY owner_username,student_id) p ON p.owner_username=s.owner_username AND p.student_id=s.student_id
         WHERE s.owner_username=? AND s.camp_id=?
-        """ + filter + " GROUP BY s.student_id ORDER BY total_points DESC,score_reached_at ASC,accuracy_basis_points DESC,"
+        """ + filter + " GROUP BY s.student_id ORDER BY available_points DESC,score_reached_at ASC,accuracy_basis_points DESC,"
         + "homework_points DESC,inclass_points DESC,completion_points DESC,s.student_id";
     return jdbc.query(sql, (rs, n) -> aggregateRow(rs), args.toArray());
   }
 
   private AggregateRow aggregateRow(java.sql.ResultSet rs) throws java.sql.SQLException {
-    return new AggregateRow(rs.getString("student_id"), rs.getString("student_name"), rs.getString("class_id"),
-        rs.getString("class_name"), rs.getInt("total_points"), rs.getInt("completion_points"),
+    return new AggregateRow(rs.getString("student_id"), rs.getString("student_name"), rs.getString("camp_id"), rs.getString("class_id"),
+        rs.getString("class_name"), rs.getInt("total_points"), rs.getInt("adjustment_points"), rs.getInt("spent_points"),
+        rs.getInt("available_points"), rs.getInt("completion_points"),
         rs.getInt("inclass_points"), rs.getInt("homework_points"), rs.getInt("lesson_count"),
         rs.getTimestamp("score_reached_at").toInstant(), rs.getInt("accuracy_basis_points"));
   }
@@ -273,7 +290,7 @@ public class RankingBoardService {
       jdbc.update("INSERT INTO ranking_daily_snapshots(snapshot_date,owner_username,camp_id,scope_type,class_id,"
               + "student_id,rank_no,total_points) VALUES(?,?,?,?,?,?,?,?)",
           date, owner, campId, scope, classId, rankedRow.row().studentId(), rankedRow.rank(),
-          rankedRow.row().totalPoints());
+          rankedRow.row().availablePoints());
     }
   }
 
@@ -283,13 +300,36 @@ public class RankingBoardService {
     int previousPoints = 0;
     for (int index = 0; index < rows.size(); index++) {
       AggregateRow row = rows.get(index);
-      if (index == 0 || row.totalPoints() != previousPoints) {
+      if (index == 0 || row.availablePoints() != previousPoints) {
         rank = index + 1;
       }
       rankedRows.add(new RankedRow(rank, row));
-      previousPoints = row.totalPoints();
+      previousPoints = row.availablePoints();
     }
     return rankedRows;
+  }
+
+  @Transactional
+  public RankingPayload.PointAdjustment adjustStudentPoints(String owner, String studentValue, String campValue,
+                                                            String classValue, Integer targetValue, String reason,
+                                                            String actor) {
+    String studentId = text(studentValue, "学员 ID", 100);
+    String campId = text(campValue, "营期 ID", 100);
+    String classId = text(classValue, "班级 ID", 100);
+    String note = text(reason, "调整原因", 255);
+    if (targetValue == null || targetValue < 0 || targetValue > 1_000_000) {
+      throw invalid("目标积分必须是 0 至 1000000 的整数");
+    }
+    List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND camp_id=? AND class_id=? AND student_id=? FOR UPDATE",
+        (rs, n) -> rs.getString(1), owner, campId, classId, studentId);
+    if (names.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不在指定营期班级中");
+    AggregateRow before = aggregateAllRows(owner).stream().filter(row -> row.studentId().equals(studentId)).findFirst()
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在"));
+    int delta = targetValue - before.availablePoints();
+    jdbc.update("INSERT INTO ranking_point_adjustments(owner_username,camp_id,class_id,student_id,points,reason,actor) VALUES(?,?,?,?,?,?,?)",
+        owner, campId, classId, studentId, delta, note, actor);
+    return new RankingPayload.PointAdjustment(studentId, names.getFirst(), campId, classId, before.totalPoints(),
+        before.adjustmentPoints() + delta, before.spentPoints(), before.availablePoints(), targetValue, delta, note);
   }
 
   private TeacherOwner resolveTeacher(String teacherValue) {
@@ -366,8 +406,8 @@ public class RankingBoardService {
   }
 
   private record TeacherOwner(String username, String teacherId) {}
-  private record AggregateRow(String studentId, String studentName, String classId, String className, int totalPoints,
-                              int completionPoints, int inclassPoints, int homeworkPoints, int lessonCount,
+  private record AggregateRow(String studentId, String studentName, String campId, String classId, String className, int totalPoints,
+                              int adjustmentPoints, int spentPoints, int availablePoints, int completionPoints, int inclassPoints, int homeworkPoints, int lessonCount,
                               Instant scoreReachedAt, int accuracyBasisPoints) {}
   private record RankedRow(int rank, AggregateRow row) {}
   private record SnapshotScore(String studentId, int totalPoints) {}

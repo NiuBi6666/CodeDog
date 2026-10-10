@@ -23,6 +23,7 @@ describe("ranking admin helpers", () => {
     expect(rankingSummary([{ totalPoints: 300 }, { totalPoints: 240 }])).toEqual({
       studentCount: 2,
       totalPoints: 540,
+      availablePoints: 540,
       averagePoints: 270
     });
   });

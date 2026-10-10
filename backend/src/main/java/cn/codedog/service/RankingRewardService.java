@@ -229,9 +229,12 @@ public class RankingRewardService {
   private RankingRewardPayload.Balance balanceValues(String owner, String studentId) {
     Integer earned = jdbc.queryForObject("SELECT COALESCE(SUM(total_points),0) FROM ranking_lesson_results WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
     Integer spent = jdbc.queryForObject("SELECT COALESCE(SUM(points_spent),0) FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
+    Integer adjustment = jdbc.queryForObject("SELECT COALESCE(SUM(points),0) FROM ranking_point_adjustments WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
     int earnedPoints = Objects.requireNonNullElse(earned, 0);
     int spentPoints = Objects.requireNonNullElse(spent, 0);
-    return new RankingRewardPayload.Balance(earnedPoints, spentPoints, Math.max(0, earnedPoints - spentPoints));
+    int adjustmentPoints = Objects.requireNonNullElse(adjustment, 0);
+    return new RankingRewardPayload.Balance(earnedPoints, spentPoints,
+        Math.max(0, earnedPoints + adjustmentPoints - spentPoints), adjustmentPoints);
   }
 
   @Transactional

@@ -32,6 +32,7 @@ public final class PermissionCatalog {
     public static final String RANKINGS_REDEMPTIONS_READ = "rankings.redemptions.read";
     public static final String RANKINGS_REDEMPTIONS_CREATE = "rankings.redemptions.create";
     public static final String RANKINGS_REDEMPTIONS_FULFILL = "rankings.redemptions.fulfill";
+    public static final String RANKINGS_POINTS_EDIT = "rankings.points.edit";
     public static final String RANKINGS_IMPORT = "rankings.import";
     public static final String RANKINGS_DEVICES_READ = "rankings.devices.read";
     public static final String RANKINGS_DEVICES_PAIR = "rankings.devices.pair";
@@ -92,6 +93,7 @@ public final class PermissionCatalog {
             data(RANKINGS_REDEMPTIONS_READ, "查看兑换记录"),
             action(RANKINGS_REDEMPTIONS_CREATE, "登记兑换"),
             action(RANKINGS_REDEMPTIONS_FULFILL, "确认或撤销发放"),
+            action(RANKINGS_POINTS_EDIT, "手动调整学员积分"),
             action(RANKINGS_IMPORT, "导入排行榜数据"),
             data(RANKINGS_DEVICES_READ, "查看扩展设备"),
             action(RANKINGS_DEVICES_PAIR, "创建设备配对"),

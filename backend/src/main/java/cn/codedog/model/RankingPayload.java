@@ -26,7 +26,11 @@ public record RankingPayload(String campId, String campName, List<ClassData> cla
   public record Entry(int rank, String studentId, String studentName, String classId, String className,
                       int totalPoints, int completionPoints, int inclassPoints, int homeworkPoints,
                       int lessonCount, int level, String levelName, Instant scoreReachedAt,
-                      double accuracyRate, Integer previousRank, int rankChange, String trend) {}
+                      double accuracyRate, Integer previousRank, int rankChange, String trend,
+                      int availablePoints, int adjustmentPoints, int spentPoints, String campId) {}
+  public record PointAdjustment(String studentId, String studentName, String campId, String classId,
+                                int earnedPoints, int adjustmentPoints, int spentPoints,
+                                int availablePointsBefore, int availablePointsAfter, int delta, String reason) {}
   public record Opportunity(String type, String title, String description, int count) {}
   public record OpportunitySummary(String studentId, boolean complete, List<Opportunity> opportunities) {}
 }

@@ -57,6 +57,18 @@ class RankingRewardServiceTest {
         PRIMARY KEY(owner_username,camp_id,class_id,lesson_id,student_id))
       """);
     jdbc.execute("""
+      CREATE TABLE ranking_point_adjustments(
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_username VARCHAR(50) NOT NULL,
+        camp_id VARCHAR(100) NOT NULL,
+        class_id VARCHAR(100) NOT NULL,
+        student_id VARCHAR(100) NOT NULL,
+        points INT NOT NULL,
+        reason VARCHAR(255) NOT NULL,
+        actor VARCHAR(100) NOT NULL
+      )
+      """);
+    jdbc.execute("""
       CREATE TABLE ranking_reward_redemptions(
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,
         student_name VARCHAR(100) NOT NULL,reward_id BIGINT,reward_name VARCHAR(100) NOT NULL,points_spent INT NOT NULL,

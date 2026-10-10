@@ -15,9 +15,9 @@ export function rankingAvatarText(name) {
 
 export function rankingPointsToPass(rows = [], index = -1) {
   if (index <= 0) return 0;
-  const currentPoints = Number(rows[index]?.totalPoints || 0);
+  const currentPoints = Number(rows[index]?.availablePoints ?? rows[index]?.totalPoints ?? 0);
   for (let previous = index - 1; previous >= 0; previous -= 1) {
-    const previousPoints = Number(rows[previous]?.totalPoints || 0);
+    const previousPoints = Number(rows[previous]?.availablePoints ?? rows[previous]?.totalPoints ?? 0);
     if (previousPoints > currentPoints) return previousPoints - currentPoints + 1;
   }
   return 0;
@@ -60,9 +60,11 @@ export function rankingShareUrl({ origin }) {
 export function rankingSummary(rows = []) {
   const values = Array.isArray(rows) ? rows : [];
   const totalPoints = values.reduce((sum, row) => sum + Number(row.totalPoints || 0), 0);
+  const availablePoints = values.reduce((sum, row) => sum + Number(row.availablePoints ?? row.totalPoints ?? 0), 0);
   return {
     studentCount: values.length,
     totalPoints,
+    availablePoints,
     averagePoints: values.length ? Math.round(totalPoints / values.length) : 0
   };
 }

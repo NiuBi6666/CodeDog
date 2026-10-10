@@ -100,6 +100,26 @@ class RankingServiceTest {
       )
       """);
     jdbc.execute("""
+      CREATE TABLE ranking_point_adjustments (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_username VARCHAR(50) NOT NULL,
+        camp_id VARCHAR(100) NOT NULL,
+        class_id VARCHAR(100) NOT NULL,
+        student_id VARCHAR(100) NOT NULL,
+        points INT NOT NULL,
+        reason VARCHAR(255) NOT NULL,
+        actor VARCHAR(100) NOT NULL
+      )
+      """);
+    jdbc.execute("""
+      CREATE TABLE ranking_reward_redemptions (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        owner_username VARCHAR(50) NOT NULL,
+        student_id VARCHAR(100) NOT NULL,
+        points_spent INT NOT NULL
+      )
+      """);
+    jdbc.execute("""
       CREATE TABLE ranking_daily_snapshots (
         snapshot_date DATE NOT NULL,
         owner_username VARCHAR(50) NOT NULL,

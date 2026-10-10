@@ -55,6 +55,20 @@ public class RankingRewardAdminController {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value);
   }
 
+  @PutMapping("/students/{studentId}/points")
+  public RankingPayload.PointAdjustment adjustStudentPoints(@PathVariable String studentId,
+      @RequestBody StudentPointsRequest body, Principal principal, HttpServletRequest request) {
+    var value = rankings.adjustStudentPoints(principal.getName(), studentId,
+        body == null ? null : body.campId(), body == null ? null : body.classId(),
+        body == null ? null : body.targetPoints(), body == null ? null : body.reason(), principal.getName());
+    audit.change("STUDENT_POINTS", studentId,
+        java.util.Map.of("availablePoints", value.availablePointsBefore(), "adjustmentPoints", value.adjustmentPoints() - value.delta()),
+        java.util.Map.of("availablePoints", value.availablePointsAfter(), "adjustmentPoints", value.adjustmentPoints(),
+            "earnedPoints", value.earnedPoints(), "spentPoints", value.spentPoints(), "delta", value.delta(), "reason", value.reason()));
+    audit.record("ranking_student_points_adjusted:" + studentId + ":delta=" + value.delta(), request);
+    return value;
+  }
+
   @GetMapping("/announcement")
   public RankingRewardPayload.Announcement announcement(Principal principal) { return rewards.announcement(principal.getName()); }
 
@@ -192,4 +206,5 @@ public class RankingRewardAdminController {
 
   public record AnnouncementRequest(String text) {}
   public record StudentPasswordRequest(String password) {}
+  public record StudentPointsRequest(String campId, String classId, Integer targetPoints, String reason) {}
 }

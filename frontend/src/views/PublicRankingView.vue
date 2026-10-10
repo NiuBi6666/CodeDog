@@ -310,10 +310,11 @@ async function redeemReward() {
     redeemNotice.value = `已兑换“${selectedReward.value.name}”，请联系老师领取。`;
     closeRewardRedeem(true);
     try {
-      const [balanceValue, redemptionValues] = await Promise.all([
-        api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions")
+      const [balanceValue, redemptionValues, boardValue] = await Promise.all([
+        api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions"), api("/public/rankings/student-board")
       ]);
       balance.value = balanceValue;
+      board.value = boardValue;
       redemptions.value = redemptionValues || [];
     } catch (refreshFailure) {
       if (refreshFailure.status === 401) handleSessionExpired();
@@ -457,7 +458,7 @@ onBeforeUnmount(() => {
               <span class="ladder-rank">{{ row.rank }}</span>
               <span class="avatar">{{ rankingAvatarText(row.studentName) }}</span>
               <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><span class="level-badge">{{ row.levelName }}</span></div>
-              <strong class="ladder-points">{{ row.totalPoints }}<small>积分</small></strong>
+              <strong class="ladder-points">{{ row.availablePoints ?? row.totalPoints }}<small>积分</small></strong>
             </article>
               <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="后续名次已省略"><EllipsisVertical aria-hidden="true" /></div>
             </template>
@@ -516,7 +517,7 @@ onBeforeUnmount(() => {
     </div>
 
     <aside v-if="detailRow" ref="popover" class="score-popover" :style="popoverStyle" role="tooltip" @click.stop>
-      <h3>{{ detailRow.studentName }} · {{ detailRow.totalPoints }} 积分</h3>
+      <h3>{{ detailRow.studentName }} · {{ detailRow.availablePoints ?? detailRow.totalPoints }} 积分</h3>
       <dl>
         <div><dt>完课</dt><dd>{{ detailRow.completionPoints }}</dd></div>
         <div><dt>课上作业</dt><dd>{{ detailRow.inclassPoints }}</dd></div>
