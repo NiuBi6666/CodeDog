@@ -277,7 +277,8 @@ async function savePoints() {
   pointsSaving.value = true; pointsError.value = "";
   try {
     await api(`/rankings/admin/students/${encodeURIComponent(pointsStudent.value.studentId)}/points`, { method: "PUT", body: jsonBody({ campId: pointsStudent.value.campId, classId: pointsStudent.value.classId, targetPoints: target, reason: pointsReason.value.trim() }) });
-    board.value = await api("/rankings/admin/board"); closePoints(); notify("学生积分已更新，排名已刷新");
+    board.value = await api("/rankings/admin/board");
+    pointsOpen.value = false; pointsStudent.value = null; notify("学生积分已更新，排名已刷新");
   } catch (failure) { pointsError.value = failure.message || "积分调整失败"; }
   finally { pointsSaving.value = false; }
 }
@@ -312,8 +313,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <section v-if="board" class="ranking-admin-summary" aria-label="排名概览">
         <article><span class="ranking-summary-icon ranking-summary-gold"><Trophy :size="20"/></span><div><strong>全量榜</strong><small>全部营期、全部班级</small></div></article>
         <article><span class="ranking-summary-icon ranking-summary-blue"><UsersRound :size="20"/></span><div><strong>{{ summary.studentCount }}</strong><small>学员总数</small></div></article>
-        <article><span class="ranking-summary-icon ranking-summary-teal">Σ</span><div><strong>{{ numberText(summary.totalPoints) }}</strong><small>累计获得积分</small></div></article>
-        <article><span class="ranking-summary-icon ranking-summary-gray">Ø</span><div><strong>{{ numberText(summary.averagePoints) }}</strong><small>平均积分</small></div></article>
+        <article><span class="ranking-summary-icon ranking-summary-teal">Σ</span><div><strong>{{ numberText(summary.availablePoints) }}</strong><small>当前积分总计</small></div></article>
+        <article><span class="ranking-summary-icon ranking-summary-gray">Ø</span><div><strong>{{ numberText(summary.averagePoints) }}</strong><small>平均当前积分</small></div></article>
       </section>
 
       <section class="admin-panel ranking-list-panel">
@@ -321,13 +322,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
         <div v-else-if="board && !filteredRows.length" class="ranking-admin-state"><Search :size="23"/><span>没有找到匹配的学员</span></div>
         <div v-else-if="board" class="ranking-admin-table-wrap">
-          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>总获得积分</th><th>排名积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit">积分调整</th><th v-if="auth.user?.admin">密码</th></tr></thead>
+          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>当前积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit">积分调整</th><th v-if="auth.user?.admin">密码</th></tr></thead>
             <tbody><tr v-for="row in filteredRows" :key="row.studentId">
               <td><span class="ranking-number" :class="`rank-${Math.min(row.rank, 4)}`">{{ row.rank }}</span></td>
               <td><div class="ranking-student"><img class="ranking-student-avatar" src="/favicon-dog-20260913.png" alt="" width="38" height="38"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
-              <td><span class="ranking-class-name">{{ row.className || '—' }}</span></td><td><strong class="ranking-total-points">{{ numberText(row.totalPoints) }}</strong></td>
-              <td>{{ numberText(row.availablePoints ?? row.totalPoints) }}</td>
-              <td><div class="ranking-score-parts"><span>完课 {{ row.completionPoints }}</span><span>课上 {{ row.inclassPoints }}</span><span>课后 {{ row.homeworkPoints }}</span></div></td>
+              <td><span class="ranking-class-name">{{ row.className || '—' }}</span></td><td><strong class="ranking-total-points">{{ numberText(row.availablePoints ?? row.totalPoints) }}</strong></td>
+              <td><div class="ranking-score-parts"><span>课程 {{ row.totalPoints }}</span><span v-if="row.adjustmentPoints">调整 {{ row.adjustmentPoints > 0 ? '+' : '' }}{{ row.adjustmentPoints }}</span><span v-if="row.spentPoints">兑换 -{{ row.spentPoints }}</span></div></td>
               <td>{{ Number(row.accuracyRate || 0).toFixed(1) }}%</td><td><span class="ranking-level" :class="`ranking-level-${row.level}`">{{ row.levelName }}</span></td>
               <td><span class="ranking-trend" :class="`ranking-trend-${rankingTrendView(row).direction}`" :title="rankingTrendView(row).title"><ArrowUp v-if="rankingTrendView(row).direction === 'up'" :size="14"/><ArrowDown v-else-if="rankingTrendView(row).direction === 'down'" :size="14"/><Minus v-else :size="14"/>{{ rankingTrendView(row).direction === 'same' ? '' : Math.abs(row.rankChange) }}</span></td>
               <td v-if="canPointsEdit"><button class="button button-quiet button-small" type="button" @click="openPoints(row)"><Pencil :size="14"/>调整积分</button></td><td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
@@ -407,8 +407,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       </section>
     </div>
     <div v-if="pointsOpen && canPointsEdit && pointsStudent" class="ranking-share-backdrop" @click.self="closePoints">
-      <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前排名积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
-        <div class="ranking-form-body"><label><span>调整后排名积分</span><input v-model.number="pointsTarget" type="number" min="0" max="1000000" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>将按目标积分计算差额并写入积分调整记录。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p></div>
+      <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
+        <div class="ranking-form-body"><label><span>调整后积分</span><input v-model.number="pointsTarget" type="number" min="0" max="1000000" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>保存后，管理端和学生排行榜统一显示该积分；后续兑换会继续扣减。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p></div>
         <footer><button class="button button-quiet" type="button" @click="closePoints">取消</button><button class="button button-primary" type="submit" :disabled="pointsSaving">{{ pointsSaving ? '保存中' : '保存积分' }}</button></footer>
       </form>
     </div>

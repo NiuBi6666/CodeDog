@@ -65,6 +65,6 @@ export function rankingSummary(rows = []) {
     studentCount: values.length,
     totalPoints,
     availablePoints,
-    averagePoints: values.length ? Math.round(totalPoints / values.length) : 0
+    averagePoints: values.length ? Math.round(availablePoints / values.length) : 0
   };
 }

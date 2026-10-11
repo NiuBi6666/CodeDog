@@ -234,6 +234,30 @@ class RankingServiceTest {
   }
 
   @Test
+  void usesAdjustedBalanceForDisplayedPointsAndRanking() {
+    addStudent("Liam", "adjusted", "调整学员", "2026-01-01T10:00:00Z", 1000, 600, 469);
+    addStudent("Liam", "competitor", "对照学员", "2026-01-01T11:00:00Z", 400, 300, 300);
+    jdbc.update("INSERT INTO ranking_reward_redemptions(owner_username,student_id,points_spent) VALUES('Liam','adjusted',2000)");
+
+    RankingPayload.PointAdjustment adjustment = service.adjustStudentPoints(
+      "Liam", "adjusted", "camp", "class", 6900, "测试调整", "Liam");
+    RankingPayload.Entry adjusted = service.allBoard("CD-ADMIN001").rankings().getFirst();
+
+    assertThat(adjustment.delta()).isEqualTo(6831);
+    assertThat(adjusted.totalPoints()).isEqualTo(2069);
+    assertThat(adjusted.adjustmentPoints()).isEqualTo(6831);
+    assertThat(adjusted.spentPoints()).isEqualTo(2000);
+    assertThat(adjusted.availablePoints()).isEqualTo(6900);
+    assertThat(adjusted.rank()).isEqualTo(1);
+
+    jdbc.update("INSERT INTO ranking_reward_redemptions(owner_username,student_id,points_spent) VALUES('Liam','adjusted',6000)");
+    RankingPayload.Entry afterRedemption = service.allBoard("CD-ADMIN001").rankings().stream()
+      .filter(row -> row.studentId().equals("adjusted")).findFirst().orElseThrow();
+    assertThat(afterRedemption.availablePoints()).isEqualTo(900);
+    assertThat(afterRedemption.rank()).isEqualTo(2);
+  }
+
+  @Test
   void suggestsRealIncompleteAndIncorrectWorkInPriorityOrder() {
     addStudent("Liam", "needs-work", "待提升学员", "2026-01-01T10:00:00Z", 50, 50, 50);
     jdbc.update("""

@@ -26,6 +26,15 @@ describe("ranking admin helpers", () => {
       availablePoints: 540,
       averagePoints: 270
     });
+    expect(rankingSummary([
+      { totalPoints: 300, availablePoints: 120 },
+      { totalPoints: 240, availablePoints: 80 }
+    ])).toEqual({
+      studentCount: 2,
+      totalPoints: 540,
+      availablePoints: 200,
+      averagePoints: 100
+    });
   });
 
   it("shows the top ten and appends the selected student only when needed", () => {
