@@ -31,6 +31,8 @@ public record RankingPayload(String campId, String campName, List<ClassData> cla
   public record PointAdjustment(String studentId, String studentName, String campId, String classId,
                                 int earnedPoints, int adjustmentPoints, int spentPoints,
                                 int availablePointsBefore, int availablePointsAfter, int delta, String reason) {}
+  public record PointAdjustmentHistory(long id, int delta, int availablePointsBefore, int availablePointsAfter,
+                                       String reason, String actor, Instant createdAt) {}
   public record Opportunity(String type, String title, String description, int count) {}
   public record OpportunitySummary(String studentId, boolean complete, List<Opportunity> opportunities) {}
 }

@@ -3900,6 +3900,24 @@ a {
 .ranking-redemption-check.invalid { border-color:#e3b6b1;color:#a33d35;background:#fff7f6; }
 .ranking-redemption-check.invalid strong { color:#a33d35; }
 
+.ranking-point-history { display:grid;grid-column:1/-1;gap:10px;padding-top:4px; }
+.ranking-point-history>header { display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:9px;border-bottom:1px solid #e2e8ea; }
+.ranking-point-history>header div { display:grid;gap:2px; }
+.ranking-point-history>header strong { color:#304248;font-size:13px; }
+.ranking-point-history>header small,.ranking-point-history>header>span { color:#7c8b90;font-size:11px; }
+.ranking-point-history-state { display:flex;min-height:54px;align-items:center;justify-content:center;gap:7px;color:#7b8b90;font-size:12px; }
+.ranking-point-history-state.is-error { color:#a33d35; }
+.ranking-point-history ol { display:grid;max-height:230px;margin:0;padding:0;overflow:auto;border:1px solid #e0e7e9;border-radius:6px;list-style:none; }
+.ranking-point-history li { display:grid;gap:4px;padding:10px 12px;border-bottom:1px solid #e8edef; }
+.ranking-point-history li:last-child { border-bottom:0; }
+.ranking-point-history-balance { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.ranking-point-history-balance strong { color:#31444a;font-size:13px;font-variant-numeric:tabular-nums; }
+.ranking-point-history-balance span { font-size:12px;font-weight:800;font-variant-numeric:tabular-nums; }
+.ranking-point-history-balance .is-positive { color:#187055; }
+.ranking-point-history-balance .is-negative { color:#b5483f; }
+.ranking-point-history li p { margin:0;color:#596b71;font-size:12px;white-space:normal; }
+.ranking-point-history li>small { color:#879499;font-size:10px; }
+
 
 @media(max-width:900px) {
   .ranking-announcement-form-row { grid-template-columns:minmax(300px,1.8fr) minmax(160px,.9fr); }

@@ -519,6 +519,9 @@ onBeforeUnmount(() => {
     <aside v-if="detailRow" ref="popover" class="score-popover" :style="popoverStyle" role="tooltip" @click.stop>
       <h3>{{ detailRow.studentName }} · {{ detailRow.availablePoints ?? detailRow.totalPoints }} 积分</h3>
       <dl>
+        <div><dt>正常获得积分</dt><dd>{{ detailRow.totalPoints }}</dd></div>
+        <div><dt>手动调整积分</dt><dd>{{ detailRow.adjustmentPoints > 0 ? '+' : '' }}{{ detailRow.adjustmentPoints || 0 }}</dd></div>
+        <div><dt>兑换扣减积分</dt><dd>{{ detailRow.spentPoints ? `-${detailRow.spentPoints}` : 0 }}</dd></div>
         <div><dt>完课</dt><dd>{{ detailRow.completionPoints }}</dd></div>
         <div><dt>课上作业</dt><dd>{{ detailRow.inclassPoints }}</dd></div>
         <div><dt>课后作业</dt><dd>{{ detailRow.homeworkPoints }}</dd></div>

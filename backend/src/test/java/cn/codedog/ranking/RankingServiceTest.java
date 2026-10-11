@@ -107,8 +107,11 @@ class RankingServiceTest {
         class_id VARCHAR(100) NOT NULL,
         student_id VARCHAR(100) NOT NULL,
         points INT NOT NULL,
+        balance_before INT,
+        balance_after INT,
         reason VARCHAR(255) NOT NULL,
-        actor VARCHAR(100) NOT NULL
+        actor VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
       """);
     jdbc.execute("""
@@ -116,7 +119,8 @@ class RankingServiceTest {
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         owner_username VARCHAR(50) NOT NULL,
         student_id VARCHAR(100) NOT NULL,
-        points_spent INT NOT NULL
+        points_spent INT NOT NULL,
+        redeemed_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
       """);
     jdbc.execute("""
@@ -249,12 +253,35 @@ class RankingServiceTest {
     assertThat(adjusted.spentPoints()).isEqualTo(2000);
     assertThat(adjusted.availablePoints()).isEqualTo(6900);
     assertThat(adjusted.rank()).isEqualTo(1);
+    assertThat(service.pointAdjustments("Liam", "adjusted")).singleElement().satisfies(history -> {
+      assertThat(history.delta()).isEqualTo(6831);
+      assertThat(history.availablePointsBefore()).isEqualTo(69);
+      assertThat(history.availablePointsAfter()).isEqualTo(6900);
+      assertThat(history.reason()).isEqualTo("测试调整");
+      assertThat(history.actor()).isEqualTo("Liam");
+      assertThat(history.createdAt()).isNotNull();
+    });
 
     jdbc.update("INSERT INTO ranking_reward_redemptions(owner_username,student_id,points_spent) VALUES('Liam','adjusted',6000)");
     RankingPayload.Entry afterRedemption = service.allBoard("CD-ADMIN001").rankings().stream()
       .filter(row -> row.studentId().equals("adjusted")).findFirst().orElseThrow();
     assertThat(afterRedemption.availablePoints()).isEqualTo(900);
     assertThat(afterRedemption.rank()).isEqualTo(2);
+  }
+
+  @Test
+  void reconstructsBalanceSnapshotsForLegacyAdjustments() {
+    addStudent("Liam", "legacy", "旧记录学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+    Timestamp adjustedAt = Timestamp.from(Instant.parse("2027-01-01T10:00:00Z"));
+    jdbc.update("INSERT INTO ranking_point_adjustments(owner_username,camp_id,class_id,student_id,points,reason,actor,created_at) "
+        + "VALUES('Liam','camp','class','legacy',50,'历史奖励','Liam',?)", adjustedAt);
+
+    assertThat(service.pointAdjustments("Liam", "legacy")).singleElement().satisfies(history -> {
+      assertThat(history.delta()).isEqualTo(50);
+      assertThat(history.availablePointsBefore()).isEqualTo(300);
+      assertThat(history.availablePointsAfter()).isEqualTo(350);
+      assertThat(history.reason()).isEqualTo("历史奖励");
+    });
   }
 
   @Test

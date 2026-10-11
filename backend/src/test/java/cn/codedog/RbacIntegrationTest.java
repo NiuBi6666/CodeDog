@@ -72,6 +72,13 @@ class RbacIntegrationTest {
             )
             """);
         jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS ranking_students (
+              owner_username VARCHAR(50) NOT NULL,
+              student_id VARCHAR(100) NOT NULL,
+              PRIMARY KEY (owner_username, student_id)
+            )
+            """);
+        jdbc.execute("""
             CREATE TABLE IF NOT EXISTS crm_external_contacts (
               owner_username VARCHAR(50) NOT NULL,
               crm_user_id VARCHAR(100) NOT NULL,
@@ -240,11 +247,20 @@ class RbacIntegrationTest {
         mvc.perform(get("/api/admin/users").session(session)).andExpect(status().isForbidden());
         mvc.perform(get("/api/admin/exams").session(session)).andExpect(status().isForbidden());
         mvc.perform(get("/api/rankings/admin/board").session(session)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/rankings/admin/students/missing/point-adjustments").session(session))
+            .andExpect(status().isForbidden());
         mvc.perform(post("/api/rankings/admin/announcements").session(session).with(csrf())
                 .contentType(APPLICATION_JSON).content("{\"text\":\"test\"}"))
             .andExpect(status().isForbidden());
         mvc.perform(delete("/api/rankings/admin/rewards/1").session(session).with(csrf()))
             .andExpect(status().isForbidden());
+
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of(
+            PermissionCatalog.DASHBOARD_VIEW,
+            PermissionCatalog.RANKINGS_POINTS_EDIT)));
+        users.saveAndFlush(manager);
+        mvc.perform(get("/api/rankings/admin/students/missing/point-adjustments").session(session))
+            .andExpect(status().isNotFound());
 
         manager.setPermissions(new LinkedHashSet<>(java.util.Set.of(
             PermissionCatalog.DASHBOARD_VIEW,

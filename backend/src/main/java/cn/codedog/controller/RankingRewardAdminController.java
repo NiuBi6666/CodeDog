@@ -69,6 +69,12 @@ public class RankingRewardAdminController {
     return value;
   }
 
+  @GetMapping("/students/{studentId}/point-adjustments")
+  public List<RankingPayload.PointAdjustmentHistory> studentPointAdjustments(@PathVariable String studentId,
+      Principal principal) {
+    return rankings.pointAdjustments(principal.getName(), studentId);
+  }
+
   @GetMapping("/announcement")
   public RankingRewardPayload.Announcement announcement(Principal principal) { return rewards.announcement(principal.getName()); }
 

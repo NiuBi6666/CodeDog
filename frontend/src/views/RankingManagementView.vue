@@ -41,6 +41,9 @@ const pointsStudent = ref(null);
 const pointsTarget = ref("");
 const pointsReason = ref("");
 const pointsError = ref("");
+const pointsHistory = ref([]);
+const pointsHistoryLoading = ref(false);
+const pointsHistoryError = ref("");
 const rewardSaving = ref(false);
 const redemptionSaving = ref(false);
 const rewardForm = ref(emptyRewardForm());
@@ -268,8 +271,19 @@ async function resetStudentPassword() {
   } catch (failure) { passwordError.value = failure.message || "密码重置失败"; }
   finally { passwordSaving.value = false; }
 }
-function openPoints(row) { pointsStudent.value = row; pointsTarget.value = String(row.availablePoints ?? row.totalPoints ?? 0); pointsReason.value = ""; pointsError.value = ""; pointsOpen.value = true; }
-function closePoints() { if (pointsSaving.value) return; pointsOpen.value = false; pointsStudent.value = null; pointsError.value = ""; }
+async function openPoints(row) {
+  pointsStudent.value = row; pointsTarget.value = String(row.availablePoints ?? row.totalPoints ?? 0);
+  pointsReason.value = ""; pointsError.value = ""; pointsHistory.value = []; pointsHistoryError.value = "";
+  pointsOpen.value = true; pointsHistoryLoading.value = true;
+  try { pointsHistory.value = await api(`/rankings/admin/students/${encodeURIComponent(row.studentId)}/point-adjustments`); }
+  catch (failure) { pointsHistoryError.value = failure.message || "调整记录读取失败"; }
+  finally { pointsHistoryLoading.value = false; }
+}
+function closePoints() {
+  if (pointsSaving.value) return;
+  pointsOpen.value = false; pointsStudent.value = null; pointsError.value = "";
+  pointsHistory.value = []; pointsHistoryError.value = ""; pointsHistoryLoading.value = false;
+}
 async function savePoints() {
   const target = Number(pointsTarget.value);
   if (!pointsStudent.value || !Number.isInteger(target) || target < 0 || target > 1000000) { pointsError.value = "目标积分必须是 0 至 1000000 的整数"; return; }
@@ -408,7 +422,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     </div>
     <div v-if="pointsOpen && canPointsEdit && pointsStudent" class="ranking-share-backdrop" @click.self="closePoints">
       <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
-        <div class="ranking-form-body"><label><span>调整后积分</span><input v-model.number="pointsTarget" type="number" min="0" max="1000000" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>保存后，管理端和学生排行榜统一显示该积分；后续兑换会继续扣减。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p></div>
+        <div class="ranking-form-body"><label><span>调整后积分</span><input v-model.number="pointsTarget" type="number" min="0" max="1000000" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>保存后，管理端和学生排行榜统一显示该积分；后续兑换会继续扣减。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p>
+          <section class="ranking-point-history"><header><div><strong>积分调整记录</strong><small>记录每次调整前后积分、原因和操作人</small></div><span>{{ pointsHistory.length }} 条</span></header>
+            <div v-if="pointsHistoryLoading" class="ranking-point-history-state"><RefreshCw class="spin-icon" :size="16"/>正在读取调整记录</div>
+            <div v-else-if="pointsHistoryError" class="ranking-point-history-state is-error">{{ pointsHistoryError }}</div>
+            <div v-else-if="!pointsHistory.length" class="ranking-point-history-state">暂无手动调整记录</div>
+            <ol v-else><li v-for="item in pointsHistory" :key="item.id"><div class="ranking-point-history-balance"><strong>{{ numberText(item.availablePointsBefore) }} → {{ numberText(item.availablePointsAfter) }}</strong><span :class="item.delta >= 0 ? 'is-positive' : 'is-negative'">{{ item.delta >= 0 ? '+' : '' }}{{ numberText(item.delta) }}</span></div><p>{{ item.reason }}</p><small>{{ formatDateTime(item.createdAt) }} · {{ item.actor }}</small></li></ol>
+          </section>
+        </div>
         <footer><button class="button button-quiet" type="button" @click="closePoints">取消</button><button class="button button-primary" type="submit" :disabled="pointsSaving">{{ pointsSaving ? '保存中' : '保存积分' }}</button></footer>
       </form>
     </div>

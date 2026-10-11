@@ -326,10 +326,45 @@ public class RankingBoardService {
     AggregateRow before = aggregateAllRows(owner).stream().filter(row -> row.studentId().equals(studentId)).findFirst()
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在"));
     int delta = targetValue - before.availablePoints();
-    jdbc.update("INSERT INTO ranking_point_adjustments(owner_username,camp_id,class_id,student_id,points,reason,actor) VALUES(?,?,?,?,?,?,?)",
-        owner, campId, classId, studentId, delta, note, actor);
+    jdbc.update("INSERT INTO ranking_point_adjustments(owner_username,camp_id,class_id,student_id,points,balance_before,balance_after,reason,actor) VALUES(?,?,?,?,?,?,?,?,?)",
+        owner, campId, classId, studentId, delta, before.availablePoints(), targetValue, note, actor);
     return new RankingPayload.PointAdjustment(studentId, names.getFirst(), campId, classId, before.totalPoints(),
         before.adjustmentPoints() + delta, before.spentPoints(), before.availablePoints(), targetValue, delta, note);
+  }
+
+  public List<RankingPayload.PointAdjustmentHistory> pointAdjustments(String ownerValue, String studentValue) {
+    String owner = text(ownerValue, "数据所属用户", 50);
+    String studentId = text(studentValue, "学员 ID", 100);
+    Integer count = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM ranking_students WHERE owner_username=? AND student_id=?", Integer.class, owner, studentId);
+    if (count == null || count == 0) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在");
+    }
+    return jdbc.query("SELECT id,points,balance_before,balance_after,reason,actor,created_at "
+            + "FROM ranking_point_adjustments WHERE owner_username=? AND student_id=? ORDER BY created_at DESC,id DESC",
+        (rs, n) -> {
+          long id = rs.getLong("id");
+          int delta = rs.getInt("points");
+          Timestamp createdAt = rs.getTimestamp("created_at");
+          Integer before = (Integer) rs.getObject("balance_before");
+          Integer after = (Integer) rs.getObject("balance_after");
+          if (before == null) before = legacyAdjustmentBalanceBefore(owner, studentId, id, createdAt);
+          if (after == null) after = Math.max(0, before + delta);
+          return new RankingPayload.PointAdjustmentHistory(id, delta, before, after,
+              rs.getString("reason"), rs.getString("actor"), createdAt.toInstant());
+        }, owner, studentId);
+  }
+
+  private int legacyAdjustmentBalanceBefore(String owner, String studentId, long adjustmentId, Timestamp createdAt) {
+    Integer earned = jdbc.queryForObject("SELECT COALESCE(SUM(total_points),0) FROM ranking_lesson_results "
+        + "WHERE owner_username=? AND student_id=? AND updated_at<=?", Integer.class, owner, studentId, createdAt);
+    Integer adjusted = jdbc.queryForObject("SELECT COALESCE(SUM(points),0) FROM ranking_point_adjustments "
+        + "WHERE owner_username=? AND student_id=? AND (created_at<? OR (created_at=? AND id<?))",
+        Integer.class, owner, studentId, createdAt, createdAt, adjustmentId);
+    Integer spent = jdbc.queryForObject("SELECT COALESCE(SUM(points_spent),0) FROM ranking_reward_redemptions "
+        + "WHERE owner_username=? AND student_id=? AND redeemed_at<?", Integer.class, owner, studentId, createdAt);
+    return Math.max(0, java.util.Objects.requireNonNullElse(earned, 0)
+        + java.util.Objects.requireNonNullElse(adjusted, 0) - java.util.Objects.requireNonNullElse(spent, 0));
   }
 
   private TeacherOwner resolveTeacher(String teacherValue) {
