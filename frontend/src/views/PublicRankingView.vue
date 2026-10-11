@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
       <div v-if="studentSession && announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
 
       <main v-if="studentSession" class="ranking-layout" @click.stop>
-        <section class="game-panel ladder-panel" aria-labelledby="ladderTitle">
+        <section class="game-panel ladder-panel" :class="{ 'ladder-panel--compact': !showsSelectedSeparately }" aria-labelledby="ladderTitle">
           <div class="game-panel-heading">
             <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名 · 共 {{ board ? board.studentCount : 0 }} 名学员</p></div></div>
             <button class="ghost-button" type="button" :disabled="loading" @click="loadBoard"><RefreshCw :class="{ spin: loading }" aria-hidden="true" />刷新</button>
@@ -807,6 +807,11 @@ button {
   border-radius: 8px;
   background: #0d152b;
   box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.18);
+}
+
+.ladder-panel--compact {
+  align-self: start;
+  min-height: 0;
 }
 
 .supply-panel {
