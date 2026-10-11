@@ -14,6 +14,18 @@ class RankingScoreTest {
     assertThat(score.inclassPoints()).isEqualTo(100);
     assertThat(score.homeworkPoints()).isEqualTo(100);
   }
+  @Test void awardsOnePointOnlyForCompletedAndPerfectSpreadsheetTasks() {
+    var perfect=RankingScore.calculatePerfectTasks(100.0,new RankingPayload.Counts(4,4,4),new RankingPayload.Counts(2,2,2));
+    assertThat(perfect.completionPoints()).isEqualTo(1);
+    assertThat(perfect.inclassPoints()).isEqualTo(1);
+    assertThat(perfect.homeworkPoints()).isEqualTo(1);
+    assertThat(perfect.totalPoints()).isEqualTo(3);
+
+    var partial=RankingScore.calculatePerfectTasks(0.0,new RankingPayload.Counts(4,4,3),new RankingPayload.Counts(2,2,1));
+    assertThat(partial.totalPoints()).isZero();
+    var unassigned=RankingScore.calculatePerfectTasks(100.0,RankingPayload.Counts.empty(),RankingPayload.Counts.empty());
+    assertThat(unassigned.totalPoints()).isEqualTo(3);
+  }
   @Test void assignedButUnsubmittedHomeworkGetsZero() {
     var score=RankingScore.calculate(50.0,new RankingPayload.Counts(4,0,0),new RankingPayload.Counts(8,4,3));
     assertThat(score.inclassPoints()).isZero();

@@ -10,6 +10,13 @@ final public class RankingScore {
     int completion = (int) Math.round(completionPercent), ap = correctness(a), bp = correctness(b);
     return new Score(completionPercent / 100.0, a, b, completion, ap, bp, completion + ap + bp);
   }
+  public static Score calculatePerfectTasks(Double completionPercent, RankingPayload.Counts inclass, RankingPayload.Counts homework) {
+    if (completionPercent == null || !Double.isFinite(completionPercent) || completionPercent < 0 || completionPercent > 100)
+      throw new IllegalArgumentException("完课率必须在 0 到 100 之间");
+    Counts a = validate(inclass, "课上作业"); Counts b = validate(homework, "课后作业");
+    int completion = completionPercent == 100 ? 1 : 0, ap = perfect(a), bp = perfect(b);
+    return new Score(completionPercent / 100.0, a, b, completion, ap, bp, completion + ap + bp);
+  }
   private static Counts validate(RankingPayload.Counts value, String label) {
     RankingPayload.Counts source = Objects.requireNonNullElseGet(value, RankingPayload.Counts::empty);
     int total = Objects.requireNonNullElse(source.total(), 0), submitted = Objects.requireNonNullElse(source.submitted(), 0), passed = Objects.requireNonNullElse(source.passed(), 0);
@@ -18,6 +25,7 @@ final public class RankingScore {
     return new Counts(total, submitted, passed);
   }
   private static int correctness(Counts c) { if (c.total() == 0) return 100; if (c.submitted() == 0) return 0; return (int) Math.round(c.passed() * 100.0 / c.submitted()); }
+  private static int perfect(Counts c) { return c.total() == 0 || c.passed() == c.total() ? 1 : 0; }
   public record Counts(int total, int submitted, int passed) {}
   public record Score(double completionRate, Counts inclass, Counts homework, int completionPoints, int inclassPoints, int homeworkPoints, int totalPoints) {}
 }

@@ -199,7 +199,8 @@ public class RankingBoardService {
         COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
         COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
         CASE WHEN COUNT(r.lesson_id)=0 THEN 0
-        ELSE ROUND(50.0*SUM(r.inclass_points+r.homework_points)/COUNT(r.lesson_id)) END accuracy_basis_points
+        ELSE ROUND(50.0*SUM(CASE WHEN r.rule_version=2 THEN 100*(r.inclass_points+r.homework_points)
+          ELSE r.inclass_points+r.homework_points END)/COUNT(r.lesson_id)) END accuracy_basis_points
         FROM ranking_students s
         JOIN ranking_classes c ON c.owner_username=s.owner_username AND c.camp_id=s.camp_id AND c.class_id=s.class_id
         LEFT JOIN ranking_lesson_results r ON r.owner_username=s.owner_username AND r.camp_id=s.camp_id
@@ -230,7 +231,8 @@ public class RankingBoardService {
         COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
         COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
         CASE WHEN COUNT(r.lesson_id)=0 THEN 0
-        ELSE ROUND(50.0*SUM(r.inclass_points+r.homework_points)/COUNT(r.lesson_id)) END accuracy_basis_points
+        ELSE ROUND(50.0*SUM(CASE WHEN r.rule_version=2 THEN 100*(r.inclass_points+r.homework_points)
+          ELSE r.inclass_points+r.homework_points END)/COUNT(r.lesson_id)) END accuracy_basis_points
         FROM ranking_students s
         JOIN ranking_classes c ON c.owner_username=s.owner_username AND c.camp_id=s.camp_id AND c.class_id=s.class_id
         LEFT JOIN ranking_lesson_results r ON r.owner_username=s.owner_username AND r.camp_id=s.camp_id

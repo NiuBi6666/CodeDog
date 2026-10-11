@@ -18,10 +18,10 @@ public class RankingXlsxParser {
   private static final long MAX_BYTES=10L*1024*1024;
   private static final List<Column> COLUMNS=List.of(
     c(0,"A","用户ID"),c(1,"B","姓名"),c(11,"L","班级名称"),c(12,"M","课程名称"),c(15,"P","是否完课"),
-    c(20,"U","课中OJ题总数"),c(21,"V","课中OJ题提交数"),c(22,"W","课中OJ题通过数"),
-    c(23,"X","课中客观题总数"),c(24,"Y","课中客观题提交数"),c(25,"Z","课中客观题通过数"),
-    c(28,"AC","课后作业OJ题总数"),c(29,"AD","课后作业OJ题提交数"),c(30,"AE","课后作业OJ题通过数"),
-    c(31,"AF","课后作业客观题总数"),c(32,"AG","课后作业客观题提交数"),c(33,"AH","课后作业客观题通过数"));
+    c(20,"U","课中OJ题总数"),c(22,"W","课中OJ题通过数"),
+    c(23,"X","课中客观题总数"),c(25,"Z","课中客观题通过数"),
+    c(31,"AF","课后作业OJ题总数"),c(33,"AH","课后作业OJ题通过数"),
+    c(34,"AI","课后作业客观题总数"),c(36,"AK","课后作业客观题通过数"));
 
   public RankingPayload parse(String campValue,String campNameValue,List<MultipartFile> files){
     String camp=required(campValue,"营期 ID"),campName=required(campNameValue,"营期名称");
@@ -55,8 +55,8 @@ public class RankingXlsxParser {
         String lessonName=required(values.get("M"),name+" 第 "+(i+1)+" 行课程名称");
         String classId="xlsx-"+digest(camp+"|"+className).substring(0,24);
         String lessonId="xlsx-"+digest(camp+"|"+className+"|"+lessonName).substring(0,24);
-        var inclass=counts(values,"U","V","W","X","Y","Z",name,i+1);
-        var homework=counts(values,"AC","AD","AE","AF","AG","AH",name,i+1);
+        var inclass=counts(values,"U","W","X","Z",name,i+1);
+        var homework=counts(values,"AF","AH","AI","AK",name,i+1);
         var result=new RankingPayload.StudentResult(studentId,studentName,completion(values.get("P"),name,i+1),inclass,homework);
         classes.computeIfAbsent(classId,id->new ClassBuilder(classId,className)).add(lessonId,lessonName,result);count++;
       }
@@ -64,8 +64,9 @@ public class RankingXlsxParser {
     }catch(ResponseStatusException error){throw error;}catch(Exception error){throw invalid(name+"：Excel 读取失败（"+error.getMessage()+"）");}
   }
 
-  private RankingPayload.Counts counts(Map<String,String> v,String ta,String sa,String pa,String tb,String sb,String pb,String file,int row){
-    return new RankingPayload.Counts(number(v.get(ta),file,row,ta)+number(v.get(tb),file,row,tb),number(v.get(sa),file,row,sa)+number(v.get(sb),file,row,sb),number(v.get(pa),file,row,pa)+number(v.get(pb),file,row,pb));
+  private RankingPayload.Counts counts(Map<String,String> v,String ta,String pa,String tb,String pb,String file,int row){
+    int total=number(v.get(ta),file,row,ta)+number(v.get(tb),file,row,tb);
+    return new RankingPayload.Counts(total,total,number(v.get(pa),file,row,pa)+number(v.get(pb),file,row,pb));
   }
   private int number(String value,String file,int row,String column){if(value==null||value.isBlank())return 0;try{double n=Double.parseDouble(value);if(n<0||n!=Math.rint(n))throw new NumberFormatException();return Math.toIntExact((long)n);}catch(RuntimeException e){throw invalid(file+"：第 "+row+" 行 "+column+" 列必须是非负整数");}}
   private double completion(String value,String file,int row){String n=value==null?"":value.trim().toLowerCase(Locale.ROOT);if(List.of("是","已完课","完成","true","yes").contains(n))return 100;if(List.of("否","未完课","未完成","false","no","").contains(n))return 0;try{boolean percent=n.endsWith("%");double d=Double.parseDouble(n.replace("%",""));if(!percent&&d>=0&&d<=1)d*=100;if(!Double.isFinite(d)||d<0||d>100)throw new NumberFormatException();return d;}catch(Exception e){throw invalid(file+"：第 "+row+" 行 P 列完课率无效");}}

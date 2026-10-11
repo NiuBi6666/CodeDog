@@ -95,6 +95,7 @@ class RankingServiceTest {
         inclass_points INT NOT NULL,
         homework_points INT NOT NULL,
         total_points INT NOT NULL,
+        rule_version INT NOT NULL DEFAULT 1,
         updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (owner_username, camp_id, class_id, lesson_id, student_id)
       )
@@ -176,6 +177,17 @@ class RankingServiceTest {
       .containsExactly(100, 100, 100, 90);
     assertThat(board.rankings()).extracting(RankingPayload.Entry::rank)
       .containsExactly(1, 1, 1, 4);
+  }
+
+  @Test
+  void normalizesSpreadsheetRuleAccuracyToPercentage() {
+    addStudent("Liam", "xlsx-perfect", "表格满分", "2026-01-01T10:00:00Z", 1, 1, 1);
+    jdbc.update("UPDATE ranking_lesson_results SET rule_version=2 WHERE owner_username='Liam' AND student_id='xlsx-perfect'");
+
+    RankingPayload.Entry row = service.board("CD-ADMIN001", "camp", "class", "class").rankings().getFirst();
+
+    assertThat(row.totalPoints()).isEqualTo(3);
+    assertThat(row.accuracyRate()).isEqualTo(100.0);
   }
 
   @Test

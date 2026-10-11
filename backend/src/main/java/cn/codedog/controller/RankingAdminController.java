@@ -25,9 +25,9 @@ public class RankingAdminController {
     audit.record("ranking_device_revoked:"+id,r);
   }
   @PostMapping(value="/imports/xlsx",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
-  public RankingPayload.ImportSummary xlsx(@RequestParam String campId,@RequestParam String campName,@RequestParam("files")List<MultipartFile> files,Principal p,HttpServletRequest r){
+  public RankingPayload.ImportSummary xlsx(@RequestParam(defaultValue="spreadsheet-points") String campId,@RequestParam(defaultValue="表格积分") String campName,@RequestParam("files")List<MultipartFile> files,Principal p,HttpServletRequest r){
     var metadata=files.stream().map(audit::fileMetadata).toList();
-    var result=imports.importData(xlsx.parse(campId,campName,files),"XLSX",files.size()+" 个 Excel 文件",p.getName());
+    var result=imports.importPerfectTaskData(xlsx.parse(campId,campName,files),"XLSX",files.size()+" 个 Excel 文件",p.getName());
     audit.target("IMPORT_BATCH",result.batchId());
     audit.detail(java.util.Map.of("campId",campId,"campName",campName,"files",metadata,"receivedRows",result.receivedRows(),"changedRows",result.changedRows(),"unchangedRows",result.unchangedRows(),"rejectedRows",result.rejectedRows(),"errorCount",result.errors().size()));
     audit.record("ranking_xlsx_import:"+result.batchId(),r);return result;

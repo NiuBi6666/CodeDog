@@ -39,6 +39,17 @@ public class RankingImportService {
   @Transactional
   public RankingPayload.ImportSummary importData(RankingPayload payload, String sourceType, String sourceName,
                                                   String ownerValue) {
+    return importData(payload, sourceType, sourceName, ownerValue, ScorePolicy.PERCENTAGE);
+  }
+
+  @Transactional
+  public RankingPayload.ImportSummary importPerfectTaskData(RankingPayload payload, String sourceType, String sourceName,
+                                                             String ownerValue) {
+    return importData(payload, sourceType, sourceName, ownerValue, ScorePolicy.PERFECT_TASKS);
+  }
+
+  private RankingPayload.ImportSummary importData(RankingPayload payload, String sourceType, String sourceName,
+                                                   String ownerValue, ScorePolicy scorePolicy) {
     String owner = text(ownerValue, "数据所属用户", 50);
     String campId = text(payload == null ? null : payload.campId(), "营期 ID", 100);
     String campName = text(payload.campName(), "营期名称", 160);
@@ -83,14 +94,14 @@ public class RankingImportService {
           try {
             String studentId = text(student.studentId(), "学员 ID", 100);
             String studentName = text(student.studentName(), "学员姓名", 100);
-            RankingScore.Score score = RankingScore.calculate(student.completionRate(), student.inclass(), student.homework());
+            RankingScore.Score score = scorePolicy.calculate(student);
             upsertStudent(owner, campId, classId, studentId, studentName);
-            String hash = sha256(studentName + "|" + score);
+            String hash = sha256(scorePolicy.ruleVersion + "|" + studentName + "|" + score);
             ExistingResult existing = existingResult(owner, campId, classId, lessonId, studentId);
             if (existing != null && hash.equals(existing.hash())) {
               unchanged++;
             } else {
-              upsertResult(owner, campId, classId, lessonId, studentId, score, hash, batchId);
+              upsertResult(owner, campId, classId, lessonId, studentId, score, scorePolicy.ruleVersion, hash, batchId);
               if (existing == null || existing.totalPoints() != score.totalPoints()) {
                 markScoreReached(owner, campId, classId, studentId, scoreEventAt);
               }
@@ -235,23 +246,23 @@ public class RankingImportService {
   }
 
   private void upsertResult(String owner, String camp, String clazz, String lesson, String student,
-                            RankingScore.Score score, String hash, long batch) {
+                            RankingScore.Score score, int ruleVersion, String hash, long batch) {
     jdbc.update("""
         INSERT INTO ranking_lesson_results(owner_username,camp_id,class_id,lesson_id,student_id,completion_rate,
           inclass_total,inclass_submitted,inclass_passed,homework_total,homework_submitted,homework_passed,
           completion_points,inclass_points,homework_points,total_points,rule_version,content_hash,import_batch_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?) ON DUPLICATE KEY UPDATE
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
           completion_rate=VALUES(completion_rate),inclass_total=VALUES(inclass_total),
           inclass_submitted=VALUES(inclass_submitted),inclass_passed=VALUES(inclass_passed),
           homework_total=VALUES(homework_total),homework_submitted=VALUES(homework_submitted),
           homework_passed=VALUES(homework_passed),completion_points=VALUES(completion_points),
           inclass_points=VALUES(inclass_points),homework_points=VALUES(homework_points),
-          total_points=VALUES(total_points),content_hash=VALUES(content_hash),
+          total_points=VALUES(total_points),rule_version=VALUES(rule_version),content_hash=VALUES(content_hash),
           import_batch_id=VALUES(import_batch_id),updated_at=CURRENT_TIMESTAMP(6)
         """, owner, camp, clazz, lesson, student, score.completionRate(), score.inclass().total(),
         score.inclass().submitted(), score.inclass().passed(), score.homework().total(), score.homework().submitted(),
         score.homework().passed(), score.completionPoints(), score.inclassPoints(), score.homeworkPoints(),
-        score.totalPoints(), hash, batch);
+        score.totalPoints(), ruleVersion, hash, batch);
   }
 
   private ExistingResult existingResult(String owner, String camp, String clazz, String lesson, String student) {
@@ -312,5 +323,19 @@ public class RankingImportService {
     }
   }
 
+  private enum ScorePolicy {
+    PERCENTAGE(1) {
+      RankingScore.Score calculate(RankingPayload.StudentResult student) {
+        return RankingScore.calculate(student.completionRate(), student.inclass(), student.homework());
+      }
+    },
+    PERFECT_TASKS(2) {
+      RankingScore.Score calculate(RankingPayload.StudentResult student) {
+        return RankingScore.calculatePerfectTasks(student.completionRate(), student.inclass(), student.homework());
+      }
+    };
+    final int ruleVersion; ScorePolicy(int ruleVersion) { this.ruleVersion = ruleVersion; }
+    abstract RankingScore.Score calculate(RankingPayload.StudentResult student);
+  }
   private record ExistingResult(String hash, int totalPoints) {}
 }

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ArrowDown, ArrowUp, Award, CalendarClock, CheckCircle2, CircleOff, Copy, ExternalLink, Gift, ImagePlus,
-  Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2,
+  Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2, Upload,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
@@ -44,6 +44,9 @@ const pointsError = ref("");
 const pointsHistory = ref([]);
 const pointsHistoryLoading = ref(false);
 const pointsHistoryError = ref("");
+const pointImportInput = ref(null);
+const pointsImporting = ref(false);
+const pointsImportSummary = ref(null);
 const rewardSaving = ref(false);
 const redemptionSaving = ref(false);
 const rewardForm = ref(emptyRewardForm());
@@ -51,6 +54,7 @@ const rewardImage = ref(null);
 const rewardPreview = ref("");
 const redemptionForm = ref({ studentId: "", rewardId: "" });
 const canBoardRead = computed(() => hasPermission("rankings.board.read"));
+const canImportPoints = computed(() => hasPermission("rankings.import"));
 const canShare = computed(() => hasPermission("rankings.share"));
 const canAnnouncementsRead = computed(() => hasPermission("rankings.announcements.read"));
 const canAnnouncementsCreate = computed(() => hasPermission("rankings.announcements.create"));
@@ -271,6 +275,26 @@ async function resetStudentPassword() {
   } catch (failure) { passwordError.value = failure.message || "密码重置失败"; }
   finally { passwordSaving.value = false; }
 }
+function openPointsImport() { if (!pointsImporting.value) pointImportInput.value?.click(); }
+async function importPointFiles(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = "";
+  if (!files.length) return;
+  const invalid = files.find((file) => !file.name.toLowerCase().endsWith(".xlsx") || file.size > 10 * 1024 * 1024);
+  if (invalid) { notify("仅支持不超过 10 MB 的 .xlsx 文件"); return; }
+  pointsImporting.value = true; pointsImportSummary.value = null;
+  try {
+    const body = new FormData();
+    body.set("campId", "spreadsheet-points"); body.set("campName", "表格积分");
+    files.forEach((file) => body.append("files", file));
+    const result = await api("/rankings/admin/imports/xlsx", { method: "POST", body });
+    pointsImportSummary.value = result;
+    if (canBoardRead.value) board.value = await api("/rankings/admin/board");
+    const message = `导入 ${result.receivedRows} 行，更新 ${result.changedRows} 行，未变化 ${result.unchangedRows} 行`;
+    notify(result.rejectedRows ? `${message}，失败 ${result.rejectedRows} 行` : message);
+  } catch (failure) { notify(failure.message || "积分导入失败"); }
+  finally { pointsImporting.value = false; }
+}
 async function openPoints(row) {
   pointsStudent.value = row; pointsTarget.value = String(row.availablePoints ?? row.totalPoints ?? 0);
   pointsReason.value = ""; pointsError.value = ""; pointsHistory.value = []; pointsHistoryError.value = "";
@@ -308,11 +332,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     <div class="admin-page-heading ranking-page-heading">
       <div><h1>学生排名</h1><p>管理全量积分排名、排行榜公告、奖品与发放记录</p></div>
       <div class="ranking-heading-actions">
+        <input ref="pointImportInput" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple @change="importPointFiles">
+        <button v-if="canImportPoints" class="button button-quiet" type="button" :disabled="pointsImporting" @click="openPointsImport"><Upload :size="15"/>{{ pointsImporting ? '导入中' : '导入积分' }}</button>
         <button v-if="canRefresh" class="button button-quiet" type="button" :disabled="loading" @click="loadAll"><RefreshCw :class="{ 'spin-icon': loading }" :size="15"/>刷新</button>
         <button v-if="canShare" class="button button-primary" type="button" @click="shareOpen = true"><Share2 :size="15"/>分享</button>
       </div>
     </div>
     <div v-if="error" class="notice notice-error">{{ error }}</div>
+    <div v-if="pointsImportSummary" class="notice" :class="pointsImportSummary.rejectedRows ? 'notice-error' : 'notice-success'">
+      导入 {{ pointsImportSummary.receivedRows }} 行，更新 {{ pointsImportSummary.changedRows }} 行，未变化 {{ pointsImportSummary.unchangedRows }} 行<span v-if="pointsImportSummary.rejectedRows">，失败 {{ pointsImportSummary.rejectedRows }} 行：{{ pointsImportSummary.errors?.[0]?.message }}</span>
+    </div>
 
     <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能">
       <button v-if="canBoardRead" type="button" :class="{ active: activeTab === 'rankings' }" @click="activeTab = 'rankings'"><Trophy :size="17"/>全量排名</button>
