@@ -303,7 +303,7 @@ public class RankingRewardService {
     try { return new ImageValue(file.getBytes(), type); } catch (IOException error) { throw invalid("奖品图片读取失败"); }
   }
 
-  private int points(Integer value) { if (value == null || value <= 0 || value > 1_000_000) throw invalid("所需积分必须是 1 至 1000000 的整数"); return value; }
+  private int points(Integer value) { if (value == null || value <= 0 || value > 999_999_999) throw invalid("所需积分必须是 1 至 999999999 的整数"); return value; }
   private String text(String value, String label, int max) { String result = value == null ? "" : value.trim(); if (result.isEmpty()) throw invalid(label + "不能为空"); if (result.length() > max) throw invalid(label + "不能超过 " + max + " 个字符"); return result; }
   private String optionalText(String value, String label, int max) { String result = value == null ? "" : value.trim(); if (result.length() > max) throw invalid(label + "不能超过 " + max + " 个字符"); return result; }
   private Instant instant(Timestamp value) { return value == null ? null : value.toInstant(); }

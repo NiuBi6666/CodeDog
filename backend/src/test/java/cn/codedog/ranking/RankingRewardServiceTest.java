@@ -118,6 +118,20 @@ class RankingRewardServiceTest {
   }
 
   @Test
+  void acceptsMaximumRewardPointsAndRejectsValuesAboveIt() {
+    var reward = service.createReward("teacher-a", "最高积分奖品", 999_999_999, true, null);
+
+    assertThat(reward.requiredPoints()).isEqualTo(999_999_999);
+    assertThatThrownBy(() -> service.createReward("teacher-a", "超出上限奖品", 1_000_000_000, true, null))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> {
+        var status = (ResponseStatusException) error;
+        assertThat(status.getStatusCode().value()).isEqualTo(422);
+        assertThat(status.getReason()).contains("1 至 999999999");
+      });
+  }
+
+  @Test
   void managesRewardImagesAndKeepsRedemptionHistoryAfterDeletion() {
     MockMultipartFile image = new MockMultipartFile("image", "gift.png", "image/png", new byte[]{1, 2, 3, 4});
     var reward = service.createReward("teacher-a", "编程笔记本", 300, true, image);

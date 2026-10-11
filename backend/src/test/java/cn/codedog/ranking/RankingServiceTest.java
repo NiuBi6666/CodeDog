@@ -270,6 +270,24 @@ class RankingServiceTest {
   }
 
   @Test
+  void acceptsMaximumTargetPointsAndRejectsValuesAboveIt() {
+    addStudent("Liam", "limit", "上限学员", "2026-01-01T10:00:00Z", 100, 100, 100);
+
+    RankingPayload.PointAdjustment adjustment = service.adjustStudentPoints(
+      "Liam", "limit", "camp", "class", 999_999_999, "上限测试", "Liam");
+
+    assertThat(adjustment.availablePointsAfter()).isEqualTo(999_999_999);
+    assertThatThrownBy(() -> service.adjustStudentPoints(
+      "Liam", "limit", "camp", "class", 1_000_000_000, "超出上限", "Liam"))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> {
+        var status = (ResponseStatusException) error;
+        assertThat(status.getStatusCode().value()).isEqualTo(422);
+        assertThat(status.getReason()).contains("0 至 999999999");
+      });
+  }
+
+  @Test
   void reconstructsBalanceSnapshotsForLegacyAdjustments() {
     addStudent("Liam", "legacy", "旧记录学员", "2026-01-01T10:00:00Z", 100, 100, 100);
     Timestamp adjustedAt = Timestamp.from(Instant.parse("2027-01-01T10:00:00Z"));

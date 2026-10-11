@@ -286,7 +286,7 @@ function closePoints() {
 }
 async function savePoints() {
   const target = Number(pointsTarget.value);
-  if (!pointsStudent.value || !Number.isInteger(target) || target < 0 || target > 1000000) { pointsError.value = "目标积分必须是 0 至 1000000 的整数"; return; }
+  if (!pointsStudent.value || !Number.isInteger(target) || target < 0 || target > 999999999) { pointsError.value = "目标积分必须是 0 至 999999999 的整数"; return; }
   if (!pointsReason.value.trim()) { pointsError.value = "请填写调整原因"; return; }
   pointsSaving.value = true; pointsError.value = "";
   try {
@@ -422,7 +422,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     </div>
     <div v-if="pointsOpen && canPointsEdit && pointsStudent" class="ranking-share-backdrop" @click.self="closePoints">
       <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
-        <div class="ranking-form-body"><label><span>调整后积分</span><input v-model.number="pointsTarget" type="number" min="0" max="1000000" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>保存后，管理端和学生排行榜统一显示该积分；后续兑换会继续扣减。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p>
+        <div class="ranking-form-body"><label><span>调整后积分</span><input v-model.number="pointsTarget" type="number" min="0" max="999999999" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>保存后，管理端和学生排行榜统一显示该积分；后续兑换会继续扣减。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p>
           <section class="ranking-point-history"><header><div><strong>积分调整记录</strong><small>记录每次调整前后积分、原因和操作人</small></div><span>{{ pointsHistory.length }} 条</span></header>
             <div v-if="pointsHistoryLoading" class="ranking-point-history-state"><RefreshCw class="spin-icon" :size="16"/>正在读取调整记录</div>
             <div v-else-if="pointsHistoryError" class="ranking-point-history-state is-error">{{ pointsHistoryError }}</div>
@@ -435,7 +435,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     </div>
     <div v-if="rewardOpen && (rewardForm.id ? canRewardsEdit : canRewardsCreate)" class="ranking-share-backdrop" @click.self="closeReward">
       <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
-        <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="1000000"></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>
+        <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="999999999"></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>
         <footer><button class="button button-quiet" type="button" @click="closeReward">取消</button><button class="button button-primary" type="submit" :disabled="rewardSaving">{{ rewardSaving ? '保存中' : '保存奖品' }}</button></footer>
       </form>
     </div>

@@ -317,8 +317,8 @@ public class RankingBoardService {
     String campId = text(campValue, "营期 ID", 100);
     String classId = text(classValue, "班级 ID", 100);
     String note = text(reason, "调整原因", 255);
-    if (targetValue == null || targetValue < 0 || targetValue > 1_000_000) {
-      throw invalid("目标积分必须是 0 至 1000000 的整数");
+    if (targetValue == null || targetValue < 0 || targetValue > 999_999_999) {
+      throw invalid("目标积分必须是 0 至 999999999 的整数");
     }
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND camp_id=? AND class_id=? AND student_id=? FOR UPDATE",
         (rs, n) -> rs.getString(1), owner, campId, classId, studentId);
