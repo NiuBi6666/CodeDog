@@ -45,6 +45,7 @@ async function load() {
 
 function openPermissions(user) {
   if (user.admin || !canManagePermissions.value || (!auth.user?.admin && user.username === auth.user?.username)) return;
+  error.value = "";
   selected.value = user;
   draft.value = new Set(user.permissions);
 }
@@ -99,6 +100,15 @@ function toggleGroup(group) {
   draft.value = next;
 }
 
+function selectAllPermissions() {
+  if (saving.value || !canManagePermissions.value) return;
+  const next = new Set(draft.value);
+  catalog.value.forEach((group) => {
+    editablePermissions(group).forEach((permission) => next.add(permission.code));
+  });
+  draft.value = next;
+}
+
 function replaceUser(updated) {
   users.value = users.value.map((user) => user.id === updated.id ? updated : user);
 }
@@ -114,6 +124,7 @@ async function savePermissions() {
     });
     replaceUser(updated);
     notify("用户权限已更新");
+    saving.value = false;
     closePermissions();
   } catch (failure) {
     error.value = failure.message;
@@ -204,6 +215,8 @@ onMounted(load);
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="saving" @click="closePermissions"><X :size="18"/></button>
           </header>
           <div class="permission-groups">
+            <div class="permission-bulk-actions"><span>一键选中所有可授予的权限</span><button class="button button-quiet button-small" type="button" :disabled="saving || !canManagePermissions" @click="selectAllPermissions">全部全选</button></div>
+            <div v-if="error" class="notice notice-error" role="alert">{{ error }}</div>
             <section v-for="group in catalog" :key="group.key" class="permission-group">
               <label class="permission-group-title"><input type="checkbox" :checked="groupSelected(group)" :disabled="!editablePermissions(group).length" @change="toggleGroup(group)"><strong>{{ group.label }}</strong><span>全选</span></label>
               <div class="permission-options">
@@ -220,3 +233,8 @@ onMounted(load);
     </Teleport>
   </AdminLayout>
 </template>
+
+<style scoped>
+.permission-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.permission-bulk-actions > span { color: #637984; font-size: 12px; }
+</style>
