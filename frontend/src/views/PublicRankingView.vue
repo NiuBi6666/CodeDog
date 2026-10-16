@@ -276,13 +276,22 @@ function closeDetails() {
   pinnedDetailId.value = "";
 }
 
+async function refreshRewardStock() {
+  rewards.value = await api("/public/rankings/rewards");
+  if (selectedReward.value) {
+    selectedReward.value = rewards.value.find(item => item.id === selectedReward.value.id) || { ...selectedReward.value, stock: 0 };
+  }
+}
+
 async function openRewardRedeem(reward) {
+  if (reward.stock <= 0) return;
   selectedReward.value = reward;
   redeemError.value = "";
   redeemNotice.value = "";
   redeemOpen.value = true;
   try {
-    balance.value = await api("/public/rankings/student-balance");
+    const [currentBalance] = await Promise.all([api("/public/rankings/student-balance"), refreshRewardStock()]);
+    balance.value = currentBalance;
   } catch (failure) {
     redeemError.value = failure.message || "积分余额加载失败，请重试";
   }
@@ -296,7 +305,7 @@ function closeRewardRedeem(force = false) {
 }
 
 async function redeemReward() {
-  if (!selectedReward.value || redeemSaving.value) return;
+  if (!selectedReward.value || selectedReward.value.stock <= 0 || redeemSaving.value) return;
   redeemSaving.value = true;
   redeemError.value = "";
   try {
@@ -305,13 +314,14 @@ async function redeemReward() {
     balance.value = {
       ...balance.value,
       spentPoints: Number(balance.value.spentPoints || 0) + Number(created.pointsSpent || 0),
-      availablePoints: Math.max(0, Number(balance.value.availablePoints || 0) - Number(created.pointsSpent || 0))
+      availablePoints: created.balanceAfter
     };
+    selectedReward.value.stock = Math.max(0, selectedReward.value.stock - 1);
     redeemNotice.value = `已兑换“${selectedReward.value.name}”，请联系老师领取。`;
     closeRewardRedeem(true);
     try {
       const [balanceValue, redemptionValues, boardValue] = await Promise.all([
-        api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions"), api("/public/rankings/student-board")
+        api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions"), api("/public/rankings/student-board"), refreshRewardStock()
       ]);
       balance.value = balanceValue;
       board.value = boardValue;
@@ -321,6 +331,7 @@ async function redeemReward() {
     }
   } catch (failure) {
     redeemError.value = failure.message || "兑换失败，请刷新后重试";
+    await refreshRewardStock().catch(() => {});
   } finally {
     redeemSaving.value = false;
   }
@@ -402,8 +413,8 @@ onBeforeUnmount(() => {
       <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop" @click.self="closeRewardRedeem">
         <section class="reward-redeem-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
           <header><div><span class="reward-redeem-mark"><Gift aria-hidden="true" /></span><div><p class="password-modal-kicker">积分兑换</p><h2 id="rewardRedeemTitle">确认兑换奖品</h2></div></div><button class="icon-button" type="button" title="关闭" @click="closeRewardRedeem"><X :size="17" /></button></header>
-          <div class="reward-redeem-body"><div class="reward-redeem-item"><div class="reward-image"><img v-if="selectedReward.imageUrl" :src="selectedReward.imageUrl" :alt="selectedReward.name"><Gift v-else aria-hidden="true" /></div><div><strong>{{ selectedReward.name }}</strong><small>需要 {{ selectedReward.requiredPoints }} 积分</small></div></div><p>当前可用积分：<b>{{ balance.availablePoints }}</b>；兑换后剩余：<b>{{ Math.max(0, balance.availablePoints - selectedReward.requiredPoints) }}</b></p><p v-if="redeemError" class="redeem-error" role="alert">{{ redeemError }}</p></div>
-          <footer><button class="password-later-button" type="button" @click="closeRewardRedeem">取消</button><button class="login-button" type="button" :disabled="redeemSaving || balance.availablePoints < selectedReward.requiredPoints" @click="redeemReward"><RefreshCw v-if="redeemSaving" class="spin" aria-hidden="true" /><span>{{ redeemSaving ? "兑换中…" : "确认兑换" }}</span></button></footer>
+          <div class="reward-redeem-body"><div class="reward-redeem-item"><div class="reward-image"><img v-if="selectedReward.imageUrl" :src="selectedReward.imageUrl" :alt="selectedReward.name"><Gift v-else aria-hidden="true" /></div><div><strong>{{ selectedReward.name }}</strong><small>需要 {{ selectedReward.requiredPoints }} 积分 · 剩余 {{ selectedReward.stock }} 件</small></div></div><p>当前可用积分：<b>{{ balance.availablePoints }}</b>；兑换后剩余：<b>{{ Math.max(0, balance.availablePoints - selectedReward.requiredPoints) }}</b></p><p v-if="redeemError" class="redeem-error" role="alert">{{ redeemError }}</p></div>
+          <footer><button class="password-later-button" type="button" @click="closeRewardRedeem">取消</button><button class="login-button" type="button" :disabled="redeemSaving || selectedReward.stock <= 0 || !!redeemError || balance.availablePoints < selectedReward.requiredPoints" @click="redeemReward"><RefreshCw v-if="redeemSaving" class="spin" aria-hidden="true" /><span>{{ redeemSaving ? "兑换中…" : "确认兑换" }}</span></button></footer>
         </section>
       </div>
       <div v-if="passwordPromptOpen" class="password-modal-backdrop" @click.self="deferPasswordChange">
@@ -472,12 +483,12 @@ onBeforeUnmount(() => {
           </div>
           <p v-if="redeemNotice" class="redeem-notice" role="status">{{ redeemNotice }}</p>
             <div v-if="rewards.length" class="reward-grid">
-              <article v-for="reward in rewards" :key="reward.id" class="reward-card" role="button" tabindex="0" @click="openRewardRedeem(reward)" @keydown.enter.prevent="openRewardRedeem(reward)">
+              <article v-for="reward in rewards" :key="reward.id" :class="['reward-card', { 'sold-out': reward.stock <= 0 }]" role="button" :aria-disabled="reward.stock <= 0" :tabindex="reward.stock > 0 ? 0 : -1" @click="openRewardRedeem(reward)" @keydown.enter.prevent="openRewardRedeem(reward)">
                 <div class="reward-image">
                   <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name">
                   <Gift v-else aria-hidden="true" />
                 </div>
-                <div class="reward-copy"><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong></div>
+                <div class="reward-copy"><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong><small class="reward-stock">{{ reward.stock > 0 ? `剩余 ${reward.stock} 件` : "已兑完 · 无法兑换" }}</small></div>
               </article>
             </div>
             <div v-else class="reward-empty"><Gift aria-hidden="true" /><span><strong>奖品正在补货</strong><small>老师添加奖品后会显示在这里</small></span></div>
@@ -1649,6 +1660,9 @@ button {
     animation: none;
   }
 }
+.reward-stock { display: block; margin-top: 6px; color: #a4b7d9; font-size: 11px; }
+.reward-card.sold-out { filter: grayscale(1); opacity: .55; cursor: not-allowed; }
+.reward-card.sold-out:hover { transform: none; box-shadow: none; border-color: #354c70; }
 .reward-card { cursor: pointer; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .reward-card:hover, .reward-card:focus-visible { border-color: #55ddff; outline: none; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(42, 189, 255, .16); }
 .redeem-notice { margin: -2px 0 10px; padding: 8px 10px; border: 1px solid #2b715f; border-radius: 6px; color: #9ff5c8; background: rgba(31, 103, 78, .2); font-size: 11px; }

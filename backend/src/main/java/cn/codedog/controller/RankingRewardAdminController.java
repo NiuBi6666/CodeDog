@@ -128,9 +128,9 @@ public class RankingRewardAdminController {
   @PostMapping(value = "/rewards", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
   public RankingRewardPayload.Reward createReward(@RequestParam String name, @RequestParam Integer requiredPoints,
-      @RequestParam(defaultValue = "true") Boolean enabled, @RequestParam(required = false) MultipartFile image,
+      @RequestParam(defaultValue = "true") Boolean enabled, @RequestParam(defaultValue = "0") Integer stock, @RequestParam(required = false) MultipartFile image,
       Principal principal, HttpServletRequest request) {
-    var value = rewards.createReward(principal.getName(), name, requiredPoints, enabled, image);
+    var value = rewards.createReward(principal.getName(), name, requiredPoints, enabled, image, stock);
     audit.change("REWARD", value.id(), java.util.Map.of(), rewardAudit(value));
     if (image != null && !image.isEmpty()) audit.detail(java.util.Map.of("image", audit.fileMetadata(image)));
     audit.record("ranking_reward_created:" + value.id(), request); return value;
@@ -139,9 +139,10 @@ public class RankingRewardAdminController {
   @PutMapping(value = "/rewards/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public RankingRewardPayload.Reward updateReward(@PathVariable long id, @RequestParam String name,
       @RequestParam Integer requiredPoints, @RequestParam(defaultValue = "true") Boolean enabled,
-      @RequestParam(required = false) MultipartFile image, Principal principal, HttpServletRequest request) {
+      @RequestParam(required = false) MultipartFile image, @RequestParam(required = false) Integer stock,
+      @RequestParam(required = false) Integer expectedStock, Principal principal, HttpServletRequest request) {
     var before = rewards.rewards(principal.getName()).stream().filter(item -> item.id() == id).findFirst().orElse(null);
-    var value = rewards.updateReward(principal.getName(), id, name, requiredPoints, enabled, image);
+    var value = rewards.updateReward(principal.getName(), id, name, requiredPoints, enabled, image, stock, expectedStock);
     audit.change("REWARD", id, before == null ? java.util.Map.of() : rewardAudit(before), rewardAudit(value));
     if (image != null && !image.isEmpty()) audit.detail(java.util.Map.of("image", audit.fileMetadata(image)));
     audit.record("ranking_reward_updated:" + id, request); return value;
@@ -193,7 +194,7 @@ public class RankingRewardAdminController {
   }
   private java.util.Map<String,Object> rewardAudit(RankingRewardPayload.Reward value) {
     return java.util.Map.of("name", value.name(), "requiredPoints", value.requiredPoints(),
-      "enabled", value.enabled(), "hasImage", value.hasImage());
+      "stock", value.stock(), "enabled", value.enabled(), "hasImage", value.hasImage());
   }
   private java.util.Map<String,Object> redemptionAudit(RankingRewardPayload.Redemption value) {
     var map = new java.util.LinkedHashMap<String,Object>();

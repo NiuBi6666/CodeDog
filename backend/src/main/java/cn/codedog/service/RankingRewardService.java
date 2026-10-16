@@ -27,12 +27,15 @@ public class RankingRewardService {
   private static final Set<String> IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
   private final JdbcTemplate jdbc;
   private final RankingAnnouncementBroadcaster announcements;
+  private final AuditService audit;
 
-  public RankingRewardService(JdbcTemplate jdbc) { this(jdbc, null); }
+  public RankingRewardService(JdbcTemplate jdbc) { this(jdbc, null, null); }
+
+  public RankingRewardService(JdbcTemplate jdbc, RankingAnnouncementBroadcaster announcements) { this(jdbc, announcements, null); }
 
   @Autowired
-  public RankingRewardService(JdbcTemplate jdbc, RankingAnnouncementBroadcaster announcements) {
-    this.jdbc = jdbc; this.announcements = announcements;
+  public RankingRewardService(JdbcTemplate jdbc, RankingAnnouncementBroadcaster announcements, AuditService audit) {
+    this.jdbc = jdbc; this.announcements = announcements; this.audit = audit;
   }
 
   public RankingRewardPayload.Announcement announcement(String owner) {
@@ -117,34 +120,41 @@ public class RankingRewardService {
   }
 
   public List<RankingRewardPayload.Reward> rewards(String owner) {
-    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at FROM ranking_rewards WHERE owner_username=? ORDER BY enabled DESC,required_points,id",
-      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), false), owner);
+    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? ORDER BY enabled DESC,required_points,id",
+      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), false), owner);
   }
 
   public List<RankingRewardPayload.Reward> publicRewards() {
     String owner = publicOwner();
-    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE ORDER BY required_points,id",
-      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), true, rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), true), owner);
+    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE ORDER BY required_points,id",
+      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), true, rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), true), owner);
   }
 
   @Transactional
-  public RankingRewardPayload.Reward createReward(String owner, String nameValue, Integer pointsValue, Boolean enabledValue, MultipartFile image) {
+  public RankingRewardPayload.Reward createReward(String owner, String nameValue, Integer pointsValue, Boolean enabledValue, MultipartFile image, Integer stockValue) {
     String name = text(nameValue, "奖品名称", 100);
     int points = points(pointsValue);
+    int stock = stock(stockValue);
     ImageValue imageValue = image(image, true);
     GeneratedKeyHolder key = new GeneratedKeyHolder();
     jdbc.update(connection -> {
-      PreparedStatement statement = connection.prepareStatement("INSERT INTO ranking_rewards(owner_username,reward_name,required_points,image_data,image_content_type,enabled) VALUES(?,?,?,?,?,?)", new String[]{"id"});
+      PreparedStatement statement = connection.prepareStatement("INSERT INTO ranking_rewards(owner_username,reward_name,required_points,image_data,image_content_type,enabled,stock) VALUES(?,?,?,?,?,?,?)", new String[]{"id"});
       statement.setString(1, owner); statement.setString(2, name); statement.setInt(3, points);
       statement.setBytes(4, imageValue == null ? null : imageValue.data()); statement.setString(5, imageValue == null ? null : imageValue.contentType());
-      statement.setBoolean(6, enabledValue == null || enabledValue); return statement;
+      statement.setBoolean(6, enabledValue == null || enabledValue); statement.setInt(7, stock); return statement;
     }, key);
     return rewardById(owner, Objects.requireNonNull(key.getKey()).longValue());
   }
 
   @Transactional
-  public RankingRewardPayload.Reward updateReward(String owner, long id, String nameValue, Integer pointsValue, Boolean enabledValue, MultipartFile image) {
-    rewardById(owner, id);
+  public RankingRewardPayload.Reward updateReward(String owner, long id, String nameValue, Integer pointsValue, Boolean enabledValue, MultipartFile image, Integer stockValue, Integer expectedStock) {
+    jdbc.queryForList("SELECT id FROM ranking_rewards WHERE id=? AND owner_username=? FOR UPDATE", id, owner);
+    var before = rewardById(owner, id);
+    if (stockValue != null) {
+      stock(stockValue);
+      if (expectedStock == null || expectedStock != before.stock())
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "库存已变化，请重新打开奖品后修改");
+    }
     String name = text(nameValue, "奖品名称", 100);
     int points = points(pointsValue);
     ImageValue imageValue = image(image, false);
@@ -152,6 +162,7 @@ public class RankingRewardService {
       ? jdbc.update("UPDATE ranking_rewards SET reward_name=?,required_points=?,enabled=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", name, points, enabledValue == null || enabledValue, id, owner)
       : jdbc.update("UPDATE ranking_rewards SET reward_name=?,required_points=?,enabled=?,image_data=?,image_content_type=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", name, points, enabledValue == null || enabledValue, imageValue.data(), imageValue.contentType(), id, owner);
     if (changed == 0) throw notFound("奖品不存在");
+    if (stockValue != null) jdbc.update("UPDATE ranking_rewards SET stock=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", stockValue, id, owner);
     return rewardById(owner, id);
   }
 
@@ -208,13 +219,20 @@ public class RankingRewardService {
     // Lock every current student row before reading the balance so two tabs cannot spend the same points.
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
     if (names.isEmpty()) throw notFound("学员不存在");
-    List<RewardValue> rewardValues = jdbc.query("SELECT id,reward_name,required_points,enabled FROM ranking_rewards WHERE id=? AND owner_username=? FOR UPDATE",
-      (rs, n) -> new RewardValue(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4)), rewardId, owner);
+    List<RewardValue> rewardValues = jdbc.query("SELECT id,reward_name,required_points,enabled,stock FROM ranking_rewards WHERE id=? AND owner_username=? FOR UPDATE",
+      (rs, n) -> new RewardValue(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getInt(5)), rewardId, owner);
     if (rewardValues.isEmpty()) throw notFound("奖品不存在");
     RewardValue reward = rewardValues.getFirst();
     if (!reward.enabled()) throw invalid("该奖品已停用");
+    if (reward.stock() <= 0) throw invalid("该奖品已兑完，请选择其他奖品");
     RankingRewardPayload.Balance current = balanceValues(owner, studentId);
     if (current.availablePoints() < reward.points()) throw invalid("可用积分不足，当前可用 " + current.availablePoints() + " 分");
+    // Conditional update is a second database guard; the enclosing transaction rolls it back on any failure.
+    int reserved = jdbc.update("UPDATE ranking_rewards SET stock=stock-1,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=? AND enabled=TRUE AND stock>0", rewardId, owner);
+    if (reserved != 1) throw invalid("该奖品已兑完，请选择其他奖品");
+    if (audit != null) audit.detail(java.util.Map.of("rewardStock", java.util.Map.of(
+      "rewardId", rewardId, "before", reward.stock(), "after", reward.stock()-1,
+      "reason", "redemption", "studentId", studentId)));
     GeneratedKeyHolder key = new GeneratedKeyHolder();
     jdbc.update(connection -> {
       PreparedStatement statement = connection.prepareStatement("INSERT INTO ranking_reward_redemptions(owner_username,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after) VALUES(?,?,?,?,?,?,?,?)", new String[]{"id"});
@@ -247,14 +265,14 @@ public class RankingRewardService {
   }
 
   private RankingRewardPayload.Reward rewardById(String owner, long id) {
-    List<RankingRewardPayload.Reward> values = jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at FROM ranking_rewards WHERE id=? AND owner_username=?",
-      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), false), id, owner);
+    List<RankingRewardPayload.Reward> values = jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE id=? AND owner_username=?",
+      (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), false), id, owner);
     if (values.isEmpty()) throw notFound("奖品不存在"); return values.getFirst();
   }
 
-  private RankingRewardPayload.Reward reward(long id, String name, int points, boolean enabled, boolean hasImage, Instant createdAt, Instant updatedAt, boolean publicImage) {
+  private RankingRewardPayload.Reward reward(long id, String name, int points, boolean enabled, boolean hasImage, Instant createdAt, Instant updatedAt, int stock, boolean publicImage) {
     String imagePath = publicImage ? "/api/public/rankings/rewards/" : "/api/rankings/admin/rewards/";
-    return new RankingRewardPayload.Reward(id, name, points, enabled, hasImage, hasImage ? imagePath + id + "/image?v=" + (updatedAt == null ? 0 : updatedAt.toEpochMilli()) : null, createdAt, updatedAt);
+    return new RankingRewardPayload.Reward(id, name, points, stock, enabled, hasImage, hasImage ? imagePath + id + "/image?v=" + (updatedAt == null ? 0 : updatedAt.toEpochMilli()) : null, createdAt, updatedAt);
   }
 
   private String publicOwner() { return jdbc.queryForObject("SELECT username FROM users ORDER BY is_admin DESC,id LIMIT 1", String.class); }
@@ -311,5 +329,10 @@ public class RankingRewardService {
   private ResponseStatusException invalid(String message) { return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, message); }
   private ResponseStatusException notFound(String message) { return new ResponseStatusException(HttpStatus.NOT_FOUND, message); }
   private record ImageValue(byte[] data, String contentType) {}
-  private record RewardValue(long id, String name, int points, boolean enabled) {}
+  private int stock(Integer value) {
+    if (value == null || value < 0 || value > 999_999_999) throw invalid("库存必须为 0 至 999999999 的整数");
+    return value;
+  }
+
+  private record RewardValue(long id, String name, int points, boolean enabled, int stock) {}
 }

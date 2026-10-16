@@ -533,6 +533,50 @@ class RbacIntegrationTest {
             .andExpect(status().isForbidden());
     }
 
+    @Test
+    void rewardInventoryRequiresExactPermissionsAndAuditsBeforeAndAfter() throws Exception {
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS ranking_rewards (
+              id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,reward_name VARCHAR(100) NOT NULL,
+              required_points INT NOT NULL,stock INT NOT NULL DEFAULT 0,image_data BLOB,image_content_type VARCHAR(50),
+              enabled BOOLEAN NOT NULL,created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+            """);
+        String username=uniqueUsername("stock");
+        User teacher=users.saveAndFlush(user(username,"stock-test-password"));
+        MockHttpSession session=login(username,"stock-test-password");
+        mvc.perform(multipart("/api/rankings/admin/rewards").session(session).with(csrf())
+            .param("name","库存测试").param("requiredPoints","1").param("stock","4"))
+            .andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.create","rankings.rewards.read")));
+        users.saveAndFlush(teacher);
+        var result=mvc.perform(multipart("/api/rankings/admin/rewards").session(session).with(csrf())
+            .param("name","库存测试").param("requiredPoints","1").param("stock","4"))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.stock").value(4)).andReturn();
+        long id=json.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+        mvc.perform(multipart("/api/rankings/admin/rewards/{id}",id).with(req->{req.setMethod("PUT"); return req;})
+            .session(session).with(csrf()).param("name","库存测试").param("requiredPoints","1")
+            .param("stock","7").param("expectedStock","4")).andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.edit","rankings.rewards.read")));
+        users.saveAndFlush(teacher);
+        mvc.perform(multipart("/api/rankings/admin/rewards/{id}",id).with(req->{req.setMethod("PUT"); return req;})
+            .session(session).with(csrf()).param("name","库存测试").param("requiredPoints","1")
+            .param("stock","7").param("expectedStock","4"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.stock").value(7));
+        assertThat(jdbc.queryForObject("SELECT changes_json FROM audit_log WHERE action=? ORDER BY id DESC LIMIT 1",String.class,
+            "ranking_reward_updated:"+id)).contains("stock").contains("4").contains("7");
+        mvc.perform(multipart("/api/rankings/admin/rewards/{id}",id).with(req->{req.setMethod("PUT"); return req;})
+            .session(session).with(csrf()).param("name","旧库存").param("requiredPoints","1")
+            .param("stock","9").param("expectedStock","4"))
+            .andExpect(status().isConflict());
+        mvc.perform(get("/api/rankings/admin/rewards").session(session))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].stock").value(7));
+        mvc.perform(multipart("/api/rankings/admin/rewards/{id}",id).with(req->{req.setMethod("PUT"); return req;})
+            .session(session).param("name","无CSRF").param("requiredPoints","1").param("stock","9").param("expectedStock","7"))
+            .andExpect(status().isForbidden());
+        jdbc.update("DELETE FROM ranking_rewards WHERE id=?",id);
+    }
+
     private MockHttpSession login(String username, String password) throws Exception {
         var result = mvc.perform(post("/api/auth/login").with(csrf())
                 .contentType(APPLICATION_JSON)

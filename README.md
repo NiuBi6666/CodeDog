@@ -114,3 +114,13 @@ The frontend container joins the external codemao_default network and proxies th
 ## 代码目录约定
 
 后端按职责集中管理：controller 目录放置全部 HTTP 控制器，service 目录放置全部业务服务及计算与导入辅助类，dao 目录放置全部数据访问接口，config 目录放置 Spring 配置，model 目录放置实体和接口数据模型；只有确有必要时才在这些目录下增加二级包。前端可直接发布的静态文件统一放在 frontend/public 目录，由构建产物复制到站点根目录，确保 favicon、排行榜页面和验证文件保持原有 URL。
+
+
+### 奖品库存
+
+- 添加和编辑奖品时可设置剩余库存（0–999999999）；旧奖品迁移为 0 件，需要核实后补货。
+- 库存为 0 仍向学生展示，标记“已兑完 · 无法兑换”并禁用兑换；剩余库存显示在奖品和确认弹窗中。
+- 新增库存沿用 `rankings.rewards.create`，修改库存沿用可配置的 `rankings.rewards.edit` 权限。审计记录管理员库存前后值，以及兑换造成的 `rewardStock` 前后值。
+- 兑换先锁定学生和奖品，再核验数据库积分余额，通过条件更新扣减一件库存，并写入兑换流水；这些操作在同一事务内，任何失败全部回滚。发放状态切换不会再次扣库存。
+- 修改库存需提交 `stock` 和打开编辑表单时的 `expectedStock`，库存已变化返回 409，防止旧表单覆盖学生已经兑换的数量。旧客户端不传库存时只更新奖品其他信息。
+- 并发回归：`RankingRewardServiceTest` 包含 16 位学员争抢最后一件、同一学员多页兑换、库存冲突、积分不足、插入失败回滚和发放不重复扣库存。可通过 `reward.test.url/user/password` 在隔离 MySQL 数据库 `reward_stock_test` 运行；严禁指向生产库。

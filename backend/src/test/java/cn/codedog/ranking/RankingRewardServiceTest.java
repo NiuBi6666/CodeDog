@@ -23,31 +23,38 @@ class RankingRewardServiceTest {
   @BeforeEach
   void setUp() {
     DriverManagerDataSource dataSource = new DriverManagerDataSource(
-      "jdbc:h2:mem:rewards-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE", "sa", "");
+      System.getProperty("reward.test.url", "jdbc:h2:mem:rewards-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE"), System.getProperty("reward.test.user", "sa"), System.getProperty("reward.test.password", ""));
     jdbc = new JdbcTemplate(dataSource);
+    if (System.getProperty("reward.test.url") != null) {
+      // Only the explicitly supplied isolated test database is reset, never the application datasource.
+      if (!System.getProperty("reward.test.url").contains("/reward_stock_test")) throw new IllegalStateException("Isolated test database required");
+      jdbc.execute("SET FOREIGN_KEY_CHECKS=0");
+      for (String table : new String[]{"ranking_reward_redemptions", "ranking_rewards", "ranking_point_adjustments", "ranking_lesson_results", "ranking_students", "ranking_announcements", "ranking_board_settings", "users"}) jdbc.execute("DROP TABLE IF EXISTS " + table);
+      jdbc.execute("SET FOREIGN_KEY_CHECKS=1");
+    }
     jdbc.execute("CREATE TABLE users(id BIGINT AUTO_INCREMENT PRIMARY KEY,username VARCHAR(50) NOT NULL UNIQUE,is_admin BOOLEAN NOT NULL)");
     jdbc.execute("""
       CREATE TABLE ranking_board_settings(
         owner_username VARCHAR(50) PRIMARY KEY,announcement VARCHAR(500) NOT NULL DEFAULT '',
-        updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+        updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6))
       """);
     jdbc.execute("""
       CREATE TABLE ranking_announcements(
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,announcement_text VARCHAR(500) NOT NULL,
         enabled BOOLEAN NOT NULL DEFAULT FALSE,publish_at TIMESTAMP(6),unpublish_at TIMESTAMP(6),
-        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6))
       """);
     jdbc.execute("""
       CREATE TABLE ranking_rewards(
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,reward_name VARCHAR(100) NOT NULL,
-        required_points INT NOT NULL,image_data BLOB,image_content_type VARCHAR(50),enabled BOOLEAN NOT NULL,
-        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+        stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),required_points INT NOT NULL,image_data BLOB,image_content_type VARCHAR(50),enabled BOOLEAN NOT NULL,
+        created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6))
       """);
     jdbc.execute("""
       CREATE TABLE ranking_students(
         owner_username VARCHAR(50) NOT NULL,camp_id VARCHAR(100) NOT NULL,class_id VARCHAR(100) NOT NULL,
         student_id VARCHAR(100) NOT NULL,student_name VARCHAR(100) NOT NULL,
-        updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         PRIMARY KEY(owner_username,camp_id,class_id,student_id))
       """);
     jdbc.execute("""
@@ -73,7 +80,7 @@ class RankingRewardServiceTest {
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,
         student_name VARCHAR(100) NOT NULL,reward_id BIGINT,reward_name VARCHAR(100) NOT NULL,points_spent INT NOT NULL,
         balance_before INT NOT NULL,balance_after INT NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',redeemed_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',redeemed_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         fulfilled_at TIMESTAMP(6),fulfilled_by VARCHAR(50),
         FOREIGN KEY(reward_id) REFERENCES ranking_rewards(id) ON DELETE SET NULL)
       """);
@@ -119,10 +126,10 @@ class RankingRewardServiceTest {
 
   @Test
   void acceptsMaximumRewardPointsAndRejectsValuesAboveIt() {
-    var reward = service.createReward("teacher-a", "最高积分奖品", 999_999_999, true, null);
+    var reward = service.createReward("teacher-a", "最高积分奖品", 999_999_999, true, null, 10);
 
     assertThat(reward.requiredPoints()).isEqualTo(999_999_999);
-    assertThatThrownBy(() -> service.createReward("teacher-a", "超出上限奖品", 1_000_000_000, true, null))
+    assertThatThrownBy(() -> service.createReward("teacher-a", "超出上限奖品", 1_000_000_000, true, null, 10))
       .isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> {
         var status = (ResponseStatusException) error;
@@ -134,7 +141,7 @@ class RankingRewardServiceTest {
   @Test
   void managesRewardImagesAndKeepsRedemptionHistoryAfterDeletion() {
     MockMultipartFile image = new MockMultipartFile("image", "gift.png", "image/png", new byte[]{1, 2, 3, 4});
-    var reward = service.createReward("teacher-a", "编程笔记本", 300, true, image);
+    var reward = service.createReward("teacher-a", "编程笔记本", 300, true, image, 10);
 
     assertThat(reward.name()).isEqualTo("编程笔记本");
     assertThat(reward.hasImage()).isTrue();
@@ -156,9 +163,9 @@ class RankingRewardServiceTest {
   @Test
   void exposesOnlyEnabledRewardsWithPublicImages() {
     MockMultipartFile image = new MockMultipartFile("image", "gift.png", "image/png", new byte[]{5, 6, 7});
-    var enabled = service.createReward("teacher-a", "机械键盘", 800, true, image);
-    service.createReward("teacher-a", "暂停售卖", 100, false, null);
-    service.createReward("teacher-b", "其他老师奖品", 50, true, null);
+    var enabled = service.createReward("teacher-a", "机械键盘", 800, true, image, 10);
+    service.createReward("teacher-a", "暂停售卖", 100, false, null, 10);
+    service.createReward("teacher-b", "其他老师奖品", 50, true, null, 10);
 
     var visible = service.publicRewards();
 
@@ -172,8 +179,8 @@ class RankingRewardServiceTest {
 
   @Test
   void preventsOverspendingAndTracksFulfillment() {
-    var small = service.createReward("teacher-a", "小奖品", 300, true, null);
-    var large = service.createReward("teacher-a", "大奖品", 250, true, null);
+    var small = service.createReward("teacher-a", "小奖品", 300, true, null, 10);
+    var large = service.createReward("teacher-a", "大奖品", 250, true, null, 10);
     var redemption = service.createRedemption("teacher-a", new RankingRewardPayload.RedemptionRequest("student-1", small.id()));
 
     assertThat(redemption.balanceBefore()).isEqualTo(500);
@@ -198,7 +205,7 @@ class RankingRewardServiceTest {
 
   @Test
   void rejectsDisabledRewardsAndCrossTeacherStudents() {
-    var disabled = service.createReward("teacher-a", "停用奖品", 100, false, null);
+    var disabled = service.createReward("teacher-a", "停用奖品", 100, false, null, 10);
     assertThatThrownBy(() -> service.createRedemption("teacher-a", new RankingRewardPayload.RedemptionRequest("student-1", disabled.id())))
       .isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(422));
@@ -210,9 +217,9 @@ class RankingRewardServiceTest {
   @Test
   void returnsOnlyTheCurrentStudentsRedemptionsNewestFirst() {
     addStudent("teacher-a", "student-2", "王同学", 500);
-    var firstReward = service.createReward("teacher-a", "第一件奖品", 50, true, null);
-    var secondReward = service.createReward("teacher-a", "第二件奖品", 60, true, null);
-    var otherTeacherReward = service.createReward("teacher-b", "其他老师奖品", 70, true, null);
+    var firstReward = service.createReward("teacher-a", "第一件奖品", 50, true, null, 10);
+    var secondReward = service.createReward("teacher-a", "第二件奖品", 60, true, null, 10);
+    var otherTeacherReward = service.createReward("teacher-b", "其他老师奖品", 70, true, null, 10);
 
     var first = service.createStudentRedemption("teacher-a", "student-1", firstReward.id());
     var second = service.createStudentRedemption("teacher-a", "student-1", secondReward.id());
@@ -234,6 +241,103 @@ class RankingRewardServiceTest {
       .containsExactly(450, 500);
     assertThat(values).extracting(RankingRewardPayload.Redemption::balanceAfter)
       .containsExactly(390, 450);
+  }
+
+  private org.springframework.transaction.support.TransactionTemplate transactions() {
+    return new org.springframework.transaction.support.TransactionTemplate(
+      new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+  }
+
+  @Test
+  void validatesStockAndPreservesItWhenAnOldClientOnlyEditsDetails() {
+    var reward = service.createReward("teacher-a", "库存", 100, true, null, 3);
+    assertThat(reward.stock()).isEqualTo(3);
+    assertThatThrownBy(() -> service.createReward("teacher-a", "负库存", 100, true, null, -1)).isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(() -> service.createReward("teacher-a", "超限库存", 100, true, null, 1_000_000_000)).isInstanceOf(ResponseStatusException.class);
+    transactions().executeWithoutResult(status -> service.updateReward("teacher-a", reward.id(), "修改名称", 100, true, null, null, null));
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isEqualTo(3);
+    transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", "student-1", reward.id()));
+    assertThatThrownBy(() -> transactions().executeWithoutResult(status -> service.updateReward("teacher-a", reward.id(), "旧表单", 100, true, null, 10, 3)))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(409));
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isEqualTo(2);
+    assertThat(service.rewards("teacher-a").getFirst().name()).isEqualTo("修改名称");
+    transactions().executeWithoutResult(status -> service.updateReward("teacher-a", reward.id(), "补货", 100, true, null, 8, 2));
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isEqualTo(8);
+  }
+
+  @Test
+  void soldOutAndInsufficientPointsNeverSpendStockOrPoints() {
+    var sold = service.createReward("teacher-a", "售罄", 100, true, null, 0);
+    assertThat(service.publicRewards().getFirst().stock()).isZero();
+    assertThatThrownBy(() -> transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", "student-1", sold.id())))
+      .isInstanceOf(ResponseStatusException.class).hasMessageContaining("已兑完");
+    var expensive = service.createReward("teacher-a", "买不起", 600, true, null, 2);
+    assertThatThrownBy(() -> transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", "student-1", expensive.id())))
+      .isInstanceOf(ResponseStatusException.class).hasMessageContaining("积分不足");
+    assertThat(service.balance("teacher-a", "student-1").availablePoints()).isEqualTo(500);
+    assertThat(service.redemptions("teacher-a")).isEmpty();
+    assertThat(service.rewards("teacher-a").stream().filter(x -> x.id()==expensive.id()).findFirst().orElseThrow().stock()).isEqualTo(2);
+  }
+
+  @Test
+  void failedRedemptionInsertRollsBackInventory() {
+    var reward = service.createReward("teacher-a", "回滚测试", 100, true, null, 1);
+    jdbc.execute("ALTER TABLE ranking_reward_redemptions ADD CONSTRAINT force_test_failure CHECK (points_spent < 1)");
+    assertThatThrownBy(() -> transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", "student-1", reward.id())))
+      .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isEqualTo(1);
+    assertThat(service.balance("teacher-a", "student-1").availablePoints()).isEqualTo(500);
+    assertThat(service.redemptions("teacher-a")).isEmpty();
+  }
+
+  @Test
+  void concurrentStudentsCannotOversellTheLastItem() throws Exception {
+    var reward = service.createReward("teacher-a", "最后一件", 100, true, null, 1);
+    for (int i=0;i<16;i++) addStudent("teacher-a", "race-"+i, "并发学员", 500);
+    int success = race(16, i -> "race-"+i, reward.id());
+    assertThat(success).isEqualTo(1);
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isZero();
+    assertThat(service.redemptions("teacher-a")).hasSize(1);
+    assertThat(jdbc.queryForObject("SELECT SUM(points_spent) FROM ranking_reward_redemptions", Integer.class)).isEqualTo(100);
+    assertThat(jdbc.queryForObject("SELECT SUM(balance_after) FROM ranking_reward_redemptions", Integer.class)).isEqualTo(400);
+  }
+
+  @Test
+  void simultaneousTabsCannotSpendTheSameBalanceTwice() throws Exception {
+    var reward = service.createReward("teacher-a", "多页兑换", 300, true, null, 20);
+    assertThat(race(12, i -> "student-1", reward.id())).isEqualTo(1);
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isEqualTo(19);
+    assertThat(service.balance("teacher-a", "student-1").availablePoints()).isEqualTo(200);
+    var redemption = service.redemptions("teacher-a").getFirst();
+    service.setFulfilled("teacher-a", redemption.id(), true, "teacher-a");
+    service.setFulfilled("teacher-a", redemption.id(), false, "teacher-a");
+    assertThat(service.rewards("teacher-a").getFirst().stock()).isEqualTo(19);
+  }
+
+  private int race(int count, java.util.function.IntFunction<String> student, long rewardId) throws Exception {
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(count);
+    var start = new java.util.concurrent.CountDownLatch(1);
+    var futures = new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();
+    try {
+      for (int i=0;i<count;i++) {
+        final String id=student.apply(i);
+        futures.add(pool.submit(() -> {
+          start.await();
+          try {
+            transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", id, rewardId));
+            return true;
+          } catch (ResponseStatusException error) {
+            assertThat(error.getStatusCode().value()).isEqualTo(422);
+            return false;
+          }
+        }));
+      }
+      start.countDown();
+      int successes=0;
+      for (var future:futures) if (future.get(45, java.util.concurrent.TimeUnit.SECONDS)) successes++;
+      return successes;
+    } finally { pool.shutdownNow(); }
   }
 
   private void addStudent(String owner, String id, String name, int points) {
