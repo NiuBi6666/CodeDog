@@ -100,12 +100,15 @@ function toggleGroup(group) {
   draft.value = next;
 }
 
+const allEditablePermissions = computed(() => catalog.value.flatMap(editablePermissions));
+const allPermissionsSelected = computed(() => allEditablePermissions.value.length > 0 &&
+  allEditablePermissions.value.every((permission) => draft.value.has(permission.code)));
+
 function selectAllPermissions() {
   if (saving.value || !canManagePermissions.value) return;
   const next = new Set(draft.value);
-  catalog.value.forEach((group) => {
-    editablePermissions(group).forEach((permission) => next.add(permission.code));
-  });
+  const enable = !allPermissionsSelected.value;
+  allEditablePermissions.value.forEach((permission) => enable ? next.add(permission.code) : next.delete(permission.code));
   draft.value = next;
 }
 
@@ -215,7 +218,7 @@ onMounted(load);
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="saving" @click="closePermissions"><X :size="18"/></button>
           </header>
           <div class="permission-groups">
-            <div class="permission-bulk-actions"><span>一键选中所有可授予的权限</span><button class="button button-quiet button-small" type="button" :disabled="saving || !canManagePermissions" @click="selectAllPermissions">全部全选</button></div>
+            <div class="permission-bulk-actions"><span>一键全选或取消所有可授予的权限</span><button class="button button-quiet button-small" type="button" :disabled="saving || !canManagePermissions || !allEditablePermissions.length" :aria-pressed="allPermissionsSelected" @click="selectAllPermissions">{{ allPermissionsSelected ? "全部取消" : "全部全选" }}</button></div>
             <div v-if="error" class="notice notice-error" role="alert">{{ error }}</div>
             <section v-for="group in catalog" :key="group.key" class="permission-group">
               <label class="permission-group-title"><input type="checkbox" :checked="groupSelected(group)" :disabled="!editablePermissions(group).length" @change="toggleGroup(group)"><strong>{{ group.label }}</strong><span>全选</span></label>

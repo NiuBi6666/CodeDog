@@ -9,7 +9,7 @@ function editor(admin = true, assigned = ["users.permissions.manage", "dashboard
   const api = vi.fn();
   const auth = { user: { username: "manager", admin, permissions: assigned } };
   const state = new Function("computed", "ref", "api", "jsonBody", "notify", "auth", "hasPermission", source + `
-    return { selected, draft, catalog, users, saving, error, openPermissions, closePermissions, selectAllPermissions, savePermissions };
+    return { selected, draft, catalog, users, saving, error, openPermissions, closePermissions, selectAllPermissions, savePermissions, allPermissionsSelected, toggle, toggleGroup };
   `)(computed, ref, api, JSON.stringify, vi.fn(), auth, (code) => admin || assigned.includes(code));
   state.catalog.value = [{ key: "home", permissions: [{ code: "dashboard.view", type: "page" }, { code: "dashboard.stats", type: "data" }] }];
   state.users.value = [{ id: 7, username: "teacher", permissions: [] }];
@@ -22,14 +22,48 @@ describe("permission editor", () => {
     const state = editor();
     state.selectAllPermissions();
     expect([...state.draft.value]).toEqual(["dashboard.view", "dashboard.stats"]);
+    expect(state.allPermissionsSelected.value).toBe(true);
     state.selectAllPermissions();
-    expect(state.draft.value.size).toBe(2);
+    expect(state.draft.value.size).toBe(0);
+    expect(state.allPermissionsSelected.value).toBe(false);
   });
 
   it("selects only permissions the managing teacher may grant", () => {
     const state = editor(false);
     state.selectAllPermissions();
     expect([...state.draft.value]).toEqual(["dashboard.view"]);
+  });
+
+  it("tracks individual and group changes when deciding between select and clear", () => {
+    const state = editor();
+    const group = state.catalog.value[0];
+    state.toggle(group, group.permissions[1]);
+    expect(state.allPermissionsSelected.value).toBe(true);
+    state.toggle(group, group.permissions[1]);
+    expect(state.allPermissionsSelected.value).toBe(false);
+    state.selectAllPermissions();
+    expect(state.draft.value.size).toBe(2);
+    state.toggleGroup(group);
+    expect(state.allPermissionsSelected.value).toBe(false);
+    expect(state.draft.value.size).toBe(0);
+  });
+
+  it("clears only editable permissions and preserves locked grants", () => {
+    const state = editor(false);
+    state.draft.value = new Set(["dashboard.stats"]);
+    state.selectAllPermissions();
+    expect(state.allPermissionsSelected.value).toBe(true);
+    state.selectAllPermissions();
+    expect([...state.draft.value]).toEqual(["dashboard.stats"]);
+    expect(state.allPermissionsSelected.value).toBe(false);
+  });
+
+  it("does not treat an empty catalog as fully selected", () => {
+    const state = editor();
+    state.catalog.value = [];
+    expect(state.allPermissionsSelected.value).toBe(false);
+    state.selectAllPermissions();
+    expect(state.draft.value.size).toBe(0);
   });
 
   it("updates the list and closes the dialog after a successful save", async () => {
