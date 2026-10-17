@@ -222,6 +222,7 @@ public class RankingRewardService {
   }
 
   private RankingRewardPayload.Redemption createRedemptionInternal(String owner, String studentId, long rewardId) {
+    new RankingPointsService(jdbc).lock(owner,studentId);
     // Lock every current student row before reading the balance so two tabs cannot spend the same points.
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
     if (names.isEmpty()) throw notFound("学员不存在");
@@ -231,6 +232,8 @@ public class RankingRewardService {
     RewardValue reward = rewardValues.getFirst();
     if (!reward.enabled()) throw invalid("该奖品已停用");
     if (reward.stock() <= 0) throw invalid("该奖品已兑完，请选择其他奖品");
+    RankingPointsService points = new RankingPointsService(jdbc);
+    long rawBefore = points.raw(owner,studentId);
     RankingRewardPayload.Balance current = balanceValues(owner, studentId);
     if (current.availablePoints() < reward.points()) throw invalid("可用积分不足，当前可用 " + current.availablePoints() + " 分");
     // Conditional update is a second database guard; the enclosing transaction rolls it back on any failure.
@@ -247,7 +250,9 @@ public class RankingRewardService {
       statement.setInt(7, current.availablePoints()); statement.setInt(8, current.availablePoints() - reward.points());
       return statement;
     }, key);
-    return redemptionById(owner, Objects.requireNonNull(key.getKey()).longValue());
+    long redemptionId=Objects.requireNonNull(key.getKey()).longValue();
+    points.record(owner,studentId,"REDEMPTION","redeem:"+redemptionId,rawBefore,points.raw(owner,studentId),"兑换："+reward.name(),studentId);
+    return redemptionById(owner, redemptionId);
   }
 
   private RankingRewardPayload.Balance balanceValues(String owner, String studentId) {
@@ -258,7 +263,7 @@ public class RankingRewardService {
     int spentPoints = Objects.requireNonNullElse(spent, 0);
     int adjustmentPoints = Objects.requireNonNullElse(adjustment, 0);
     return new RankingRewardPayload.Balance(earnedPoints, spentPoints,
-        Math.max(0, earnedPoints + adjustmentPoints - spentPoints), adjustmentPoints);
+        new RankingPointsService(jdbc).available(owner,studentId), adjustmentPoints);
   }
 
   @Transactional

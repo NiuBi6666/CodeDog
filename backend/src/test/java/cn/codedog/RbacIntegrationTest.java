@@ -33,9 +33,15 @@ class RbacIntegrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
+    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingPointsService operationsPoints;
+    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingImportWorkflow operationsImports;
 
     @BeforeEach
     void ensureRankingMappingTables() {
+        OperationsTestSchema.create(jdbc);
+        org.mockito.Mockito.when(operationsPoints.reconcile(org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("checked",0,"anomalies",0));
+        org.mockito.Mockito.when(operationsImports.confirm(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString())).thenReturn(new cn.codedog.model.RankingPayload.ImportSummary(1,0,0,0,0,java.util.List.of()));
+        org.mockito.Mockito.when(operationsImports.reverse(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("batchId",1));
         jdbc.execute("""
             CREATE TABLE IF NOT EXISTS ranking_teacher_mappings (
               crm_teacher_id VARCHAR(100) PRIMARY KEY,
@@ -662,4 +668,26 @@ class RbacIntegrationTest {
         mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON)
             .content("{\"username\":\"validnewuser\",\"password\":\"123\",\"confirmation\":\"123\"}")).andExpect(status().isBadRequest());
     }
+    @Test void pointsOperationsReadPermissionsAreIndependentAndRevocable() throws Exception {
+      String name=uniqueUsername("pointops");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
+      for(var spec:java.util.List.of(new String[]{"rankings.ledger.read","/api/rankings/admin/operations/students/unknown/ledger"},new String[]{"rankings.reconciliation.read","/api/rankings/admin/operations/reconciliations"},new String[]{"rankings.batches.read","/api/rankings/admin/operations/import-batches"})){
+        mvc.perform(get(spec[1]).session(session)).andExpect(status().isForbidden());
+        member.setPermissions(new LinkedHashSet<>(java.util.Set.of(spec[0])));users.saveAndFlush(member);
+        mvc.perform(get(spec[1]).session(session)).andExpect(status().isOk());
+        member.setPermissions(new LinkedHashSet<>());users.saveAndFlush(member);
+        mvc.perform(get(spec[1]).session(session)).andExpect(status().isForbidden());
+      }
+      mvc.perform(get("/api/public/rankings/student-ledger")).andExpect(status().isUnauthorized());
+    }
+    @Test void pointsOperationsWritePermissionsAreIndependentAndRevocable() throws Exception {
+      String name=uniqueUsername("pointswrite");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
+      for(var spec:java.util.List.of(new String[]{"rankings.reconciliation.repair","/api/rankings/admin/operations/reconciliations/repair","200"},new String[]{"rankings.reconciliation.run","/api/rankings/admin/operations/reconciliations","200"},new String[]{"rankings.import.confirm","/api/rankings/admin/operations/import-previews/unknown/confirm","200"},new String[]{"rankings.import.reverse","/api/rankings/admin/operations/import-batches/999999999/reverse","200"})){
+        mvc.perform(post(spec[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"reason\":\"测试\"}")).andExpect(status().isForbidden());
+        member.setPermissions(new LinkedHashSet<>(java.util.Set.of(spec[0])));users.saveAndFlush(member);
+        mvc.perform(post(spec[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"reason\":\"测试\"}")).andExpect(status().is(Integer.parseInt(spec[2])));
+        member.setPermissions(new LinkedHashSet<>());users.saveAndFlush(member);
+        mvc.perform(post(spec[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"reason\":\"测试\"}")).andExpect(status().isForbidden());
+      }
+    }
+
 }

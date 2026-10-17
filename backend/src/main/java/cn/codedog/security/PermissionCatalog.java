@@ -35,6 +35,13 @@ public final class PermissionCatalog {
     public static final String RANKINGS_POINTS_EDIT = "rankings.points.edit";
     public static final String RANKINGS_ACCOUNTS_IMPORT = "rankings.accounts.import";
     public static final String RANKINGS_ACCOUNTS_EDIT = "rankings.accounts.edit";
+    public static final String LEDGER_READ = "rankings.ledger.read";
+    public static final String RECONCILE_READ = "rankings.reconciliation.read";
+    public static final String RECONCILE_REPAIR = "rankings.reconciliation.repair";
+    public static final String RECONCILE_RUN = "rankings.reconciliation.run";
+    public static final String BATCH_READ = "rankings.batches.read";
+    public static final String IMPORT_CONFIRM = "rankings.import.confirm";
+    public static final String IMPORT_REVERSE = "rankings.import.reverse";
     public static final String RANKINGS_IMPORT = "rankings.import";
     public static final String RANKINGS_DEVICES_READ = "rankings.devices.read";
     public static final String RANKINGS_DEVICES_PAIR = "rankings.devices.pair";
@@ -97,6 +104,13 @@ public final class PermissionCatalog {
             action(RANKINGS_REDEMPTIONS_CREATE, "登记兑换"),
             action(RANKINGS_REDEMPTIONS_FULFILL, "确认或撤销发放"),
             action(RANKINGS_POINTS_EDIT, "手动调整学员积分"),
+            action(LEDGER_READ, "查看积分流水"),
+            action(RECONCILE_READ, "查看对账结果"),
+            action(RECONCILE_REPAIR, "核实并修复积分台账"),
+            action(RECONCILE_RUN, "执行积分对账"),
+            action(BATCH_READ, "查看导入批次"),
+            action(IMPORT_CONFIRM, "确认积分导入"),
+            action(IMPORT_REVERSE, "撤销积分导入"),
             action(RANKINGS_IMPORT, "导入排行榜数据"),
             action(RANKINGS_ACCOUNTS_IMPORT, "导入手机号并开通学生账号"),
             action(RANKINGS_ACCOUNTS_EDIT, "查看和修改学生登录手机号"),

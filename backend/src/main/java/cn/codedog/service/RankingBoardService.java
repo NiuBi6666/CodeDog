@@ -200,7 +200,7 @@ public class RankingBoardService {
     String sql = """
         SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.camp_id) camp_id,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
         COALESCE(MAX(a.adjustment_points),0) adjustment_points,COALESCE(MAX(p.spent_points),0) spent_points,
-        GREATEST(0,COALESCE(SUM(r.total_points),0)+COALESCE(MAX(a.adjustment_points),0)-COALESCE(MAX(p.spent_points),0)) available_points,
+        LEAST(999999999,GREATEST(0,COALESCE(SUM(r.total_points),0)+COALESCE(MAX(a.adjustment_points),0)-COALESCE(MAX(p.spent_points),0))) available_points,
         COALESCE(SUM(r.total_points),0) total_points,COALESCE(SUM(r.completion_points),0) completion_points,
         COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
         COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
@@ -232,7 +232,7 @@ public class RankingBoardService {
     String sql = """
         SELECT s.student_id,MAX(s.student_name) student_name,MIN(s.camp_id) camp_id,MIN(s.class_id) class_id,MIN(c.class_name) class_name,
         COALESCE(MAX(a.adjustment_points),0) adjustment_points,COALESCE(MAX(p.spent_points),0) spent_points,
-        GREATEST(0,COALESCE(SUM(r.total_points),0)+COALESCE(MAX(a.adjustment_points),0)-COALESCE(MAX(p.spent_points),0)) available_points,
+        LEAST(999999999,GREATEST(0,COALESCE(SUM(r.total_points),0)+COALESCE(MAX(a.adjustment_points),0)-COALESCE(MAX(p.spent_points),0))) available_points,
         COALESCE(SUM(r.total_points),0) total_points,COALESCE(SUM(r.completion_points),0) completion_points,
         COALESCE(SUM(r.inclass_points),0) inclass_points,COALESCE(SUM(r.homework_points),0) homework_points,
         COUNT(r.lesson_id) lesson_count,MAX(s.score_reached_at) score_reached_at,
@@ -328,14 +328,20 @@ public class RankingBoardService {
     if (targetValue == null || targetValue < 0 || targetValue > 999_999_999) {
       throw invalid("目标积分必须是 0 至 999999999 的整数");
     }
+    new RankingPointsService(jdbc).lock(owner,studentId);
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND camp_id=? AND class_id=? AND student_id=? FOR UPDATE",
         (rs, n) -> rs.getString(1), owner, campId, classId, studentId);
     if (names.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不在指定营期班级中");
+    new RankingPointsService(jdbc).lock(owner,studentId);
     AggregateRow before = aggregateAllRows(owner).stream().filter(row -> row.studentId().equals(studentId)).findFirst()
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在"));
+    RankingPointsService points = new RankingPointsService(jdbc);
+    points.lock(owner, studentId);
+    long rawBefore = points.raw(owner, studentId);
     int delta = targetValue - before.availablePoints();
     jdbc.update("INSERT INTO ranking_point_adjustments(owner_username,camp_id,class_id,student_id,points,balance_before,balance_after,reason,actor) VALUES(?,?,?,?,?,?,?,?,?)",
         owner, campId, classId, studentId, delta, before.availablePoints(), targetValue, note, actor);
+    points.record(owner,studentId,"MANUAL",java.util.UUID.randomUUID().toString(),rawBefore,points.raw(owner,studentId),note,actor);
     return new RankingPayload.PointAdjustment(studentId, names.getFirst(), campId, classId, before.totalPoints(),
         before.adjustmentPoints() + delta, before.spentPoints(), before.availablePoints(), targetValue, delta, note);
   }

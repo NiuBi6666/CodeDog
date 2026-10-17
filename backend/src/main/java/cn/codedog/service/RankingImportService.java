@@ -62,6 +62,7 @@ public class RankingImportService {
       throw invalid("单次导入不能超过 " + MAX_ROWS + " 行");
     }
 
+    jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",owner);
     long batchId = createBatch(owner, sourceType, sourceName, campId, received, owner);
     Instant scoreEventAt = Instant.now();
     upsertCamp(owner, campId, campName);
@@ -101,13 +102,25 @@ public class RankingImportService {
             if (existing != null && hash.equals(existing.hash())) {
               unchanged++;
             } else {
+
+              RankingPointsService points = new RankingPointsService(jdbc);
+              points.lock(owner,studentId);
+              long balanceBefore=points.raw(owner,studentId);
+              long projected=balanceBefore+score.totalPoints()-(existing==null?0:existing.totalPoints());
+              if(projected<0||projected>999999999L)throw invalid("更新后余额超出0至999999999范围，请先处理已有兑换或积分");
+              var beforeRows=jdbc.queryForList("SELECT * FROM ranking_lesson_results WHERE owner_username=? AND camp_id=? AND class_id=? AND lesson_id=? AND student_id=?",owner,campId,classId,lessonId,studentId);
+              String beforeJson=beforeRows.isEmpty()?null:jsonRow(beforeRows.getFirst());
               upsertResult(owner, campId, classId, lessonId, studentId, score, scorePolicy.ruleVersion, hash, batchId);
+              jdbc.update("INSERT INTO ranking_import_changes(batch_id,owner_username,camp_id,class_id,lesson_id,student_id,before_json,after_hash) VALUES(?,?,?,?,?,?,?,?)",batchId,owner,campId,classId,lessonId,studentId,beforeJson,hash);
+              points.record(owner,studentId,"COURSE",batchId+":"+sha256(campId+"|"+classId+"|"+lessonId+"|"+studentId),balanceBefore,points.raw(owner,studentId),lesson.lessonName(),owner);
+
               if (existing == null || existing.totalPoints() != score.totalPoints()) {
                 markScoreReached(owner, campId, classId, studentId, scoreEventAt);
               }
               changed++;
             }
           } catch (RuntimeException error) {
+            if(error instanceof org.springframework.dao.DataAccessException || error instanceof IllegalStateException) throw error;
             rejected++;
             addError(errors, classId, lessonId, student.studentId(), message(error));
           }
@@ -197,6 +210,10 @@ public class RankingImportService {
         contacts.size(), inserted, unchanged, conflicts, List.copyOf(errors));
   }
 
+  private String jsonRow(Map<String,Object> row) {
+    try { return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(row); }
+    catch(Exception e){throw new IllegalStateException("无法保存导入前快照",e);}
+  }
   private long createBatch(String owner, String type, String source, String camp, int received, String actor) {
     KeyHolder key = new GeneratedKeyHolder();
     jdbc.update(connection -> {

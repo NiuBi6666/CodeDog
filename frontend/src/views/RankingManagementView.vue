@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2, Upload,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
+import RankingOperations from "../components/RankingOperations.vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
 import { auth, hasPermission } from "../auth";
@@ -102,6 +103,9 @@ const pointsHistoryError = ref("");
 const pointImportInput = ref(null);
 const pointsImporting = ref(false);
 const pointsImportSummary = ref(null);
+const importPreview=ref(null);
+const importConfirming=ref(false);
+async function confirmImport(){if(importConfirming.value)return;importConfirming.value=true;try{pointsImportSummary.value=await api(`/rankings/admin/operations/import-previews/${importPreview.value.previewId}/confirm`,{method:"POST"});importPreview.value=null;await loadAll();}catch(e){notify(e.message);}finally{importConfirming.value=false;}}
 const rewardSaving = ref(false);
 const redemptionSaving = ref(false);
 const rewardForm = ref(emptyRewardForm());
@@ -351,12 +355,8 @@ async function importPointFiles(event) {
     const body = new FormData();
     body.set("campId", "spreadsheet-points"); body.set("campName", "表格积分");
     files.forEach((file) => body.append("files", file));
-    const result = await api("/rankings/admin/imports/xlsx", { method: "POST", body });
-    pointsImportSummary.value = result;
-    if (canBoardRead.value) board.value = await api("/rankings/admin/board");
-    await loadAccountStatuses();
-    const message = `导入 ${result.receivedRows} 行，更新 ${result.changedRows} 行，未变化 ${result.unchangedRows} 行`;
-    notify(result.rejectedRows ? `${message}，失败 ${result.rejectedRows} 行` : message);
+    importPreview.value = await api("/rankings/admin/operations/import-previews", { method: "POST", body });
+    return;
   } catch (failure) { notify(failure.message || "积分导入失败"); }
   finally { pointsImporting.value = false; }
 }
@@ -415,12 +415,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <details v-if="phoneImportSummary.errors?.length"><summary>查看失败明细（{{ phoneImportSummary.errors.length }} 行）</summary><ul><li v-for="item in phoneImportSummary.errors" :key="item.rowNumber">第 {{ item.rowNumber }} 行 · ID {{ item.studentId || '缺失' }}：{{ item.message }}</li></ul></details>
     </div>
 
-    <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能">
+    <div v-if="importPreview" class="notice"><h3>导入预览 · {{importPreview.rows.length}} 条结果</h3><p>确认后才会更新积分；预览30分钟有效。</p><div style="max-height:320px;overflow:auto"><table class="ranking-admin-table"><thead><tr><th>学员</th><th>课程</th><th>原积分</th><th>新积分</th><th>校验</th></tr></thead><tbody><tr v-for="(r,i) in importPreview.rows" :key="i"><td>{{r.name}} · {{r.studentId}}</td><td>{{r.lesson}}</td><td>{{r.before}}</td><td>{{r.after}}</td><td>{{r.error||'通过'}}</td></tr></tbody></table></div><div class="button-row"><button class="button button-quiet" :disabled="importConfirming" @click="importPreview=null">取消</button><button v-if="hasPermission('rankings.import.confirm')" class="button button-primary" :disabled="importConfirming||importPreview.hasErrors" @click="confirmImport">确认导入</button></div></div>
+    <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能"><button v-if="['rankings.ledger.read','rankings.reconciliation.read','rankings.reconciliation.run','rankings.batches.read'].some(hasPermission)" type="button" :class="{active:activeTab==='operations'}" @click="activeTab='operations'">积分流水与导入记录</button>
       <button v-if="canBoardRead" type="button" :class="{ active: activeTab === 'rankings' }" @click="activeTab = 'rankings'"><Trophy :size="17"/>全量排名</button>
       <button v-if="canRewardsTab" type="button" :class="{ active: activeTab === 'rewards' }" @click="activeTab = 'rewards'"><Gift :size="17"/>奖品管理 <span v-if="canRewardsRead">{{ rewards.length }}</span></button>
       <button v-if="canRedemptionsTab" type="button" :class="{ active: activeTab === 'redemptions' }" @click="activeTab = 'redemptions'"><PackageCheck :size="17"/>兑换记录 <span v-if="canRedemptionsRead && pendingCount">{{ pendingCount }}</span></button>
       <button v-if="canAnnouncementsTab" type="button" :class="{ active: activeTab === 'announcements' }" @click="activeTab = 'announcements'"><Megaphone :size="17"/>公告管理 <span v-if="canAnnouncementsRead">{{ announcements.length }}</span></button>
     </nav>
+    <RankingOperations v-if="activeTab==='operations'" :students="rows"/>
 
     <template v-if="activeTab === 'rankings'">
 

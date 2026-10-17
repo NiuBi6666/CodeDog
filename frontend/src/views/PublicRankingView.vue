@@ -1,4 +1,5 @@
 <script setup>
+import PointsLedger from "../components/PointsLedger.vue";
 import { showAlert } from "../uiDialogs.js";
 import { insufficientRewardPoints, rewardRedemptionError } from "../rewardRedemption.js";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
@@ -21,6 +22,7 @@ import {
   rankingAvatarText, rankingRedemptionStatus, rankingRedemptionTime, rankingTrendView
 } from "../rankingAdmin.js";
 
+const ledgerOpen=ref(false);
 const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
@@ -413,6 +415,7 @@ onBeforeUnmount(() => {
             <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
             <strong>{{ balance.availablePoints }} 可用积分</strong>
           </div>
+          <button class="logout-button" type="button" title="积分明细" aria-label="积分明细" @click="ledgerOpen=!ledgerOpen"><History aria-hidden="true"/></button>
           <button class="logout-button" type="button" title="退出学生登录" aria-label="退出学生登录" @click="logout"><LogOut aria-hidden="true" /></button>
         </div>
       </header>
@@ -454,6 +457,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="studentSession && announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
 
+      <PointsLedger v-if="studentSession&&ledgerOpen" student/>
       <main v-if="studentSession" class="ranking-layout" @click.stop>
         <section class="game-panel ladder-panel" :class="{ 'ladder-panel--compact': !showsSelectedSeparately }" aria-labelledby="ladderTitle">
           <div class="game-panel-heading">

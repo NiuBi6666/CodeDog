@@ -27,6 +27,7 @@ class RankingServiceTest {
     DriverManagerDataSource dataSource = new DriverManagerDataSource(
       "jdbc:h2:mem:ranking-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE", "sa", "");
     jdbc = new JdbcTemplate(dataSource);
+    cn.codedog.OperationsTestSchema.create(jdbc);
     jdbc.execute("""
       CREATE TABLE users (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -440,4 +441,35 @@ class RankingServiceTest {
     org.mockito.Mockito.verify(auth).board(request);
     org.mockito.Mockito.verifyNoMoreInteractions(boards);
   }
+  @Test void ledgerAndSourceMismatchIsVisibleAndReadOnly(){
+    addStudent("Liam","ledger-test","测试","2026-01-01T10:00:00Z",1,1,1);
+    var points=new cn.codedog.service.RankingPointsService(jdbc);
+    var student=service.allBoardForOwner("Liam").rankings().getFirst();
+    long before=points.raw("Liam",student.studentId());
+    var report=points.reconcile("Liam");
+    assertThat(((Number)report.get("anomalies")).intValue()).isGreaterThan(0);
+    assertThat(points.raw("Liam",student.studentId())).isEqualTo(before);
+    assertThat(points.ledger("teacher-b",student.studentId(),0).get("total")).isEqualTo(0L);
+  }
+  @Test void manualAdjustmentHasOneDetailedLedgerEntry(){
+    addStudent("Liam","adjust-test","测试","2026-01-01T10:00:00Z",1,1,1);
+    var student=service.allBoardForOwner("Liam").rankings().getFirst();
+    service.adjustStudentPoints("Liam",student.studentId(),student.campId(),student.classId(),55,"测试调整过程","Liam");
+    var ledger=jdbc.queryForMap("SELECT * FROM ranking_point_ledger WHERE owner_username='Liam' AND student_id=?",student.studentId());
+    assertThat(ledger.get("event_type")).isEqualTo("MANUAL");
+    assertThat(((Number)ledger.get("balance_after")).longValue()).isEqualTo(55L);
+    assertThat(ledger.get("reason")).isEqualTo("测试调整过程");
+  }
+
+ @Test void ledgerRepairRequiresExpectedValuesAndNeverChangesPoints(){
+  addStudent("Liam","repair-test","测试","2026-01-01T10:00:00Z",1,1,1);
+  var points=new cn.codedog.service.RankingPointsService(jdbc);
+  assertThatThrownBy(()->points.repair("Liam","repair-test",3,0," ")).isInstanceOf(ResponseStatusException.class);
+  assertThatThrownBy(()->points.repair("Liam","repair-test",4,0,"核实来源")).isInstanceOf(ResponseStatusException.class);
+  points.repair("Liam","repair-test",3,0,"核实来源");
+  assertThat(points.available("Liam","repair-test")).isEqualTo(3);
+  assertThat(((Number)points.reconcile("Liam").get("anomalies")).intValue()).isZero();
+  assertThatThrownBy(()->points.repair("Liam","repair-test",3,0,"重复操作")).isInstanceOf(ResponseStatusException.class);
+ }
+
 }

@@ -25,6 +25,7 @@ class RankingRewardServiceTest {
     DriverManagerDataSource dataSource = new DriverManagerDataSource(
       System.getProperty("reward.test.url", "jdbc:h2:mem:rewards-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE"), System.getProperty("reward.test.user", "sa"), System.getProperty("reward.test.password", ""));
     jdbc = new JdbcTemplate(dataSource);
+    cn.codedog.OperationsTestSchema.create(jdbc);
     if (System.getProperty("reward.test.url") != null) {
       // Only the explicitly supplied isolated test database is reset, never the application datasource.
       if (!System.getProperty("reward.test.url").contains("/reward_stock_test")) throw new IllegalStateException("Isolated test database required");
