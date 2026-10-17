@@ -130,6 +130,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/messages").access(permission(permissions,"rankings.messages.read"))
                 .requestMatchers(HttpMethod.POST,"/api/rankings/admin/messages/*/read").access(permission(permissions,"rankings.messages.update"))
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/alerts").access(permission(permissions,"rankings.alerts.read"))
+                .requestMatchers(HttpMethod.GET,"/api/rankings/admin/aftercare/legacy-orders").access(admin(permissions))
+                .requestMatchers(HttpMethod.GET,"/api/rankings/admin/recovery-drill").access(admin(permissions))
                 .requestMatchers("/api/rankings/admin/transfers", "/api/rankings/admin/transfers/**").access(admin(permissions))
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/completeness","/api/rankings/admin/expected-lessons").access(permission(permissions,"rankings.completeness.read"))
                 .requestMatchers(HttpMethod.POST,"/api/rankings/admin/expected-lessons").access(permission(permissions,"rankings.expected.create"))

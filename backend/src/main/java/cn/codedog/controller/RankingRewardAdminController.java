@@ -181,8 +181,9 @@ public class RankingRewardAdminController {
   @PatchMapping("/redemptions/{id}/fulfillment")
   public RankingRewardPayload.Redemption fulfillment(@PathVariable long id,
       @RequestBody RankingRewardPayload.FulfillmentRequest body, Principal principal, HttpServletRequest request) {
-    var before = rewards.redemptions(principal.getName()).stream().filter(item -> item.id() == id).findFirst().orElse(null);
-    var value = rewards.setFulfilled(principal.getName(), id, body != null && body.fulfilled(), principal.getName());
+    String owner=permissions.isAdmin(principal.getName())?rewards.redemptionOwner(id,principal.getName()):principal.getName();audit.owner(owner);
+    var before = rewards.redemptions(owner).stream().filter(item -> item.id() == id).findFirst().orElse(null);
+    var value = rewards.setFulfilled(owner, id, body != null && body.fulfilled(), principal.getName());
     audit.change("REDEMPTION", id, before == null ? java.util.Map.of() : redemptionAudit(before), redemptionAudit(value));
     audit.record("ranking_redemption_fulfillment:" + id + ":" + value.status(), request); return value;
   }

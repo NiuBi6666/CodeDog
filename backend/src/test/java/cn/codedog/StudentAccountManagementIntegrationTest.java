@@ -34,6 +34,7 @@ class StudentAccountManagementIntegrationTest {
   @Autowired StudentAccountManagementService accounts;
   @Autowired StudentRankingAuthService studentAuth;
   @Autowired StudentPhoneXlsxParser parser;
+  @Autowired cn.codedog.service.RankingAftercareService aftercare;
   String owner;
   @BeforeEach void setup() {
     cn.codedog.OperationsTestSchema.create(jdbc);
@@ -205,4 +206,6 @@ class StudentAccountManagementIntegrationTest {
     studentAuth.resetPassword(owner,"s1","123456");
     assertThat(jdbc.queryForObject("SELECT password_changed_at FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",java.sql.Timestamp.class,owner)).isNull();
   }
+ @Test void recoveryRequestOnlyTargetsCurrentOwnerAfterConflictResolution(){String id="recover"+UUID.randomUUID().toString().substring(0,8),other="old"+UUID.randomUUID().toString().substring(0,8),number=phone();add(owner,id,"归属核实学员");add(other,id,"归属核实学员");accounts.edit(owner,id,number,"");accounts.edit(other,id,number,"");jdbc.update("INSERT INTO ranking_current_ownership(student_id,owner_username,state) VALUES(?,?,'ACTIVE')",id,owner);aftercare.requestRecovery(number,id,"找回");assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_recovery_requests WHERE student_id=? AND owner_username=?",Integer.class,id,owner)).isEqualTo(1);assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_recovery_requests WHERE student_id=? AND owner_username=?",Integer.class,id,other)).isZero();}
+
 }

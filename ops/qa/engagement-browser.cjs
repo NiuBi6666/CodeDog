@@ -6,6 +6,7 @@ if(path==='/api/auth/me')v={username:'admin',admin:true,permissions:[]};else if(
 else if(path.endsWith('/student-auth/session'))v={ownerUsername:'admin',studentId:'qa1',studentName:'测试学员',phone:'19900000001',mustChangePassword:false};
 else if(path.endsWith('/monthly-board')||path.endsWith('/student-monthly-board'))v={month:'2026-10',rankings:[{student_id:'qa1',student_name:'测试学员',earned_points:3,rank:1}],rule:'按课程实际月份计算，不含人工调整、兑换和交接',missingDateCount:1,updatedAt:new Date().toISOString()};
 else if(path.endsWith('/board')||path.endsWith('/student-board'))v={rankings:[person],studentCount:1};else if(path.endsWith('/student-balance'))v={earnedPoints:3,spentPoints:0,availablePoints:3};else if(path.endsWith('/announcement'))v={text:''};
+else if(path.endsWith('/recovery-drill'))v={report:{status:'NOT_RUN'},schedulingEnabled:true};
 else if(path.endsWith('/alerts'))v={lowStock:[{id:1,reward_name:'测试奖品',stock:1,threshold:3}],pendingCancellations:1,pendingRecoveries:0,reconciliation:[]};
 else if(path.endsWith('/reward-rules')||path.endsWith('/student-reward-rules'))v=[{reward_id:1,reward_name:'测试奖品',stock:1,low_stock_threshold:3,per_student_limit:1,starts_at:null,ends_at:null,instructions:'请联系老师领取'}];
 else if(path.includes('/reward-rules/')&&r.request().method()==='PUT'){rulesSaved++;v={saved:true};}

@@ -19,6 +19,8 @@ import java.util.*;
   jdbc.update("UPDATE ranking_reward_redemptions SET status='CANCEL_REQUESTED' WHERE id=? AND owner_username=?",id,owner);
   new RankingMessageService(jdbc).teacher(owner,"cancel:"+id+":"+UUID.randomUUID(),"待审批取消兑换",student+" 申请取消订单 #"+id,"aftercare");
  }
+ public List<Map<String,Object>> legacyOrders(String administrator){return jdbc.queryForList("SELECT id,owner_username,student_id,student_name,reward_name,points_spent,status,redeemed_at FROM ranking_reward_redemptions WHERE owner_username<>? ORDER BY redeemed_at DESC,id DESC LIMIT 200",administrator);}
+ public List<Map<String,Object>> cancellations(String owner,boolean all){return all?jdbc.queryForList("SELECT c.*,d.reward_name,d.points_spent,d.status,d.student_name FROM ranking_redemption_cancellations c JOIN ranking_reward_redemptions d ON d.id=c.redemption_id ORDER BY c.created_at DESC"):cancellations(owner);}
  public List<Map<String,Object>> cancellations(String owner){return jdbc.queryForList("SELECT c.*,d.reward_name,d.points_spent,d.status,d.student_name FROM ranking_redemption_cancellations c JOIN ranking_reward_redemptions d ON d.id=c.redemption_id WHERE c.owner_username=? ORDER BY c.created_at DESC",owner);}
  @Transactional public Map<String,Object> decide(String owner,long id,boolean approved,String note,String actor){
   String explanation=reason(note);
@@ -30,7 +32,7 @@ import java.util.*;
   if(rows.isEmpty())throw RankingPointsService.conflict("兑换记录不存在");var order=rows.getFirst();
   if(!order.get("status").equals("CANCEL_REQUESTED"))throw RankingPointsService.conflict("申请已处理或订单状态已变化");
   String student=(String)order.get("student_id");points.lock(owner,student);
-  long balanceBefore=points.raw(owner,student);
+  long balanceBefore=points.raw(owner,student);long creditedBefore=points.raw(currentOwner,student);
   var stocks=order.get("reward_id")==null?java.util.List.<java.util.Map<String,Object>>of():jdbc.queryForList("SELECT stock FROM ranking_rewards WHERE id=? AND owner_username=? FOR UPDATE",order.get("reward_id"),owner);
   int stockBefore=stocks.isEmpty()?0:((Number)stocks.getFirst().get("stock")).intValue();
   if(approved){
@@ -52,11 +54,11 @@ import java.util.*;
   jdbc.update("UPDATE ranking_reward_redemptions SET status=? WHERE id=? AND owner_username=?",approved?"CANCELLED":"PENDING",id,owner);
   jdbc.update("UPDATE ranking_redemption_cancellations SET decision_note=?,decided_by=?,decided_at=CURRENT_TIMESTAMP(6) WHERE redemption_id=? AND owner_username=?",explanation,actor,id,owner);
   new RankingMessageService(jdbc).student(currentOwner,student,"cancel-decision:"+id+":"+UUID.randomUUID(),"取消申请处理结果",approved?"订单 #"+id+" 已取消并退款":"订单 #"+id+" 取消申请未通过："+explanation,"redemptions");
-  return Map.of("redemptionId",id,"status",approved?"CANCELLED":"PENDING","refunded",approved,"studentId",student,"refundedPoints",approved?order.get("points_spent"):0,"balanceBefore",balanceBefore,"balanceAfter",points.raw(owner,student),"stockBefore",stockBefore,"stockAfter",stockBefore+(approved&&!stocks.isEmpty()?1:0),"reason",explanation);
+  var result=new LinkedHashMap<String,Object>(Map.of("redemptionId",id,"status",approved?"CANCELLED":"PENDING","refunded",approved,"studentId",student,"refundedPoints",approved?order.get("points_spent"):0,"balanceBefore",balanceBefore,"balanceAfter",points.raw(owner,student),"stockBefore",stockBefore,"stockAfter",stockBefore+(approved&&!stocks.isEmpty()?1:0),"reason",explanation));result.put("creditedOwner",currentOwner);result.put("creditedBalanceBefore",creditedBefore);result.put("creditedBalanceAfter",points.raw(currentOwner,student));return result;
  }
  @Transactional public void requestRecovery(String phone,String student,String note){
   if(phone==null||!phone.matches("^1\\d{10}$")||student==null||student.isBlank())return;
-  var rows=jdbc.queryForList("SELECT owner_username,student_id,student_name FROM ranking_student_accounts WHERE phone=? AND student_id=? AND enabled=TRUE",phone,student);
+  var rows=jdbc.queryForList("SELECT owner_username,student_id,student_name FROM ranking_student_accounts WHERE phone=? AND student_id=? AND enabled=TRUE AND NOT EXISTS(SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=ranking_student_accounts.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>ranking_student_accounts.owner_username))",phone,student);
   for(var account:rows){String owner=(String)account.get("owner_username");jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",owner);
    Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM ranking_recovery_requests WHERE owner_username=? AND student_id=? AND status IN ('PENDING_VERIFY','VERIFIED')",Integer.class,owner,student);
    if(count==0){jdbc.update("INSERT INTO ranking_recovery_requests(owner_username,student_id,student_name,reason) VALUES(?,?,?,?)",owner,student,account.get("student_name"),note==null||note.isBlank()?"申请找回学生账号":note.substring(0,Math.min(500,note.length())));new RankingMessageService(jdbc).teacher(owner,"recovery:"+student+":"+UUID.randomUUID(),"待核实账号找回",student+" 提交账号找回申请，请核实身份","aftercare");}

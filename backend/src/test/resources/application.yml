@@ -10,6 +10,7 @@ spring:
     hibernate:
       ddl-auto: create-drop
 codedog:
+  maintenance-enabled: false
   admin-username: Liam
   admin-password: "test-only-password"
   legacy-import-enabled: false

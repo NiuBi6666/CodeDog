@@ -192,6 +192,7 @@ public class RankingRewardService {
     return values.getFirst();
   }
 
+  public String redemptionOwner(long id,String fallback){return jdbc.queryForList("SELECT owner_username FROM ranking_reward_redemptions WHERE id=?",String.class,id).stream().findFirst().orElse(fallback);}
   public List<RankingRewardPayload.Redemption> redemptions(String owner) {
     return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? ORDER BY redeemed_at DESC,id DESC",
       (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getString(9), instant(rs.getTimestamp(10)), instant(rs.getTimestamp(11)), rs.getString(12)), owner);

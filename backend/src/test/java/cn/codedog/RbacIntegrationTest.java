@@ -738,4 +738,12 @@ class RbacIntegrationTest {
   mvc.perform(get("/api/public/rankings/student-messages")).andExpect(status().isUnauthorized());
  }
 
+ @Test void recoveryDrillReportIsNonDelegableAdministratorOnly() throws Exception {
+  String name=uniqueUsername("drillreport");User member=user(name,"member-password-123");member.setPermissions(new LinkedHashSet<>(PermissionCatalog.allCodes()));users.saveAndFlush(member);var session=login(name,"member-password-123");
+  mvc.perform(get("/api/rankings/admin/recovery-drill").session(session)).andExpect(status().isForbidden());
+  mvc.perform(get("/api/rankings/admin/aftercare/legacy-orders").session(session)).andExpect(status().isForbidden());
+  mvc.perform(get("/api/rankings/admin/recovery-drill")).andExpect(status().isUnauthorized());
+  mvc.perform(get("/api/rankings/admin/recovery-drill").session(login("Liam","test-only-password"))).andExpect(status().isOk()).andExpect(jsonPath("$.schedulingEnabled").value(false));
+ }
+
 }
