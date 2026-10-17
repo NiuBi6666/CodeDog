@@ -192,8 +192,8 @@ onMounted(load);
     </div>
 
     <Teleport to="body">
-      <div v-if="mappingSelected" class="permission-dialog-backdrop" role="presentation">
-        <section class="permission-dialog mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="mapping-dialog-title">
+      <div v-if="mappingSelected" class="permission-dialog-backdrop ui-dialog-backdrop" role="presentation">
+        <section class="permission-dialog ui-modal mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="mapping-dialog-title">
           <header>
             <div><h2 id="mapping-dialog-title">绑定 {{ mappingSelected.displayName || mappingSelected.username }}</h2><p>{{ mappingSelected.teacherId }}</p></div>
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="mappingSaving" @click="closeMapping"><X :size="18"/></button>
@@ -211,8 +211,8 @@ onMounted(load);
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="selected" class="permission-dialog-backdrop" role="presentation">
-        <section class="permission-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-dialog-title">
+      <div v-if="selected" class="permission-dialog-backdrop ui-dialog-backdrop" role="presentation">
+        <section class="permission-dialog ui-modal" role="dialog" aria-modal="true" aria-labelledby="permission-dialog-title">
           <header>
             <div><h2 id="permission-dialog-title">设置 {{ selected.displayName || selected.username }} 的权限</h2><p>页面、数据和操作权限分别控制可见内容及后端接口。</p></div>
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="saving" @click="closePermissions"><X :size="18"/></button>

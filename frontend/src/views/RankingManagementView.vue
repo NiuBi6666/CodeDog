@@ -1,4 +1,5 @@
 <script setup>
+import { showConfirm } from "../uiDialogs.js";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ArrowDown, ArrowUp, Award, CalendarClock, CheckCircle2, CircleOff, Copy, ExternalLink, Gift, ImagePlus,
@@ -235,7 +236,7 @@ async function saveReward() {
   finally { rewardSaving.value = false; }
 }
 async function deleteReward(reward) {
-  if (!window.confirm(`确定删除奖品“${reward.name}”吗？历史兑换记录会保留。`)) return;
+  if (!await showConfirm(`确定删除奖品“${reward.name}”吗？历史兑换记录会保留。`, { title: "删除奖品", confirmText: "确认删除", danger: true })) return;
   try { await api(`/rankings/admin/rewards/${reward.id}`, { method: "DELETE" }); rewards.value = rewards.value.filter((item) => item.id !== reward.id); notify("奖品已删除"); }
   catch (failure) { notify(failure.message); }
 }
@@ -452,13 +453,13 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       </table></div>
     </section>
 
-    <div v-if="passwordOpen && passwordStudent" class="ranking-share-backdrop" @click.self="closeStudentPassword">
-      <section class="ranking-share-dialog ranking-form-dialog"><header><div><span><Eye :size="18"/></span><div><h2>学生密码</h2><p>{{ passwordStudent.studentName }} · ID {{ passwordStudent.studentId }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeStudentPassword"><X :size="17"/></button></header>
+    <div v-if="passwordOpen && passwordStudent" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closeStudentPassword">
+      <section class="ranking-share-dialog ui-modal ranking-form-dialog" role="dialog" aria-modal="true" aria-label="排行榜管理"><header><div><span><Eye :size="18"/></span><div><h2>学生密码</h2><p>{{ passwordStudent.studentName }} · ID {{ passwordStudent.studentId }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeStudentPassword"><X :size="17"/></button></header>
         <div class="ranking-password-body"><p class="ranking-password-warning">仅系统管理员可查看。每次查看和重置都会写入操作日志。</p><div v-if="passwordLoading" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="20"/><span>正在读取密码</span></div><template v-else><div v-if="recoveredPassword" class="ranking-password-value"><span>{{ passwordVisible ? recoveredPassword : '••••••••' }}</span><button class="icon-button" type="button" :title="passwordVisible ? '隐藏密码' : '显示密码'" @click="passwordVisible = !passwordVisible"><EyeOff v-if="passwordVisible" :size="16"/><Eye v-else :size="16"/></button><button class="button button-quiet button-small" type="button" @click="copyStudentPassword"><Copy :size="14"/>复制</button></div><p v-else class="ranking-password-empty">现有密码尚未保存为可恢复密文。学生成功登录一次后即可查看，也可以在下方直接重置。</p><p v-if="passwordError" class="notice notice-error">{{ passwordError }}</p><label class="ranking-password-reset"><span>重置新密码</span><input v-model="resetPasswordValue" type="text" minlength="6" maxlength="72" placeholder="请输入 6-72 个字符"><button class="button button-primary" type="button" :disabled="passwordSaving || resetPasswordValue.length < 6" @click="resetStudentPassword">{{ passwordSaving ? '重置中' : '重置密码' }}</button></label></template></div>
       </section>
     </div>
-    <div v-if="pointsOpen && canPointsEdit && pointsStudent" class="ranking-share-backdrop" @click.self="closePoints">
-      <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
+    <div v-if="pointsOpen && canPointsEdit && pointsStudent" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closePoints">
+      <form class="ranking-share-dialog ui-modal ranking-form-dialog" role="dialog" aria-modal="true" aria-label="排行榜管理" @submit.prevent="savePoints"><header><div><span><Pencil :size="18"/></span><div><h2>调整学生积分</h2><p>{{ pointsStudent.studentName }} · 当前积分 {{ pointsStudent.availablePoints ?? pointsStudent.totalPoints }}</p></div></div><button class="icon-button" type="button" title="关闭" @click="closePoints"><X :size="17"/></button></header>
         <div class="ranking-form-body"><label><span>调整后积分</span><input v-model.number="pointsTarget" type="number" min="0" max="999999999" required></label><label><span>调整原因</span><textarea v-model.trim="pointsReason" maxlength="255" rows="3" required placeholder="例如：课堂表现奖励 50 分"></textarea><small>保存后，管理端和学生排行榜统一显示该积分；后续兑换会继续扣减。</small></label><p v-if="pointsError" class="notice notice-error">{{ pointsError }}</p>
           <section class="ranking-point-history"><header><div><strong>积分调整记录</strong><small>记录每次调整前后积分、原因和操作人</small></div><span>{{ pointsHistory.length }} 条</span></header>
             <div v-if="pointsHistoryLoading" class="ranking-point-history-state"><RefreshCw class="spin-icon" :size="16"/>正在读取调整记录</div>
@@ -470,20 +471,20 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <footer><button class="button button-quiet" type="button" @click="closePoints">取消</button><button class="button button-primary" type="submit" :disabled="pointsSaving">{{ pointsSaving ? '保存中' : '保存积分' }}</button></footer>
       </form>
     </div>
-    <div v-if="rewardOpen && (rewardForm.id ? canRewardsEdit : canRewardsCreate)" class="ranking-share-backdrop" @click.self="closeReward">
-      <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
+    <div v-if="rewardOpen && (rewardForm.id ? canRewardsEdit : canRewardsCreate)" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closeReward">
+      <form class="ranking-share-dialog ui-modal ranking-form-dialog" role="dialog" aria-modal="true" aria-label="排行榜管理" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
         <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="999999999"></label><label><span>剩余库存</span><input v-model.number="rewardForm.stock" required type="number" min="0" max="999999999" step="1"><small>每次兑换扣减 1 件；0 件时无法兑换。</small></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>
         <footer><button class="button button-quiet" type="button" @click="closeReward">取消</button><button class="button button-primary" type="submit" :disabled="rewardSaving">{{ rewardSaving ? '保存中' : '保存奖品' }}</button></footer>
       </form>
     </div>
 
-    <div v-if="redemptionOpen && canRedemptionsCreate" class="ranking-share-backdrop" @click.self="redemptionOpen = false">
-      <form class="ranking-share-dialog ranking-form-dialog" @submit.prevent="createRedemption"><header><div><span><Award :size="18"/></span><div><h2>登记奖品兑换</h2><p>确认后立即占用学员积分，记录默认为待发放</p></div></div><button class="icon-button" type="button" title="关闭" @click="redemptionOpen = false"><X :size="17"/></button></header>
+    <div v-if="redemptionOpen && canRedemptionsCreate" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="redemptionOpen = false">
+      <form class="ranking-share-dialog ui-modal ranking-form-dialog" role="dialog" aria-modal="true" aria-label="排行榜管理" @submit.prevent="createRedemption"><header><div><span><Award :size="18"/></span><div><h2>登记奖品兑换</h2><p>确认后立即占用学员积分，记录默认为待发放</p></div></div><button class="icon-button" type="button" title="关闭" @click="redemptionOpen = false"><X :size="17"/></button></header>
         <div class="ranking-form-body"><label><span>兑换学员</span><select v-model="redemptionForm.studentId" required><option v-for="row in rows" :key="row.studentId" :value="row.studentId">{{ row.studentName }} · 第 {{ row.rank }} 名 · 可用 {{ row.availablePoints ?? row.totalPoints }} 分</option></select></label><label><span>兑换奖品</span><select v-model="redemptionForm.rewardId" required><option v-for="reward in enabledRewards" :key="reward.id" :value="reward.id">{{ reward.name }} · {{ reward.requiredPoints }} 分 · 剩余 {{ reward.stock }} 件</option></select></label><div class="ranking-redemption-check" :class="{ invalid: selectedReward && !redemptionAllowed }"><span>当前可用积分</span><strong>{{ numberText(availablePoints) }}</strong><small v-if="selectedReward">兑换后剩余 {{ numberText(Math.max(0, availablePoints - selectedReward.requiredPoints)) }} 分</small></div></div>
         <footer><button class="button button-quiet" type="button" @click="redemptionOpen = false">取消</button><button class="button button-primary" type="submit" :disabled="redemptionSaving || !redemptionAllowed">{{ redemptionSaving ? '登记中' : '确认兑换' }}</button></footer>
       </form>
     </div>
 
-    <div v-if="shareOpen && canShare" class="ranking-share-backdrop" @click.self="shareOpen = false"><section class="ranking-share-dialog"><header><div><span><Share2 :size="18"/></span><div><h2>分享学生排行榜</h2><p>当前账号名下全部学员总榜</p></div></div><button class="icon-button" type="button" title="关闭" @click="shareOpen = false"><X :size="17"/></button></header><div class="ranking-share-content"><label>分享链接</label><input :value="shareUrl" readonly @focus="$event.target.select()"></div><footer><a class="button button-quiet" :href="shareUrl" target="_blank" rel="noopener"><ExternalLink :size="15"/>打开预览</a><button class="button button-primary" type="button" @click="copyShareLink"><Copy :size="15"/>复制链接</button></footer></section></div>
+    <div v-if="shareOpen && canShare" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="shareOpen = false"><section class="ranking-share-dialog ui-modal"><header><div><span><Share2 :size="18"/></span><div><h2>分享学生排行榜</h2><p>当前账号名下全部学员总榜</p></div></div><button class="icon-button" type="button" title="关闭" @click="shareOpen = false"><X :size="17"/></button></header><div class="ranking-share-content"><label>分享链接</label><input :value="shareUrl" readonly @focus="$event.target.select()"></div><footer><a class="button button-quiet" :href="shareUrl" target="_blank" rel="noopener"><ExternalLink :size="15"/>打开预览</a><button class="button button-primary" type="button" @click="copyShareLink"><Copy :size="15"/>复制链接</button></footer></section></div>
   </AdminLayout>
 </template>

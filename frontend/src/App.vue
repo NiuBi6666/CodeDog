@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watchEffect } from "vue";
 import { RouterView, useRoute } from "vue-router";
+import UiDialogHost from "./components/UiDialogHost.vue";
 
 const route = useRoute();
 const toast = ref("");
@@ -19,6 +20,7 @@ watchEffect(() => {
 </script>
 
 <template>
+  <UiDialogHost />
   <RouterView />
   <div id="toast" class="toast" :class="{ 'is-visible': toast }" role="status" aria-live="polite">{{ toast }}</div>
 </template>

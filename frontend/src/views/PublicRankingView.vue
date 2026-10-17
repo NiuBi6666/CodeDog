@@ -1,4 +1,5 @@
 <script setup>
+import { showAlert } from "../uiDialogs.js";
 import { insufficientRewardPoints, rewardRedemptionError } from "../rewardRedemption.js";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
@@ -313,7 +314,7 @@ async function redeemReward() {
     // Refresh the database balance on each confirmation, including when another tab has redeemed.
     balance.value = await api("/public/rankings/student-balance");
     if (insufficientRewardPoints(balance.value, selectedReward.value)) {
-      window.alert("当前积分不足以兑换此商品");
+      await showAlert("当前积分不足以兑换此商品");
       return;
     }
     const created = await api(`/public/rankings/rewards/${selectedReward.value.id}/redeem`, { method: "POST" });
@@ -339,7 +340,7 @@ async function redeemReward() {
   } catch (failure) {
     const message = rewardRedemptionError(failure);
     if (message === "当前积分不足以兑换此商品") {
-      window.alert(message);
+      await showAlert(message);
       try { balance.value = await api("/public/rankings/student-balance"); } catch (_) { /* Keep the original rejection. */ }
     } else {
       redeemError.value = message;
@@ -423,15 +424,15 @@ onBeforeUnmount(() => {
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
       </form>
-      <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop" @click.self="closeRewardRedeem">
-        <section class="reward-redeem-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
+      <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="closeRewardRedeem">
+        <section class="reward-redeem-modal ui-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
           <header><div><span class="reward-redeem-mark"><Gift aria-hidden="true" /></span><div><p class="password-modal-kicker">积分兑换</p><h2 id="rewardRedeemTitle">确认兑换奖品</h2></div></div><button class="icon-button" type="button" title="关闭" @click="closeRewardRedeem"><X :size="17" /></button></header>
           <div class="reward-redeem-body"><div class="reward-redeem-item"><div class="reward-image"><img v-if="selectedReward.imageUrl" :src="selectedReward.imageUrl" :alt="selectedReward.name"><Gift v-else aria-hidden="true" /></div><div><strong>{{ selectedReward.name }}</strong><small>需要 {{ selectedReward.requiredPoints }} 积分 · 剩余 {{ selectedReward.stock }} 件</small></div></div><p>当前可用积分：<b>{{ balance.availablePoints }}</b>；兑换后剩余：<b>{{ Math.max(0, balance.availablePoints - selectedReward.requiredPoints) }}</b></p><p v-if="redeemError" class="redeem-error" role="alert">{{ redeemError }}</p></div>
           <footer><button class="password-later-button" type="button" @click="closeRewardRedeem">取消</button><button class="login-button" type="button" :disabled="redeemSaving || selectedReward.stock <= 0" @click="redeemReward"><RefreshCw v-if="redeemSaving" class="spin" aria-hidden="true" /><span>{{ redeemSaving ? "兑换中…" : "确认兑换" }}</span></button></footer>
         </section>
       </div>
-      <div v-if="passwordPromptOpen" class="password-modal-backdrop" @click.self="deferPasswordChange">
-        <section class="password-modal" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle" @click.stop>
+      <div v-if="passwordPromptOpen" class="password-modal-backdrop ui-dialog-backdrop" @click.self="deferPasswordChange">
+        <section class="password-modal ui-modal" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle" @click.stop>
           <div class="password-modal-mark"><Code2 aria-hidden="true" /></div>
           <div class="password-modal-copy">
             <p class="password-modal-kicker">账号安全提醒</p>

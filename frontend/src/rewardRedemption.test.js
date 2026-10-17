@@ -27,7 +27,7 @@ describe("student confirmation action", () => {
       redeemSaving: { value: false }, redeemError: { value: "" },
       balance: { value: { availablePoints: 100 } },
       redemptions: { value: [] }, redeemNotice: { value: "" }, board: { value: {} },
-      api: vi.fn(), window: { alert: vi.fn() },
+      api: vi.fn(), showAlert: vi.fn().mockResolvedValue(true),
       insufficientRewardPoints, rewardRedemptionError,
       refreshRewardStock: vi.fn().mockResolvedValue(),
       closeRewardRedeem: vi.fn(), handleSessionExpired: vi.fn()
@@ -42,7 +42,7 @@ describe("student confirmation action", () => {
     await action();
     expect(state.api).toHaveBeenCalledTimes(1);
     expect(state.api).toHaveBeenCalledWith("/public/rankings/student-balance");
-    expect(state.window.alert).toHaveBeenCalledWith("当前积分不足以兑换此商品");
+    expect(state.showAlert).toHaveBeenCalledWith("当前积分不足以兑换此商品");
     expect(state.redeemSaving.value).toBe(false);
   });
 
@@ -52,7 +52,7 @@ describe("student confirmation action", () => {
       .mockRejectedValueOnce({ status: 422, message: "可用积分不足，当前可用 3 分" })
       .mockResolvedValueOnce({ availablePoints: 3 });
     await action();
-    expect(state.window.alert).toHaveBeenCalledWith("当前积分不足以兑换此商品");
+    expect(state.showAlert).toHaveBeenCalledWith("当前积分不足以兑换此商品");
     expect(state.balance.value.availablePoints).toBe(3);
     expect(state.redeemSaving.value).toBe(false);
     expect(state.closeRewardRedeem).not.toHaveBeenCalled();
@@ -63,6 +63,6 @@ describe("student confirmation action", () => {
     state.redeemSaving.value = true;
     await action();
     expect(state.api).not.toHaveBeenCalled();
-    expect(state.window.alert).not.toHaveBeenCalled();
+    expect(state.showAlert).not.toHaveBeenCalled();
   });
 });

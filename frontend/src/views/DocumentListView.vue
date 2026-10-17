@@ -1,4 +1,5 @@
 <script setup>
+import { showConfirm } from "../uiDialogs.js";
 import { onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Share2 } from "@lucide/vue";
@@ -34,7 +35,7 @@ function search() { router.push({ path: "/doc/list", query: { ...filters, page: 
 
 async function changeStatus(document) {
   const next = document.status === "normal" ? "offline" : "normal";
-  if (next === "offline" && !window.confirm("确定下线这篇文档？")) return;
+  if (next === "offline" && !await showConfirm("确定下线这篇文档？", { title: "下线文档", confirmText: "确认下线", danger: true })) return;
   try {
     await api(`/documents/${document.id}/status`, { method: "PATCH", body: jsonBody({ status: next }) });
     notify(next === "normal" ? "文档已上线" : "文档已下线");

@@ -156,8 +156,8 @@ onMounted(loadBootstrap);
     </template>
 
     <Teleport to="body">
-      <div v-if="credentialOpen && hasPermission('class_progress.credential')" class="progress-credential-backdrop" role="presentation">
-        <section class="progress-credential-dialog" role="dialog" aria-modal="true" aria-labelledby="credential-title">
+      <div v-if="credentialOpen && hasPermission('class_progress.credential')" class="progress-credential-backdrop ui-dialog-backdrop" role="presentation">
+        <section class="progress-credential-dialog ui-modal" role="dialog" aria-modal="true" aria-labelledby="credential-title">
           <div class="progress-credential-heading"><span><KeyRound :size="18"/></span><div><h2 id="credential-title">输入编程猫 Cookie</h2><p>验证成功后继续加载课堂数据</p></div></div>
           <form @submit.prevent="submitCredential">
             <div v-if="credentialError" class="notice notice-error">{{ credentialError }}</div>
