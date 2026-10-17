@@ -13,6 +13,60 @@ import { rankingShareUrl, rankingSummary, rankingTrendView } from "../rankingAdm
 import { formatDateTime } from "../utils";
 
 const board = ref(null);
+const accountStatuses = ref({});
+const phoneImportInput = ref(null);
+const phonesImporting = ref(false);
+const phoneImportSummary = ref(null);
+const phoneOpen = ref(false);
+const phoneLoading = ref(false);
+const phoneSaving = ref(false);
+const phoneStudent = ref(null);
+const phoneValue = ref("");
+const phoneOriginal = ref("");
+const phoneError = ref("");
+const canImportPhones = computed(() => hasPermission("rankings.accounts.import"));
+const canEditPhone = computed(() => hasPermission("rankings.accounts.edit"));
+function statusLabel(status) { return status === "ACTIVE" ? "已开通" : status === "PENDING" ? "待开通" : status === "DISABLED" ? "已停用" : "—"; }
+async function loadAccountStatuses() {
+  if (!canBoardRead.value) return;
+  const values = await api("/rankings/admin/students/account-status");
+  accountStatuses.value = Object.fromEntries(values.map((item) => [item.studentId, item]));
+}
+function openPhoneImport() { if (!phonesImporting.value) phoneImportInput.value?.click(); }
+async function importPhones(event) {
+  const file = event.target.files?.[0]; event.target.value = "";
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".xlsx") || file.size > 10 * 1024 * 1024) { notify("仅支持不超过 10 MB 的 .xlsx 文件"); return; }
+  phonesImporting.value = true; phoneImportSummary.value = null;
+  try {
+    const body = new FormData(); body.append("file", file);
+    phoneImportSummary.value = await api("/rankings/admin/imports/phones", { method: "POST", body });
+    await loadAccountStatuses();
+    notify(`手机号导入完成，开通 ${phoneImportSummary.value.createdRows} 人，更新 ${phoneImportSummary.value.updatedRows} 人，失败 ${phoneImportSummary.value.rejectedRows} 行`);
+  } catch (failure) { notify(failure.message || "手机号导入失败"); }
+  finally { phonesImporting.value = false; }
+}
+async function openStudentPhone(row) {
+  phoneStudent.value = row; phoneValue.value = ""; phoneOriginal.value = ""; phoneError.value = "";
+  phoneOpen.value = true; phoneLoading.value = true;
+  try {
+    const value = await api(`/rankings/admin/students/${encodeURIComponent(row.studentId)}/phone`);
+    if (!phoneOpen.value || phoneStudent.value?.studentId !== row.studentId) return;
+    phoneValue.value = value.phone; phoneOriginal.value = value.phone;
+  } catch (failure) { phoneError.value = failure.message || "手机号读取失败"; }
+  finally { phoneLoading.value = false; }
+}
+function closeStudentPhone() { if (!phoneSaving.value && !phoneLoading.value) { phoneOpen.value = false; phoneStudent.value = null; } }
+async function saveStudentPhone() {
+  if (!/^1\d{10}$/.test(phoneValue.value)) { phoneError.value = "请输入 11 位有效手机号"; return; }
+  phoneSaving.value = true; phoneError.value = "";
+  try {
+    await api(`/rankings/admin/students/${encodeURIComponent(phoneStudent.value.studentId)}/phone`, { method: "PUT", body: jsonBody({ phone: phoneValue.value, expectedPhone: phoneOriginal.value }) });
+    await loadAccountStatuses();
+    phoneOpen.value = false; phoneStudent.value = null; notify("手机号已保存，学生请使用新手机号登录");
+  } catch (failure) { phoneError.value = failure.message || "手机号保存失败"; }
+  finally { phoneSaving.value = false; }
+}
 const rewards = ref([]);
 const redemptions = ref([]);
 const announcements = ref([]);
@@ -130,6 +184,7 @@ async function loadAll() {
   loading.value = true; error.value = "";
   try {
     const tasks = [];
+    if (canBoardRead.value) tasks.push(loadAccountStatuses());
     if (canBoardRead.value) tasks.push(api("/rankings/admin/board").then((value) => { board.value = value; }));
     if (canAnnouncementsRead.value) tasks.push(api("/rankings/admin/announcements").then((value) => { announcements.value = normaliseAnnouncements(value); }));
     if (canRewardsRead.value) tasks.push(api("/rankings/admin/rewards").then((value) => { rewards.value = value; }));
@@ -299,6 +354,7 @@ async function importPointFiles(event) {
     const result = await api("/rankings/admin/imports/xlsx", { method: "POST", body });
     pointsImportSummary.value = result;
     if (canBoardRead.value) board.value = await api("/rankings/admin/board");
+    await loadAccountStatuses();
     const message = `导入 ${result.receivedRows} 行，更新 ${result.changedRows} 行，未变化 ${result.unchangedRows} 行`;
     notify(result.rejectedRows ? `${message}，失败 ${result.rejectedRows} 行` : message);
   } catch (failure) { notify(failure.message || "积分导入失败"); }
@@ -330,7 +386,7 @@ async function savePoints() {
   finally { pointsSaving.value = false; }
 }
 async function copyStudentPassword() { await writeClipboard(recoveredPassword.value); notify("学生密码已复制"); }
-function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); } }
+function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); closeStudentPhone(); } }
 
 onMounted(() => { document.addEventListener("keydown", closeOnEscape); activeTab.value = firstAllowedTab(); loadAll(); });
 onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
@@ -343,6 +399,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <div class="ranking-heading-actions">
         <input ref="pointImportInput" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple @change="importPointFiles">
         <button v-if="canImportPoints" class="button button-quiet" type="button" :disabled="pointsImporting" @click="openPointsImport"><Upload :size="15"/>{{ pointsImporting ? '导入中' : '导入积分' }}</button>
+        <input ref="phoneImportInput" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="importPhones">
+        <button v-if="canImportPhones" class="button button-quiet" type="button" :disabled="phonesImporting" title="A列用户ID、B列姓名、C列手机号；仅更新当前老师名下账号，不改积分" @click="openPhoneImport"><Upload :size="15"/>{{ phonesImporting ? '导入中' : '导入手机号' }}</button>
         <button v-if="canRefresh" class="button button-quiet" type="button" :disabled="loading" @click="loadAll"><RefreshCw :class="{ 'spin-icon': loading }" :size="15"/>刷新</button>
         <button v-if="canShare" class="button button-primary" type="button" @click="shareOpen = true"><Share2 :size="15"/>分享</button>
       </div>
@@ -350,6 +408,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     <div v-if="error" class="notice notice-error">{{ error }}</div>
     <div v-if="pointsImportSummary" class="notice" :class="pointsImportSummary.rejectedRows ? 'notice-error' : 'notice-success'">
       导入 {{ pointsImportSummary.receivedRows }} 行，更新 {{ pointsImportSummary.changedRows }} 行，未变化 {{ pointsImportSummary.unchangedRows }} 行<span v-if="pointsImportSummary.rejectedRows">，失败 {{ pointsImportSummary.rejectedRows }} 行：{{ pointsImportSummary.errors?.[0]?.message }}</span>
+    </div>
+
+    <div v-if="phoneImportSummary" class="notice" :class="phoneImportSummary.rejectedRows ? 'notice-error' : 'notice-success'" role="status">
+      手机号导入 {{ phoneImportSummary.receivedRows }} 行：开通 {{ phoneImportSummary.createdRows }} 人，更新 {{ phoneImportSummary.updatedRows }} 人，未变化 {{ phoneImportSummary.unchangedRows }} 人，失败 {{ phoneImportSummary.rejectedRows }} 行。新账号初始密码为 123456，已有账号密码不变，积分不变。
+      <details v-if="phoneImportSummary.errors?.length"><summary>查看失败明细（{{ phoneImportSummary.errors.length }} 行）</summary><ul><li v-for="item in phoneImportSummary.errors" :key="item.rowNumber">第 {{ item.rowNumber }} 行 · ID {{ item.studentId || '缺失' }}：{{ item.message }}</li></ul></details>
     </div>
 
     <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能">
@@ -374,15 +437,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
         <div v-else-if="board && !filteredRows.length" class="ranking-admin-state"><Search :size="23"/><span>没有找到匹配的学员</span></div>
         <div v-else-if="board" class="ranking-admin-table-wrap">
-          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>所属班级</th><th>当前积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit">积分调整</th><th v-if="auth.user?.admin">密码</th></tr></thead>
+          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>账号状态</th><th>所属班级</th><th>当前积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit">积分调整</th><th v-if="canEditPhone">登录手机号</th><th v-if="auth.user?.admin">密码</th></tr></thead>
             <tbody><tr v-for="row in filteredRows" :key="row.studentId">
               <td><span class="ranking-number" :class="`rank-${Math.min(row.rank, 4)}`">{{ row.rank }}</span></td>
               <td><div class="ranking-student"><img class="ranking-student-avatar" src="/favicon-dog-20260913.png" alt="" width="38" height="38"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
+              <td><span class="ranking-status" :class="accountStatuses[row.studentId]?.status === 'ACTIVE' ? 'is-enabled' : accountStatuses[row.studentId]?.status === 'DISABLED' ? 'is-disabled' : 'is-pending'">{{ statusLabel(accountStatuses[row.studentId]?.status) }}</span><small v-if="accountStatuses[row.studentId]?.maskedPhone" class="ranking-account-phone">{{ accountStatuses[row.studentId].maskedPhone }}</small></td>
               <td><span class="ranking-class-name">{{ row.className || '—' }}</span></td><td><strong class="ranking-total-points">{{ numberText(row.availablePoints ?? row.totalPoints) }}</strong></td>
               <td><div class="ranking-score-parts"><span>课程 {{ row.totalPoints }}</span><span v-if="row.adjustmentPoints">调整 {{ row.adjustmentPoints > 0 ? '+' : '' }}{{ row.adjustmentPoints }}</span><span v-if="row.spentPoints">兑换 -{{ row.spentPoints }}</span></div></td>
               <td>{{ Number(row.accuracyRate || 0).toFixed(1) }}%</td><td><span class="ranking-level" :class="`ranking-level-${row.level}`">{{ row.levelName }}</span></td>
               <td><span class="ranking-trend" :class="`ranking-trend-${rankingTrendView(row).direction}`" :title="rankingTrendView(row).title"><ArrowUp v-if="rankingTrendView(row).direction === 'up'" :size="14"/><ArrowDown v-else-if="rankingTrendView(row).direction === 'down'" :size="14"/><Minus v-else :size="14"/>{{ rankingTrendView(row).direction === 'same' ? '' : Math.abs(row.rankChange) }}</span></td>
-              <td v-if="canPointsEdit"><button class="button button-quiet button-small" type="button" @click="openPoints(row)"><Pencil :size="14"/>调整积分</button></td><td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
+              <td v-if="canPointsEdit"><button class="button button-quiet button-small" type="button" @click="openPoints(row)"><Pencil :size="14"/>调整积分</button></td><td v-if="canEditPhone"><button class="button button-quiet button-small" type="button" @click="openStudentPhone(row)"><Pencil :size="14"/>修改手机号</button></td><td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
             </tr></tbody>
           </table>
         </div>
@@ -471,6 +535,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <footer><button class="button button-quiet" type="button" @click="closePoints">取消</button><button class="button button-primary" type="submit" :disabled="pointsSaving">{{ pointsSaving ? '保存中' : '保存积分' }}</button></footer>
       </form>
     </div>
+    <div v-if="phoneOpen && canEditPhone" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closeStudentPhone">
+      <form class="ranking-share-dialog ranking-form-dialog ui-modal" role="dialog" aria-modal="true" aria-labelledby="student-phone-title" @submit.prevent="saveStudentPhone">
+        <header><div><span><UsersRound :size="18"/></span><div><h2 id="student-phone-title">修改登录手机号</h2><p>{{ phoneStudent?.studentName }} · ID {{ phoneStudent?.studentId }}</p></div></div><button class="icon-button" type="button" aria-label="关闭手机号窗口" :disabled="phoneSaving || phoneLoading" @click="closeStudentPhone"><X :size="17"/></button></header>
+        <div class="ranking-form-body"><p v-if="phoneLoading">正在读取手机号…</p><template v-else><label><span>学生手机号</span><input v-model.trim="phoneValue" type="tel" inputmode="numeric" autocomplete="off" maxlength="11" required placeholder="请输入 11 位手机号" aria-label="学生手机号"><small>保存后使用此手机号登录；已有密码和积分保持不变。未开通账号将以初始密码 123456 开通。</small></label><div v-if="phoneError" class="notice notice-error" role="alert">{{ phoneError }}</div></template></div>
+        <footer><button class="button button-quiet" type="button" :disabled="phoneSaving || phoneLoading" @click="closeStudentPhone">取消</button><button class="button button-primary" type="submit" :disabled="phoneSaving || phoneLoading">{{ phoneSaving ? '保存中' : '保存手机号' }}</button></footer>
+      </form>
+    </div>
+
     <div v-if="rewardOpen && (rewardForm.id ? canRewardsEdit : canRewardsCreate)" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closeReward">
       <form class="ranking-share-dialog ui-modal ranking-form-dialog" role="dialog" aria-modal="true" aria-label="排行榜管理" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
         <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="999999999"></label><label><span>剩余库存</span><input v-model.number="rewardForm.stock" required type="number" min="0" max="999999999" step="1"><small>每次兑换扣减 1 件；0 件时无法兑换。</small></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>

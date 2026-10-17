@@ -1,0 +1,167 @@
+package cn.codedog;
+
+import cn.codedog.dao.UserRepository;
+import cn.codedog.model.User;
+import cn.codedog.service.*;
+import java.time.Instant;
+import java.util.*;
+import java.io.ByteArrayOutputStream;
+import java.util.concurrent.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import static org.assertj.core.api.Assertions.*;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:studentphones;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE"})
+@AutoConfigureMockMvc
+class StudentAccountManagementIntegrationTest {
+  @Autowired MockMvc mvc;
+  @Autowired JdbcTemplate jdbc;
+  @Autowired UserRepository users;
+  @Autowired PasswordEncoder encoder;
+  @Autowired StudentAccountManagementService accounts;
+  @Autowired StudentRankingAuthService studentAuth;
+  @Autowired StudentPhoneXlsxParser parser;
+  String owner;
+  @BeforeEach void setup() {
+    jdbc.execute("""
+      CREATE TABLE IF NOT EXISTS ranking_students(owner_username VARCHAR(50),camp_id VARCHAR(100),class_id VARCHAR(100),
+      student_id VARCHAR(100),student_name VARCHAR(100),PRIMARY KEY(owner_username,camp_id,class_id,student_id))
+      """);
+    jdbc.execute("""
+      CREATE TABLE IF NOT EXISTS ranking_student_accounts(id BIGINT AUTO_INCREMENT PRIMARY KEY,phone VARCHAR(20) UNIQUE NOT NULL,
+      owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,student_name VARCHAR(100) NOT NULL,password_hash VARCHAR(100) NOT NULL,
+      password_ciphertext CLOB,enabled BOOLEAN DEFAULT TRUE,created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,password_changed_at TIMESTAMP(6),UNIQUE(owner_username,student_id))
+      """);
+    owner="phone"+UUID.randomUUID().toString().substring(0,8);
+    User teacher=new User();teacher.setUsername(owner);teacher.setPasswordHash(encoder.encode("teacher-test-password"));
+    teacher.setAdmin(false);teacher.setCreatedAt(Instant.now());teacher.setUpdatedAt(Instant.now());teacher.setPermissions(new LinkedHashSet<>());
+    users.saveAndFlush(teacher);
+    add(owner,"s1","同学一");add(owner,"s2","同学二");
+  }
+  void add(String teacher,String id,String name) {jdbc.update("INSERT INTO ranking_students VALUES(?,'camp','class',?,?)",teacher,id,name);}
+  String phone() {return "1"+String.format("%010d",Math.floorMod(UUID.randomUUID().getMostSignificantBits(),10000000000L));}
+  void grant(String...permissions) {User teacher=users.findByUsername(owner).orElseThrow();teacher.setPermissions(new LinkedHashSet<>(List.of(permissions)));users.saveAndFlush(teacher);}
+  MockHttpSession teacherLogin() throws Exception {
+    return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"username\":\""+owner+"\",\"password\":\"teacher-test-password\"}"))
+      .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+  }
+  String change(String number,String expected) {return "{\"phone\":\""+number+"\",\"expectedPhone\":\""+expected+"\"}";}
+  MockMultipartFile xlsx(String[][] values) throws Exception {
+    try(var workbook=new XSSFWorkbook();var output=new ByteArrayOutputStream()) {
+      var sheet=workbook.createSheet("手机号");int index=0;
+      for(String[] valuesRow:values){var row=sheet.createRow(index++);for(int i=0;i<valuesRow.length;i++)row.createCell(i).setCellValue(valuesRow[i]);}
+      workbook.write(output);return new MockMultipartFile("file","phones.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",output.toByteArray());
+    }
+  }
+  @Test void permissionsCsrfOwnershipAndImmediateRevocation() throws Exception {
+    var session=teacherLogin();String number=phone();
+    mvc.perform(get("/api/rankings/admin/students/account-status").session(session)).andExpect(status().isForbidden());
+    mvc.perform(get("/api/rankings/admin/students/s1/phone").session(session)).andExpect(status().isForbidden());
+    mvc.perform(put("/api/rankings/admin/students/s1/phone").session(session).with(csrf()).contentType(APPLICATION_JSON).content(change(number,""))).andExpect(status().isForbidden());
+    var file=xlsx(new String[][]{{"用户ID","姓名","手机号"},{"s1","同学一",number}});
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(file).session(session).with(csrf())).andExpect(status().isForbidden());
+    grant("rankings.board.read","rankings.accounts.import","rankings.accounts.edit");
+    mvc.perform(get("/api/rankings/admin/students/account-status").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$[0].status").value("PENDING"));
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(file).session(session)).andExpect(status().isForbidden());
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(file).session(session).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.createdRows").value(1));
+    mvc.perform(get("/api/rankings/admin/students/s1/phone").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$.phone").value(number));
+    String replacement=phone();
+    mvc.perform(put("/api/rankings/admin/students/s1/phone").session(session).with(csrf()).contentType(APPLICATION_JSON).content(change(replacement,number)))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.phone").value(replacement));
+    String changeLog=jdbc.queryForObject("SELECT changes_json FROM audit_log WHERE action=? AND owner_username=? ORDER BY id DESC LIMIT 1",String.class,"ranking_student_phone_updated:s1",owner);
+    assertThat(changeLog).contains("phone","before","after").doesNotContain(number,replacement,"123456");
+    add("other-teacher","foreign","他人学生");
+    mvc.perform(put("/api/rankings/admin/students/foreign/phone").session(session).with(csrf()).contentType(APPLICATION_JSON).content(change(phone(),""))).andExpect(status().isNotFound());
+    mvc.perform(get("/api/rankings/admin/students/account-status").session(session)).andExpect(jsonPath("$.length()").value(2));
+    grant("rankings.board.read");
+    mvc.perform(get("/api/rankings/admin/students/s1/phone").session(session)).andExpect(status().isForbidden());
+    mvc.perform(put("/api/rankings/admin/students/s1/phone").session(session).with(csrf()).contentType(APPLICATION_JSON).content(change(number,replacement))).andExpect(status().isForbidden());
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(file).session(session).with(csrf())).andExpect(status().isForbidden());
+    mvc.perform(get("/api/rankings/admin/students/account-status")).andExpect(status().isUnauthorized());
+  }
+  @Test void importIsIdempotentAndKeepsPasswordPointsAndOwner() throws Exception {
+    grant("rankings.accounts.import");var teacher=teacherLogin();String number=phone();
+    var file=xlsx(new String[][]{{"用户ID","姓名","手机号"},{"s1","同学一",number}});
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(file).session(teacher).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.createdRows").value(1));
+    String oldHash=jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE phone=?",String.class,number);
+    assertThat(encoder.matches("123456",oldHash)).isTrue();
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(file).session(teacher).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.unchangedRows").value(1));
+    var login=mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+number+"\",\"password\":\"123456\"}"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.ownerUsername").value(owner)).andReturn();
+    var student=(MockHttpSession)login.getRequest().getSession(false);
+    mvc.perform(post("/api/public/rankings/student-auth/change-password").session(student).with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"password\":\"changed-password\"}")).andExpect(status().isOk());
+    String newHash=jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE phone=?",String.class,number);
+    String replacement=phone();
+    var replacementFile=xlsx(new String[][]{{"用户ID","姓名","手机号"},{"s1","同学一",replacement}});
+    var before=jdbc.queryForList("SELECT * FROM ranking_students WHERE owner_username=?",owner);
+    mvc.perform(multipart("/api/rankings/admin/imports/phones").file(replacementFile).session(teacher).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.updatedRows").value(1));
+    assertThat(jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE phone=?",String.class,replacement)).isEqualTo(newHash);
+    assertThat(jdbc.queryForList("SELECT * FROM ranking_students WHERE owner_username=?",owner)).isEqualTo(before);
+    assertThat(jdbc.queryForObject("SELECT password_changed_at FROM ranking_student_accounts WHERE phone=?",java.sql.Timestamp.class,replacement)).isNotNull();
+    mvc.perform(get("/api/public/rankings/student-auth/session").session(student)).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON).content("{\"phone\":\""+number+"\",\"password\":\"changed-password\"}")).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON).content("{\"phone\":\""+replacement+"\",\"password\":\"changed-password\"}")).andExpect(status().isOk());
+    String detail=jdbc.queryForObject("SELECT detail_json FROM audit_log WHERE action LIKE 'ranking_student_phones_imported:%' ORDER BY id DESC LIMIT 1",String.class);
+    assertThat(detail).contains("accountChanges","before","after","sha256").doesNotContain(number,replacement,"123456","changed-password",newHash);
+  }
+  @Test void partialFailuresDuplicatesAndConflictsAreExplicit() throws Exception {
+    String used=phone();accounts.edit(owner,"s1",used,"");
+    String other="other"+UUID.randomUUID().toString().substring(0,6);add(other,"foreign","其他学生");
+    String occupied=phone();accounts.edit(other,"foreign",occupied,"");
+    var rows=parser.parse(xlsx(new String[][]{{"用户ID","姓名","手机号"},
+      {"s2","错误姓名",phone()},{"missing","不存在",phone()},{"s2","同学二",occupied},{"s2","同学二","123"}}));
+    var result=accounts.importRows(owner,rows);
+    assertThat(result.rejectedRows()).isEqualTo(4);
+    assertThat(accounts.phone(owner,"s2").status()).isEqualTo("PENDING");
+    var mismatch=accounts.importRows(owner,List.of(new StudentPhoneXlsxParser.PhoneRow(2,"s2","错误姓名",phone(),null)));
+    assertThat(mismatch.errors().getFirst().message()).contains("姓名");
+    var missing=accounts.importRows(owner,List.of(new StudentPhoneXlsxParser.PhoneRow(2,"foreign","其他学生",phone(),null)));
+    assertThat(missing.errors().getFirst().message()).contains("当前老师");
+    var duplicate=accounts.importRows(owner,parser.parse(xlsx(new String[][]{{"用户ID","姓名","手机号"},{"s1","同学一",used},{"s2","同学二",used}})));
+    assertThat(duplicate.rejectedRows()).isEqualTo(2);
+    assertThatThrownBy(()->accounts.edit(owner,"s1",phone(),"stale")).hasMessageContaining("手机号已被其他操作修改");
+    assertThat(accounts.phone(owner,"s1").phone()).isEqualTo(used);
+    assertThatThrownBy(()->accounts.edit(owner,"s2",occupied,"")).hasMessageContaining("手机号已被其他学生使用");
+  }
+  @Test void concurrentClaimsForSamePhoneCannotCreateTwoAccounts() throws Exception {
+    String other="race"+UUID.randomUUID().toString().substring(0,6);add(other,"foreign","并发学生");String number=phone();
+    var pool=Executors.newFixedThreadPool(2);var start=new CountDownLatch(1);
+    try {
+      var tasks=List.<Callable<Boolean>>of(()->{start.await();try{accounts.edit(owner,"s1",number,"");return true;}catch(org.springframework.web.server.ResponseStatusException e){return false;}},
+        ()->{start.await();try{accounts.edit(other,"foreign",number,"");return true;}catch(org.springframework.web.server.ResponseStatusException e){return false;}});
+      var futures=tasks.stream().map(pool::submit).toList();start.countDown();int successes=0;
+      for(var future:futures)if(future.get(15,TimeUnit.SECONDS))successes++;
+      assertThat(successes).isEqualTo(1);
+      assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_student_accounts WHERE phone=?",Integer.class,number)).isEqualTo(1);
+    } finally {pool.shutdownNow();}
+  }
+  @Test void parserAcceptsNumericPhonesAndRejectsWrongHeadersAndFormulas() throws Exception {
+    try(var workbook=new XSSFWorkbook();var output=new ByteArrayOutputStream()) {
+      var sheet=workbook.createSheet();var h=sheet.createRow(0);h.createCell(0).setCellValue("用户ID");h.createCell(1).setCellValue("姓名");h.createCell(2).setCellValue("手机号");
+      var r=sheet.createRow(1);r.createCell(0).setCellValue(11111111);r.createCell(1).setCellValue("测试同学");r.createCell(2).setCellValue(17785890327d);
+      var bad=sheet.createRow(2);bad.createCell(0).setCellValue("formula");bad.createCell(1).setCellValue("测试");bad.createCell(2).setCellFormula("1+1");
+      workbook.write(output);
+      var rows=parser.parse(new MockMultipartFile("file","numeric.xlsx","application/octet-stream",output.toByteArray()));
+      assertThat(rows.getFirst().studentId()).isEqualTo("11111111");assertThat(rows.getFirst().phone()).isEqualTo("17785890327");
+      assertThat(rows.get(1).error()).contains("公式");
+    }
+    assertThatThrownBy(()->parser.parse(xlsx(new String[][]{{"手机号","姓名","ID"},{phone(),"测试","s1"}}))).hasMessageContaining("A、B、C");
+  }
+}

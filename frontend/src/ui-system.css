@@ -1,3 +1,5 @@
+.ranking-heading-actions { flex-wrap: wrap; }
+.ranking-account-phone { display: block; margin-top: 6px; color: var(--ui-muted); font-size: 12px; }
 /* CodeDog UI foundations: one component geometry, separate teacher/student palettes. */
 :root {
   --ui-font: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
