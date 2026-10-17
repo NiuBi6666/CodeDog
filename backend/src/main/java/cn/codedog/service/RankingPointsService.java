@@ -18,6 +18,7 @@ public class RankingPointsService {
  public void lock(String owner,String student){jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",owner);jdbc.query("SELECT student_id FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY camp_id,class_id FOR UPDATE",(rs,n)->rs.getString(1),owner,student);}
  public void record(String owner,String student,String type,String key,long before,long after,String reason,String actor){
   jdbc.update("INSERT INTO ranking_point_ledger(owner_username,student_id,event_type,business_key,delta,balance_before,balance_after,reason,actor) VALUES(?,?,?,?,?,?,?,?,?)",owner,student,type,key,after-before,before,after,reason,actor);
+  if(after!=before)new RankingMessageService(jdbc).student(owner,student,"points:"+key,"积分变动",reason+"："+(after-before>0?"+":"")+(after-before)+" 分，余额 "+after+" 分","ledger");
  }
  public Map<String,Object> ledger(String owner,String student,int page){
   int safe=Math.max(0,page);
@@ -30,7 +31,7 @@ public class RankingPointsService {
   for(String student:students){lock(owner,student);long source=raw(owner,student);long ledger=jdbc.queryForObject("SELECT COALESCE(SUM(delta),0) FROM ranking_point_ledger WHERE owner_username=? AND student_id=?",Long.class,owner,student);
    boolean ok=source==ledger&&source>=0&&source<=999999999L;if(!ok)errors++;
    jdbc.update("INSERT INTO ranking_reconciliations(owner_username,student_id,source_balance,ledger_balance,result) VALUES(?,?,?,?,?)",owner,student,source,ledger,ok?"OK":"MISMATCH");
-  }return Map.of("checked",students.size(),"anomalies",errors);
+  }if(errors>0)new RankingMessageService(jdbc).teacher(owner,"reconcile:"+UUID.randomUUID(),"积分对账异常",errors+" 位学员需核实，请勿直接覆盖历史记录","operations");return Map.of("checked",students.size(),"anomalies",errors);
  }
 
  @Transactional public Map<String,Object> repair(String owner,String student,long expectedSource,long expectedLedger,String reason){

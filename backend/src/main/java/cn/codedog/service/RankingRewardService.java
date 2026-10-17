@@ -243,6 +243,7 @@ public class RankingRewardService {
     if (rewardValues.isEmpty()) throw notFound("奖品不存在");
     RewardValue reward = rewardValues.getFirst();
     if (!reward.enabled()) throw invalid("该奖品已停用");
+    new RankingRewardRuleService(jdbc).enforce(owner,studentId,rewardId);
     if (reward.stock() <= 0) throw invalid("该奖品已兑完，请选择其他奖品");
     RankingPointsService points = new RankingPointsService(jdbc);
     long rawBefore = points.raw(owner,studentId);
@@ -264,6 +265,7 @@ public class RankingRewardService {
     }, key);
     long redemptionId=Objects.requireNonNull(key.getKey()).longValue();
     points.record(owner,studentId,"REDEMPTION","redeem:"+redemptionId,rawBefore,points.raw(owner,studentId),"兑换："+reward.name(),actor);
+    new RankingRewardRuleService(jdbc).lowStock(owner,rewardId,"redeem:"+redemptionId);
     return redemptionById(owner, redemptionId);
   }
 
@@ -284,7 +286,8 @@ public class RankingRewardService {
       ? jdbc.update("UPDATE ranking_reward_redemptions SET status='FULFILLED',fulfilled_at=CURRENT_TIMESTAMP(6),fulfilled_by=? WHERE id=? AND owner_username=? AND status='PENDING'", actor, id, owner)
       : jdbc.update("UPDATE ranking_reward_redemptions SET status='PENDING',fulfilled_at=NULL,fulfilled_by=NULL WHERE id=? AND owner_username=? AND status='FULFILLED'", id, owner);
     if (changed == 0) throw notFound("兑换记录不存在");
-    return redemptionById(owner, id);
+    var order=redemptionById(owner,id);var active=jdbc.queryForList("SELECT owner_username FROM ranking_current_ownership WHERE student_id=? AND state='ACTIVE'",order.studentId());String recipientOwner=active.isEmpty()?owner:(String)active.getFirst().get("owner_username");new RankingMessageService(jdbc).student(recipientOwner,order.studentId(),"fulfillment:"+id+":"+fulfilled,"奖品发放状态",order.rewardName()+(fulfilled?"：老师已发放":"：恢复待发放"),"redemptions");
+    return order;
   }
 
   private RankingRewardPayload.Reward rewardById(String owner, long id) {

@@ -31,3 +31,12 @@ Current ownership is independent from historical lesson/order owners. Duplicate 
 Students retain historical order visibility through explicit transfer records. Original teachers process those orders; later refunds are forwarded atomically to the student's current owner. Shared phone numbers are allowed; ambiguous login requires the student ID without disclosing other accounts. Completeness distinguishes missing phones, unopened accounts, rejected imports and missing expected lesson data. Missing data is not treated as incomplete coursework.
 
 Batch 3 validation: 127 backend tests and 69 frontend tests passed; isolated MySQL transfer/refund/shared-phone/offboarding suite and desktop/mobile browser flows passed. Production checks are read-only.
+
+
+## Batch 4 — monthly history, prize limits, inbox
+
+Monthly rankings sum only normal course results in the Asia/Shanghai calendar month of the verified lesson occurrence date. Neither balance adjustments nor redemptions/refunds/transfers affect the monthly score. Unknown dates remain excluded and visible as missing; teachers with the separate date permission may correct them, after which historic boards are recomputed from source data. Student responses expose only the first ten entries and their own entry, even for tied scores.
+
+Prize rules independently configure stock-warning threshold, per-student lifetime quantity (zero means unlimited), start/end times and fulfillment instructions. The transaction locks the prize before enforcing all restrictions. CANCELLED orders do not consume the quantity allowance. Low stock, pending requests and ledger discrepancies are visible in the teacher alert panel. Both interfaces have paginated in-app inboxes with unread/read state and fixed internal business navigation. Notifications use business idempotency keys and are written in the business transaction; no external messaging service is contacted.
+
+Validation: 133 backend and 69 frontend tests passed. Isolated real MySQL verified concurrent quantity enforcement, cancellation releasing allowance, date correction and exclusion of manual balance changes, inbox tenant/student boundaries, alert state, and zero source/ledger differences. Teacher/student desktop and mobile browser flows passed.
