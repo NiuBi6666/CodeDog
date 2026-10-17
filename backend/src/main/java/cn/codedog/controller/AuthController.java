@@ -117,6 +117,7 @@ public class AuthController {
     private String userPasswordContext(String username) { return "user:" + username.toLowerCase(java.util.Locale.ROOT); }
 
     private AuthResponse profile(String username) {
+        if(users.findByUsername(username).filter(User::isEnabled).isEmpty())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"账号已停用");
         User user = users.findByUsername(username).orElseThrow();
         String displayName = user.getDisplayName() == null || user.getDisplayName().isBlank() ? user.getUsername() : user.getDisplayName();
         return new AuthResponse(user.getUsername(), displayName, user.getTeacherPublicId(), user.isAdmin(), permissions.permissions(user));

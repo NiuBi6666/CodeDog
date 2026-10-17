@@ -19,7 +19,7 @@ public class PermissionService {
     public boolean has(Authentication authentication, String permission) {
         if (authentication == null || !authentication.isAuthenticated() || permission == null) return false;
         return users.findByUsername(authentication.getName())
-            .map(user -> user.isAdmin() || user.getPermissions().contains(permission))
+            .map(user -> user.isEnabled() && (user.isAdmin() || user.getPermissions().contains(permission)))
             .orElse(false);
     }
 
@@ -29,11 +29,11 @@ public class PermissionService {
     }
 
     public boolean isAdmin(String username) {
-        return username != null && users.findByUsername(username).map(User::isAdmin).orElse(false);
+        return username != null && users.findByUsername(username).map(u->u.isEnabled()&&u.isAdmin()).orElse(false);
     }
 
     public Set<String> permissions(User user) {
-        return user.isAdmin() ? PermissionCatalog.allCodes() : Set.copyOf(user.getPermissions());
+        return !user.isEnabled()?Set.of():user.isAdmin() ? PermissionCatalog.allCodes() : Set.copyOf(user.getPermissions());
     }
 
     public Set<String> permissions(Authentication authentication) {

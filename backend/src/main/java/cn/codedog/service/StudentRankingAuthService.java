@@ -35,11 +35,17 @@ public class StudentRankingAuthService {
   }
 
   public StudentSession login(String phoneValue, String password, HttpServletRequest request) {
+    return login(phoneValue,password,null,request);
+  }
+  public StudentSession login(String phoneValue,String password,String studentId,HttpServletRequest request){
     if (audit.recentStudentLoginFailures(request) >= 8)
       throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "登录尝试过于频繁，请 15 分钟后再试");
     String phone = normalizePhone(phoneValue);
     String secret = password == null ? "" : password;
-    Account account = find(phone);
+    var accounts=jdbc.queryForList("SELECT a.owner_username,a.student_id FROM ranking_student_accounts a WHERE a.phone=? AND a.enabled=TRUE AND NOT EXISTS(SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=a.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>a.owner_username))",phone);
+    if(accounts.size()>1&&(studentId==null||studentId.isBlank()))throw new ResponseStatusException(HttpStatus.CONFLICT,"该手机号关联多个账号，请补充学生ID");
+    var candidates=accounts.stream().filter(a->studentId==null||studentId.isBlank()||studentId.equals(a.get("student_id"))).toList();
+    Account account=candidates.size()==1?find(phone,(String)candidates.getFirst().get("owner_username"),(String)candidates.getFirst().get("student_id")):null;
     if (account == null || !account.enabled() || !passwordEncoder.matches(secret, account.passwordHash())) {
       audit.record("student_login_failed", request);
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "手机号或密码不正确");
@@ -68,6 +74,7 @@ public class StudentRankingAuthService {
       clear(session);
       throw unauthorized();
     }
+    try{RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);}catch(RuntimeException e){clear(session);throw unauthorized();}
     session.setAttribute(STUDENT_NAME_ATTRIBUTE, account.studentName());
     return profile(account);
   }
@@ -132,6 +139,7 @@ public class StudentRankingAuthService {
   private void put(HttpSession session, Account account) {
     session.setAttribute(OWNER_ATTRIBUTE, account.ownerUsername());
     session.setAttribute(STUDENT_ID_ATTRIBUTE, account.studentId());
+    try{RankingOwnershipService.requireCurrent(jdbc,account.ownerUsername(),account.studentId(),false);}catch(RuntimeException e){clear(session);throw unauthorized();}
     session.setAttribute(STUDENT_NAME_ATTRIBUTE, account.studentName());
     session.setAttribute(PHONE_ATTRIBUTE, account.phone());
     session.setAttribute("studentSessionVersion",account.sessionVersion());

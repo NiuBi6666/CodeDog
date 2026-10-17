@@ -67,7 +67,7 @@ class RbacIntegrationTest {
         jdbc.execute("""
             CREATE TABLE IF NOT EXISTS ranking_student_accounts (
               id BIGINT AUTO_INCREMENT PRIMARY KEY,
-              phone VARCHAR(20) NOT NULL UNIQUE,
+              phone VARCHAR(20) NOT NULL,
               owner_username VARCHAR(50) NOT NULL,
               student_id VARCHAR(100) NOT NULL,
               student_name VARCHAR(100) NOT NULL,
@@ -703,6 +703,22 @@ class RbacIntegrationTest {
    }
   }
   mvc.perform(post("/api/rankings/admin/aftercare/recoveries/1/resolve").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"temporary-test\"}")).andExpect(status().isForbidden());
+ }
+
+ @Test void continuityPermissionsGrantRevokeAndTransfersStayAdministratorOnly() throws Exception {
+  String name=uniqueUsername("continuity");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
+  for(var spec:java.util.List.of(new String[]{"rankings.completeness.read","GET","/api/rankings/admin/expected-lessons"},new String[]{"rankings.expected.create","POST","/api/rankings/admin/expected-lessons"},new String[]{"rankings.expected.edit","PUT","/api/rankings/admin/expected-lessons/999999"},new String[]{"rankings.expected.delete","DELETE","/api/rankings/admin/expected-lessons/999999"})){
+   for(int pass=0;pass<3;pass++){member.setPermissions(new LinkedHashSet<>(pass==1?java.util.Set.of(spec[0]):java.util.Set.of()));users.saveAndFlush(member);
+    var request=org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(org.springframework.http.HttpMethod.valueOf(spec[1]),spec[2]).with(csrf()).contentType(APPLICATION_JSON).content("{}");
+    mvc.perform(request.session(session)).andExpect(status().is(pass==1?(spec[1].equals("GET")?200:409):403));
+   }
+  }
+  member.setPermissions(new LinkedHashSet<>(cn.codedog.security.PermissionCatalog.allCodes()));users.saveAndFlush(member);
+  mvc.perform(get("/api/rankings/admin/transfers").session(session)).andExpect(status().isForbidden());
+  mvc.perform(post("/api/rankings/admin/transfers/preview").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
+  member.setEnabled(false);users.saveAndFlush(member);
+  mvc.perform(get("/api/rankings/admin/expected-lessons").session(session)).andExpect(status().isForbidden());
+  mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isUnauthorized());
  }
 
 }

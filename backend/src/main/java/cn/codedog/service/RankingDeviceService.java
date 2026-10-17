@@ -72,6 +72,7 @@ public class RankingDeviceService {
     if (!owner.equals(authenticatedOwner)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "CRM 教师与当前授权账号不匹配");
     }
+    if(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username=? AND enabled=TRUE",Integer.class,owner)!=1)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"教师账号已停用");
     Integer active = jdbc.queryForObject(
         "SELECT COUNT(*) FROM ranking_extension_devices WHERE owner_username=? AND revoked_at IS NULL",
         Integer.class, owner);
@@ -90,6 +91,7 @@ public class RankingDeviceService {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "扩展设备令牌无效或已撤销");
     }
     jdbc.update("UPDATE ranking_extension_devices SET last_seen_at=CURRENT_TIMESTAMP(6) WHERE token_hash=?", hash);
+    if(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username=? AND enabled=TRUE",Integer.class,owners.getFirst())!=1)throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"教师账号已停用");
     return owners.getFirst();
   }
 
@@ -125,6 +127,7 @@ public class RankingDeviceService {
   }
 
   private RankingPayload.Connection createDevice(String owner, String device, String crmTeacherId) {
+    if(jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username=? AND enabled=TRUE",Integer.class,owner)!=1)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"教师账号已停用");
     String token = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes(32));
     KeyHolder key = new GeneratedKeyHolder();
     jdbc.update(connection -> {

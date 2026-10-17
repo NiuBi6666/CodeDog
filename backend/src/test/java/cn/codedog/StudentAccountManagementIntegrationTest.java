@@ -36,12 +36,13 @@ class StudentAccountManagementIntegrationTest {
   @Autowired StudentPhoneXlsxParser parser;
   String owner;
   @BeforeEach void setup() {
+    cn.codedog.OperationsTestSchema.create(jdbc);
     jdbc.execute("""
       CREATE TABLE IF NOT EXISTS ranking_students(owner_username VARCHAR(50),camp_id VARCHAR(100),class_id VARCHAR(100),
       student_id VARCHAR(100),student_name VARCHAR(100),PRIMARY KEY(owner_username,camp_id,class_id,student_id))
       """);
     jdbc.execute("""
-      CREATE TABLE IF NOT EXISTS ranking_student_accounts(id BIGINT AUTO_INCREMENT PRIMARY KEY,phone VARCHAR(20) UNIQUE NOT NULL,
+      CREATE TABLE IF NOT EXISTS ranking_student_accounts(id BIGINT AUTO_INCREMENT PRIMARY KEY,phone VARCHAR(20) NOT NULL,
       owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,student_name VARCHAR(100) NOT NULL,password_hash VARCHAR(100) NOT NULL,
       password_ciphertext CLOB,enabled BOOLEAN DEFAULT TRUE,created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,password_changed_at TIMESTAMP(6),session_version INT NOT NULL DEFAULT 0,must_change_password BOOLEAN NOT NULL DEFAULT FALSE,UNIQUE(owner_username,student_id))
@@ -135,10 +136,10 @@ class StudentAccountManagementIntegrationTest {
     var missing=accounts.importRows(owner,List.of(new StudentPhoneXlsxParser.PhoneRow(2,"foreign","其他学生",phone(),null)));
     assertThat(missing.errors().getFirst().message()).contains("当前老师");
     var duplicate=accounts.importRows(owner,parser.parse(xlsx(new String[][]{{"用户ID","姓名","手机号"},{"s1","同学一",used},{"s2","同学二",used}})));
-    assertThat(duplicate.rejectedRows()).isEqualTo(2);
+    assertThat(duplicate.rejectedRows()).isZero();
     assertThatThrownBy(()->accounts.edit(owner,"s1",phone(),"stale")).hasMessageContaining("手机号已被其他操作修改");
     assertThat(accounts.phone(owner,"s1").phone()).isEqualTo(used);
-    assertThatThrownBy(()->accounts.edit(owner,"s2",occupied,"")).hasMessageContaining("手机号已被其他学生使用");
+    assertThat(accounts.edit(owner,"s2",occupied,used).phone()).isEqualTo(occupied);
   }
   @Test void concurrentClaimsForSamePhoneCannotCreateTwoAccounts() throws Exception {
     String other="race"+UUID.randomUUID().toString().substring(0,6);add(other,"foreign","并发学生");String number=phone();
@@ -148,9 +149,15 @@ class StudentAccountManagementIntegrationTest {
         ()->{start.await();try{accounts.edit(other,"foreign",number,"");return true;}catch(org.springframework.web.server.ResponseStatusException e){return false;}});
       var futures=tasks.stream().map(pool::submit).toList();start.countDown();int successes=0;
       for(var future:futures)if(future.get(15,TimeUnit.SECONDS))successes++;
-      assertThat(successes).isEqualTo(1);
-      assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_student_accounts WHERE phone=?",Integer.class,number)).isEqualTo(1);
+      assertThat(successes).isEqualTo(2);
+      assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_student_accounts WHERE phone=?",Integer.class,number)).isEqualTo(2);
     } finally {pool.shutdownNow();}
+  }
+  @Test void sharedPhoneRequiresStudentIdAndDoesNotDiscloseOtherNames() throws Exception {
+    String shared=phone();accounts.edit(owner,"s1",shared,"");accounts.edit(owner,"s2",shared,"");
+    var result=mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON).content("{\"phone\":\""+shared+"\",\"password\":\"123456\"}")).andExpect(status().isConflict()).andReturn();
+    assertThat(result.getResponse().getContentAsString()).doesNotContain("同学一","同学二");
+    mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON).content("{\"phone\":\""+shared+"\",\"password\":\"123456\",\"studentId\":\"s2\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.studentId").value("s2"));
   }
   @Test void parserAcceptsNumericPhonesAndRejectsWrongHeadersAndFormulas() throws Exception {
     try(var workbook=new XSSFWorkbook();var output=new ByteArrayOutputStream()) {

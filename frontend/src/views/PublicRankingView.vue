@@ -53,6 +53,7 @@ const studentSession = ref(null);
 const authReady = ref(false);
 const authLoading = ref(false);
 const loginPhone = ref("");
+const loginStudentId=ref("");const needsStudentId=ref(false);
 const loginPassword = ref("");
 const loginError = ref("");
 const passwordPromptOpen = ref(false);
@@ -192,7 +193,7 @@ async function login() {
   try {
     studentSession.value = await api("/public/rankings/student-auth/login", {
       method: "POST",
-      body: jsonBody({ phone: loginPhone.value.trim(), password: loginPassword.value })
+      body: jsonBody({ phone: loginPhone.value.trim(), password: loginPassword.value,studentId:loginStudentId.value.trim()||null })
     });
     selectedStudentId.value = String(studentSession.value.studentId);
     loginPassword.value = "";
@@ -200,6 +201,7 @@ async function login() {
     openPasswordPrompt(studentSession.value);
     startRefreshTimers();
   } catch (failure) {
+    if(failure.status===409)needsStudentId.value=true;
     loginError.value = failure.message || "登录失败，请检查手机号和密码";
   } finally {
     authLoading.value = false;
@@ -432,6 +434,7 @@ onBeforeUnmount(() => {
         <div class="login-mark"><Code2 aria-hidden="true" /></div>
         <div class="login-copy"><h1>登录查看你的排名</h1><p>使用老师登记的手机号进入专属积分榜。</p></div>
         <label class="login-field"><span>手机号</span><input v-model="loginPhone" inputmode="numeric" autocomplete="username" maxlength="11" placeholder="请输入编程猫注册手机号" /></label>
+        <label v-if="needsStudentId" class="login-field"><span>学生ID</span><input v-model="loginStudentId" maxlength="100" placeholder="共用手机号，请补充学生ID"></label>
         <label class="login-field"><span>密码</span><input v-model="loginPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入密码" /></label>
         <button type="button" class="logout-button" @click="requestRecovery">找回密码</button>
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>

@@ -199,8 +199,8 @@ public class RankingRewardService {
 
   public List<RankingRewardPayload.Redemption> studentRedemptions(String owner, String studentValue) {
     String studentId = text(studentValue, "学员 ID", 100);
-    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=? ORDER BY redeemed_at DESC,id DESC",
-      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getString(9), instant(rs.getTimestamp(10)), instant(rs.getTimestamp(11)), null), owner, studentId);
+    return jdbc.query("SELECT id,student_id,student_name,reward_id,reward_name,points_spent,balance_before,balance_after,status,redeemed_at,fulfilled_at,fulfilled_by FROM ranking_reward_redemptions WHERE student_id=? AND (owner_username=? OR EXISTS(SELECT 1 FROM ranking_transfers t WHERE t.student_id=ranking_reward_redemptions.student_id AND t.from_owner=ranking_reward_redemptions.owner_username)) ORDER BY redeemed_at DESC,id DESC",
+      (rs, n) -> new RankingRewardPayload.Redemption(rs.getLong(1), rs.getString(2), rs.getString(3), nullableLong(rs, 4), rs.getString(5), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getString(9), instant(rs.getTimestamp(10)), instant(rs.getTimestamp(11)), null), studentId, owner);
   }
 
   public RankingRewardPayload.Balance balance(String owner, String studentValue) {
@@ -234,6 +234,7 @@ public class RankingRewardService {
   private RankingRewardPayload.Redemption createRedemptionInternal(String owner,String studentId,long rewardId){return createRedemptionInternal(owner,studentId,rewardId,studentId);}
   private RankingRewardPayload.Redemption createRedemptionInternal(String owner, String studentId, long rewardId,String actor) {
     new RankingPointsService(jdbc).lock(owner,studentId);
+    RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);
     // Lock every current student row before reading the balance so two tabs cannot spend the same points.
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
     if (names.isEmpty()) throw notFound("学员不存在");

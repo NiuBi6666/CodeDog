@@ -215,7 +215,7 @@ public class RankingBoardService {
           GROUP BY owner_username,student_id) a ON a.owner_username=s.owner_username AND a.student_id=s.student_id
         LEFT JOIN (SELECT owner_username,student_id,SUM(points_spent) spent_points FROM ranking_reward_redemptions
           GROUP BY owner_username,student_id) p ON p.owner_username=s.owner_username AND p.student_id=s.student_id
-        WHERE s.owner_username=?
+        WHERE s.owner_username=? AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=s.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>s.owner_username))
         GROUP BY s.student_id
         ORDER BY available_points DESC,score_reached_at ASC,accuracy_basis_points DESC,homework_points DESC,
           inclass_points DESC,completion_points DESC,s.student_id
@@ -248,7 +248,7 @@ public class RankingBoardService {
           AND a.class_id=s.class_id AND a.student_id=s.student_id
         LEFT JOIN (SELECT owner_username,student_id,SUM(points_spent) spent_points FROM ranking_reward_redemptions
           GROUP BY owner_username,student_id) p ON p.owner_username=s.owner_username AND p.student_id=s.student_id
-        WHERE s.owner_username=? AND s.camp_id=?
+        WHERE s.owner_username=? AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=s.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>s.owner_username)) AND s.camp_id=?
         """ + filter + " GROUP BY s.student_id ORDER BY available_points DESC,score_reached_at ASC,accuracy_basis_points DESC,"
         + "homework_points DESC,inclass_points DESC,completion_points DESC,s.student_id";
     return jdbc.query(sql, (rs, n) -> aggregateRow(rs), args.toArray());
@@ -329,10 +329,12 @@ public class RankingBoardService {
       throw invalid("目标积分必须是 0 至 999999999 的整数");
     }
     new RankingPointsService(jdbc).lock(owner,studentId);
+    RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND camp_id=? AND class_id=? AND student_id=? FOR UPDATE",
         (rs, n) -> rs.getString(1), owner, campId, classId, studentId);
     if (names.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不在指定营期班级中");
     new RankingPointsService(jdbc).lock(owner,studentId);
+    RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);
     AggregateRow before = aggregateAllRows(owner).stream().filter(row -> row.studentId().equals(studentId)).findFirst()
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在"));
     RankingPointsService points = new RankingPointsService(jdbc);

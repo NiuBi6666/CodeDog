@@ -123,6 +123,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/operations/import-batches").access(permission(permissions, PermissionCatalog.BATCH_READ))
                 .requestMatchers(HttpMethod.POST, "/api/rankings/admin/operations/import-batches/*/reverse").access(permission(permissions, PermissionCatalog.IMPORT_REVERSE))
                 .requestMatchers(HttpMethod.POST,"/api/rankings/admin/operations/reconciliations/repair").access(permission(permissions,PermissionCatalog.RECONCILE_REPAIR))
+                .requestMatchers("/api/rankings/admin/transfers", "/api/rankings/admin/transfers/**").access(admin(permissions))
+                .requestMatchers(HttpMethod.GET,"/api/rankings/admin/completeness","/api/rankings/admin/expected-lessons").access(permission(permissions,"rankings.completeness.read"))
+                .requestMatchers(HttpMethod.POST,"/api/rankings/admin/expected-lessons").access(permission(permissions,"rankings.expected.create"))
+                .requestMatchers(HttpMethod.PUT,"/api/rankings/admin/expected-lessons/*").access(permission(permissions,"rankings.expected.edit"))
+                .requestMatchers(HttpMethod.DELETE,"/api/rankings/admin/expected-lessons/*").access(permission(permissions,"rankings.expected.delete"))
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/aftercare/cancellations").access(permission(permissions,PermissionCatalog.CANCEL_READ))
                 .requestMatchers(HttpMethod.POST,"/api/rankings/admin/aftercare/cancellations/*/decision").access(permission(permissions,PermissionCatalog.CANCEL_DECIDE))
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/aftercare/recoveries").access(permission(permissions,PermissionCatalog.RECOVERY_READ))
@@ -189,7 +194,7 @@ public class SecurityConfig {
                 .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException(username));
             var builder = org.springframework.security.core.userdetails.User
                 .withUsername(user.getUsername())
-                .password(user.getPasswordHash());
+                .password(user.getPasswordHash()).disabled(!user.isEnabled());
             return (user.isAdmin() ? builder.roles("ADMIN") : builder.roles("USER")).build();
         };
     }

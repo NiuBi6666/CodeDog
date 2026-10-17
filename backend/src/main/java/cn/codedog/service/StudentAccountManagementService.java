@@ -62,7 +62,7 @@ public class StudentAccountManagementService {
     for(var row:rows) {
       String error=row.error();
       if(error==null && ids.get(row.studentId())>1)error="表内学生 ID 重复，请保留一行后重试";
-      if(error==null && phones.get(row.phone())>1)error="表内手机号重复，不能绑定多位学生";
+
       if(error!=null){errors.add(new RowError(row.rowNumber(),row.studentId(),error));continue;}
       try {
         Saved result=save(owner,row.studentId(),row.studentName(),row.phone(),null,initialHash);
@@ -80,6 +80,8 @@ public class StudentAccountManagementService {
     if(!phone.matches("^1\\d{10}$"))throw invalid("请输入 11 位有效手机号");
     try {
       return transactions.execute(tx->{
+        jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",owner);
+        RankingOwnershipService.requireCurrent(jdbc,owner,id,false);
         // Lock all class memberships for this owner/student before opening or changing an account.
         List<String> names=studentNames(owner,id,true);
         if(names.isEmpty())throw missing();
@@ -92,7 +94,7 @@ public class StudentAccountManagementService {
           throw new ResponseStatusException(HttpStatus.CONFLICT,"手机号已被其他操作修改，请重新打开窗口");
         if(before!=null&&previous.equals(phone))return new Saved(new PhoneInfo(id,name,phone,previousStatus),previous,previousStatus,"UNCHANGED");
         Integer occupied=jdbc.queryForObject("SELECT COUNT(*) FROM ranking_student_accounts WHERE phone=?",Integer.class,phone);
-        if(occupied!=null&&occupied>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"手机号已被其他学生使用，请核实后再修改");
+
         if(before==null) {
           String ciphertext=recovery.configured()?recovery.encrypt("123456","student:"+owner+":"+id):null;
           jdbc.update("INSERT INTO ranking_student_accounts(phone,owner_username,student_id,student_name,password_hash,password_ciphertext,enabled) VALUES(?,?,?,?,?,?,TRUE)",

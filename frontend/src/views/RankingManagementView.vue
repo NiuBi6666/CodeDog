@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2, Upload,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
+import RankingContinuity from "../components/RankingContinuity.vue";
 import RankingAftercare from "../components/RankingAftercare.vue";
 import RankingOperations from "../components/RankingOperations.vue";
 import AdminLayout from "../components/AdminLayout.vue";
@@ -173,14 +174,20 @@ function normaliseAnnouncements(values) {
     unpublishAtInput: toDateTimeInput(item.unpublishAt)
   }));
 }
+const extraTabs = computed(()=>({
+  aftercare:auth.user?.admin||['rankings.cancellations.read','rankings.recovery.read'].some(hasPermission),
+  operations:['rankings.ledger.read','rankings.reconciliation.read','rankings.reconciliation.run','rankings.reconciliation.repair','rankings.batches.read'].some(hasPermission),
+  continuity:auth.user?.admin||hasPermission('rankings.completeness.read')
+}));
 function firstAllowedTab() {
   if (canBoardRead.value) return "rankings";
   if (canRewardsTab.value) return "rewards";
   if (canRedemptionsTab.value) return "redemptions";
   if (canAnnouncementsTab.value) return "announcements";
-  return "";
+  return Object.keys(extraTabs.value).find(k=>extraTabs.value[k])||"";
 }
 function tabAllowed(tab) {
+  if(Object.hasOwn(extraTabs.value,tab))return extraTabs.value[tab];
   return tab === "rankings" ? canBoardRead.value : tab === "rewards" ? canRewardsTab.value
     : tab === "redemptions" ? canRedemptionsTab.value : tab === "announcements" ? canAnnouncementsTab.value : false;
 }
@@ -417,12 +424,13 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     </div>
 
     <div v-if="importPreview" class="notice"><h3>导入预览 · {{importPreview.rows.length}} 条结果</h3><p>确认后才会更新积分；预览30分钟有效。</p><div style="max-height:320px;overflow:auto"><table class="ranking-admin-table"><thead><tr><th>学员</th><th>课程</th><th>原积分</th><th>新积分</th><th>校验</th></tr></thead><tbody><tr v-for="(r,i) in importPreview.rows" :key="i"><td>{{r.name}} · {{r.studentId}}</td><td>{{r.lesson}}</td><td>{{r.before}}</td><td>{{r.after}}</td><td>{{r.error||'通过'}}</td></tr></tbody></table></div><div class="button-row"><button class="button button-quiet" :disabled="importConfirming" @click="importPreview=null">取消</button><button v-if="hasPermission('rankings.import.confirm')" class="button button-primary" :disabled="importConfirming||importPreview.hasErrors" @click="confirmImport">确认导入</button></div></div>
-    <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能"><button v-if="auth.user?.admin||['rankings.cancellations.read','rankings.recovery.read'].some(hasPermission)" type="button" :class="{active:activeTab==='aftercare'}" @click="activeTab='aftercare'">取消兑换与账号找回</button><button v-if="['rankings.ledger.read','rankings.reconciliation.read','rankings.reconciliation.run','rankings.batches.read'].some(hasPermission)" type="button" :class="{active:activeTab==='operations'}" @click="activeTab='operations'">积分流水与导入记录</button>
+    <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能"><button v-if="auth.user?.admin||hasPermission('rankings.completeness.read')" :class="{active:activeTab==='continuity'}" @click="activeTab='continuity'">交接与数据完整性</button><button v-if="auth.user?.admin||['rankings.cancellations.read','rankings.recovery.read'].some(hasPermission)" type="button" :class="{active:activeTab==='aftercare'}" @click="activeTab='aftercare'">取消兑换与账号找回</button><button v-if="['rankings.ledger.read','rankings.reconciliation.read','rankings.reconciliation.run','rankings.batches.read'].some(hasPermission)" type="button" :class="{active:activeTab==='operations'}" @click="activeTab='operations'">积分流水与导入记录</button>
       <button v-if="canBoardRead" type="button" :class="{ active: activeTab === 'rankings' }" @click="activeTab = 'rankings'"><Trophy :size="17"/>全量排名</button>
       <button v-if="canRewardsTab" type="button" :class="{ active: activeTab === 'rewards' }" @click="activeTab = 'rewards'"><Gift :size="17"/>奖品管理 <span v-if="canRewardsRead">{{ rewards.length }}</span></button>
       <button v-if="canRedemptionsTab" type="button" :class="{ active: activeTab === 'redemptions' }" @click="activeTab = 'redemptions'"><PackageCheck :size="17"/>兑换记录 <span v-if="canRedemptionsRead && pendingCount">{{ pendingCount }}</span></button>
       <button v-if="canAnnouncementsTab" type="button" :class="{ active: activeTab === 'announcements' }" @click="activeTab = 'announcements'"><Megaphone :size="17"/>公告管理 <span v-if="canAnnouncementsRead">{{ announcements.length }}</span></button>
     </nav>
+    <RankingContinuity v-if="activeTab==='continuity'"/>
     <RankingAftercare v-if="activeTab==='aftercare'"/>
     <RankingOperations v-if="activeTab==='operations'" :students="rows"/>
 

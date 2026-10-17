@@ -33,7 +33,7 @@ class RankingRewardServiceTest {
       for (String table : new String[]{"ranking_reward_redemptions", "ranking_rewards", "ranking_point_adjustments", "ranking_lesson_results", "ranking_students", "ranking_announcements", "ranking_board_settings", "users"}) jdbc.execute("DROP TABLE IF EXISTS " + table);
       jdbc.execute("SET FOREIGN_KEY_CHECKS=1");
     }
-    jdbc.execute("CREATE TABLE users(id BIGINT AUTO_INCREMENT PRIMARY KEY,username VARCHAR(50) NOT NULL UNIQUE,is_admin BOOLEAN NOT NULL)");
+    jdbc.execute("CREATE TABLE users(id BIGINT AUTO_INCREMENT PRIMARY KEY,username VARCHAR(50) NOT NULL UNIQUE,enabled BOOLEAN DEFAULT TRUE,is_admin BOOLEAN NOT NULL)");
     jdbc.execute("""
       CREATE TABLE ranking_board_settings(
         owner_username VARCHAR(50) PRIMARY KEY,announcement VARCHAR(500) NOT NULL DEFAULT '',

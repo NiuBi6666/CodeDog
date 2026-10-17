@@ -33,7 +33,7 @@ class RankingServiceTest {
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
         teacher_public_id VARCHAR(11) NOT NULL UNIQUE,
-        is_admin BOOLEAN NOT NULL
+        enabled BOOLEAN DEFAULT TRUE,is_admin BOOLEAN NOT NULL
       )
       """);
     jdbc.execute("""

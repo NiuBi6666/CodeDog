@@ -22,3 +22,12 @@
 - 账号找回统一返回受理信息；教师核实后仅最高管理员可重置。重置及改密递增会话版本，旧会话失效。
 - 管理界面增加“取消兑换与账号找回”，独立配置查看、核实、审批权限。
 - 学生端登录页提供找回入口，未发放订单提供取消申请。
+
+
+## Batch 3 — ownership and handover
+
+Current ownership is independent from historical lesson/order owners. Duplicate historical relationships are marked CONFLICT and require highest-administrator resolution; balances are never silently merged. Transfer previews expire in 30 minutes and recheck ownership version, balance and destination before confirmation. Transfers use ordered teacher locks and paired ledger entries. Account identity/password is retained; the recovery ciphertext context is rewrapped and sessions invalidated. Offboarding disables the teacher and revokes devices. Old-teacher imports, adjustments and reversals cannot reclaim students.
+
+Students retain historical order visibility through explicit transfer records. Original teachers process those orders; later refunds are forwarded atomically to the student's current owner. Shared phone numbers are allowed; ambiguous login requires the student ID without disclosing other accounts. Completeness distinguishes missing phones, unopened accounts, rejected imports and missing expected lesson data. Missing data is not treated as incomplete coursework.
+
+Batch 3 validation: 127 backend tests and 69 frontend tests passed; isolated MySQL transfer/refund/shared-phone/offboarding suite and desktop/mobile browser flows passed. Production checks are read-only.

@@ -17,7 +17,7 @@ public class StudentRankingAuthController {
 
   @PostMapping("/student-auth/login")
   public StudentRankingAuthService.StudentSession login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
-    return auth.login(body.phone(), body.password(), request);
+    return body.studentId()==null?auth.login(body.phone(), body.password(), request):auth.login(body.phone(),body.password(),body.studentId(),request);
   }
 
   @GetMapping("/student-auth/session")
@@ -46,7 +46,7 @@ public class StudentRankingAuthController {
 
   public record LoginRequest(
     @NotBlank @Pattern(regexp = "^1\\d{10}$", message = "请输入 11 位手机号") String phone,
-    @NotBlank @Size(max = 72, message = "密码不能超过 72 个字符") String password) {}
+    @NotBlank @Size(max = 72, message = "密码不能超过 72 个字符") String password, String studentId) {}
 
   public record PasswordChangeRequest(
     @NotBlank @Size(min = 6, max = 72, message = "新密码长度应为 6-72 个字符") String password) {}
