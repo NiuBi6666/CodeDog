@@ -61,3 +61,9 @@ async function signOut() {
     </section>
   </div>
 </template>
+
+<style scoped>
+@media (min-width: 761px) {
+  .admin-header .sidebar-toggle { display: none; }
+}
+</style>
