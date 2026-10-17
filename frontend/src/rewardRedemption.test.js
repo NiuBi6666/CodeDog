@@ -23,6 +23,7 @@ describe("student confirmation action", () => {
     const view = readFileSync(new URL("./views/PublicRankingView.vue", import.meta.url), "utf8");
     const source = view.slice(view.indexOf("async function redeemReward()"), view.indexOf("function toggleRowDetails"));
     const state = {
+      redeemRequestKey:{value:"test-request-key-123456"},
       selectedReward: { value: { id: 9, stock: 1, requiredPoints: 66 } },
       redeemSaving: { value: false }, redeemError: { value: "" },
       balance: { value: { availablePoints: 100 } },

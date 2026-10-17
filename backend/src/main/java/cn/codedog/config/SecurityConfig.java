@@ -41,6 +41,7 @@ public class SecurityConfig {
                     "/api/public/rankings/extension/import", "/api/public/rankings/extension/contacts"))
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(requests -> requests
+                .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/public/rankings/extension/bootstrap")
                     .access(permission(permissions, PermissionCatalog.RANKINGS_DEVICES_PAIR))
                 .requestMatchers("/api/public/**", "/api/auth/csrf", "/api/auth/login",
@@ -122,6 +123,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/operations/import-batches").access(permission(permissions, PermissionCatalog.BATCH_READ))
                 .requestMatchers(HttpMethod.POST, "/api/rankings/admin/operations/import-batches/*/reverse").access(permission(permissions, PermissionCatalog.IMPORT_REVERSE))
                 .requestMatchers(HttpMethod.POST,"/api/rankings/admin/operations/reconciliations/repair").access(permission(permissions,PermissionCatalog.RECONCILE_REPAIR))
+                .requestMatchers(HttpMethod.GET,"/api/rankings/admin/aftercare/cancellations").access(permission(permissions,PermissionCatalog.CANCEL_READ))
+                .requestMatchers(HttpMethod.POST,"/api/rankings/admin/aftercare/cancellations/*/decision").access(permission(permissions,PermissionCatalog.CANCEL_DECIDE))
+                .requestMatchers(HttpMethod.GET,"/api/rankings/admin/aftercare/recoveries").access(permission(permissions,PermissionCatalog.RECOVERY_READ))
+                .requestMatchers(HttpMethod.POST,"/api/rankings/admin/aftercare/recoveries/*/verify").access(permission(permissions,PermissionCatalog.RECOVERY_VERIFY))
+                .requestMatchers(HttpMethod.POST,"/api/rankings/admin/aftercare/recoveries/*/resolve").access(admin(permissions))
                 .requestMatchers("/api/rankings/admin/**").denyAll()
                 .requestMatchers(HttpMethod.GET, "/api/dashboard").access(permission(permissions, PermissionCatalog.DASHBOARD_VIEW))
                 .requestMatchers(HttpMethod.POST, "/api/students/query").access(permission(permissions, PermissionCatalog.STUDENTS_QUERY))

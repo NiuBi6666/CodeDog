@@ -64,7 +64,7 @@ public class StudentRankingAuthService {
     String studentId = value(session.getAttribute(STUDENT_ID_ATTRIBUTE));
     if (phone.isEmpty() || owner.isEmpty() || studentId.isEmpty()) throw unauthorized();
     Account account = find(phone, owner, studentId);
-    if (account == null || !account.enabled()) {
+    if (account == null || !account.enabled() || account.sessionVersion()!=Integer.parseInt(java.util.Objects.toString(session.getAttribute("studentSessionVersion"),"0"))) {
       clear(session);
       throw unauthorized();
     }
@@ -79,10 +79,11 @@ public class StudentRankingAuthService {
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码长度应为 6-72 个字符");
     if ("123456".equals(password))
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码不能与初始密码相同，请设置其他密码");
-    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=?",
+    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),must_change_password=FALSE,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=?",
       passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(current.ownerUsername(), current.studentId())),
       current.phone(), current.ownerUsername(), current.studentId());
     if (updated != 1) throw unauthorized();
+    request.getSession().setAttribute("studentSessionVersion",Integer.parseInt(java.util.Objects.toString(request.getSession().getAttribute("studentSessionVersion"),"0"))+1);
     audit.change("STUDENT", current.studentId(), java.util.Map.of("credentialState", "existing"),
       java.util.Map.of("credentialState", "rotated"));
     audit.record("student_password_changed", request);
@@ -116,15 +117,15 @@ public class StudentRankingAuthService {
 
   private Account find(String phone) {
     try {
-      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,password_ciphertext,enabled,password_changed_at FROM ranking_student_accounts WHERE phone=?",
-        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getBoolean(7), rs.getTimestamp(8)), phone);
+      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,password_ciphertext,enabled,password_changed_at,session_version,must_change_password FROM ranking_student_accounts WHERE phone=?",
+        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getBoolean(7), rs.getTimestamp(8),rs.getInt(9),rs.getBoolean(10)), phone);
     } catch (EmptyResultDataAccessException ignored) { return null; }
   }
 
   private Account find(String phone, String owner, String studentId) {
     try {
-      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,password_ciphertext,enabled,password_changed_at FROM ranking_student_accounts WHERE phone=? AND owner_username=? AND student_id=?",
-        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getBoolean(7), rs.getTimestamp(8)), phone, owner, studentId);
+      return jdbc.queryForObject("SELECT phone,owner_username,student_id,student_name,password_hash,password_ciphertext,enabled,password_changed_at,session_version,must_change_password FROM ranking_student_accounts WHERE phone=? AND owner_username=? AND student_id=?",
+        (rs, n) -> new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getBoolean(7), rs.getTimestamp(8),rs.getInt(9),rs.getBoolean(10)), phone, owner, studentId);
     } catch (EmptyResultDataAccessException ignored) { return null; }
   }
 
@@ -133,6 +134,7 @@ public class StudentRankingAuthService {
     session.setAttribute(STUDENT_ID_ATTRIBUTE, account.studentId());
     session.setAttribute(STUDENT_NAME_ATTRIBUTE, account.studentName());
     session.setAttribute(PHONE_ATTRIBUTE, account.phone());
+    session.setAttribute("studentSessionVersion",account.sessionVersion());
   }
 
   private void clear(HttpSession session) {
@@ -143,7 +145,7 @@ public class StudentRankingAuthService {
   }
 
   private StudentSession profile(Account account) {
-    return new StudentSession(account.ownerUsername(), account.studentId(), account.studentName(), account.phone(), account.passwordChangedAt() == null);
+    return new StudentSession(account.ownerUsername(), account.studentId(), account.studentName(), account.phone(), account.passwordChangedAt() == null || account.mustChangePassword());
   }
 
   public RecoveredPassword recoveredPassword(String owner, String studentId) {
@@ -160,7 +162,7 @@ public class StudentRankingAuthService {
     String password = passwordValue == null ? "" : passwordValue;
     if (password.length() < 6 || password.length() > 72)
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "密码长度应为 6-72 个字符");
-    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=?,updated_at=CURRENT_TIMESTAMP(6) WHERE owner_username=? AND student_id=?",
+    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=?,must_change_password=TRUE,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP(6) WHERE owner_username=? AND student_id=?",
       passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(owner, studentId)),
       "123456".equals(password) ? null : Timestamp.from(java.time.Instant.now()), owner, studentId);
     if (updated != 1) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学生账号不存在");
@@ -180,7 +182,7 @@ public class StudentRankingAuthService {
   private ResponseStatusException unauthorized() { return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "学生登录已失效，请重新登录"); }
 
   private record Account(String phone, String ownerUsername, String studentId, String studentName,
-                         String passwordHash, String passwordCiphertext, boolean enabled, Timestamp passwordChangedAt) {}
+                         String passwordHash, String passwordCiphertext, boolean enabled, Timestamp passwordChangedAt,int sessionVersion,boolean mustChangePassword) {}
   public record RecoveredPassword(String studentId, String studentName, String phone, String password) {}
   public record StudentSession(String ownerUsername, String studentId, String studentName, String phone,
                                boolean mustChangePassword) {}

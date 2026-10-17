@@ -33,12 +33,15 @@ class RbacIntegrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
+    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingAftercareService aftercare;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingPointsService operationsPoints;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingImportWorkflow operationsImports;
 
     @BeforeEach
     void ensureRankingMappingTables() {
         OperationsTestSchema.create(jdbc);
+        org.mockito.Mockito.when(aftercare.decide(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyBoolean(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("status","CANCELLED"));
+        org.mockito.Mockito.when(aftercare.verify(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyBoolean(),org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("status","VERIFIED"));
         org.mockito.Mockito.when(operationsPoints.reconcile(org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("checked",0,"anomalies",0));
         org.mockito.Mockito.when(operationsImports.confirm(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString())).thenReturn(new cn.codedog.model.RankingPayload.ImportSummary(1,0,0,0,0,java.util.List.of()));
         org.mockito.Mockito.when(operationsImports.reverse(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("batchId",1));
@@ -73,7 +76,7 @@ class RbacIntegrationTest {
               enabled BOOLEAN NOT NULL DEFAULT TRUE,
               created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              password_changed_at TIMESTAMP(6),
+              password_changed_at TIMESTAMP(6),session_version INT NOT NULL DEFAULT 0,must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
               UNIQUE(owner_username, student_id)
             )
             """);
@@ -549,6 +552,7 @@ class RbacIntegrationTest {
     void rewardInventoryRequiresExactPermissionsAndAuditsBeforeAndAfter() throws Exception {
         jdbc.execute("""
             CREATE TABLE IF NOT EXISTS ranking_rewards (
+                deleted_at TIMESTAMP(6),
               id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,reward_name VARCHAR(100) NOT NULL,
               required_points INT NOT NULL,stock INT NOT NULL DEFAULT 0,image_data BLOB,image_content_type VARCHAR(50),
               enabled BOOLEAN NOT NULL,created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -689,5 +693,16 @@ class RbacIntegrationTest {
         mvc.perform(post(spec[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"reason\":\"测试\"}")).andExpect(status().isForbidden());
       }
     }
+
+ @Test void aftercarePermissionsGrantAndRevokeInSameSession() throws Exception {
+  String name=uniqueUsername("aftercare");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
+  for(var spec:java.util.List.of(new String[]{"rankings.cancellations.read","/api/rankings/admin/aftercare/cancellations","GET"},new String[]{"rankings.cancellations.decide","/api/rankings/admin/aftercare/cancellations/1/decision","POST"},new String[]{"rankings.recovery.read","/api/rankings/admin/aftercare/recoveries","GET"},new String[]{"rankings.recovery.verify","/api/rankings/admin/aftercare/recoveries/1/verify","POST"})){
+   for(int pass=0;pass<3;pass++){member.setPermissions(new LinkedHashSet<>(pass==1?java.util.Set.of(spec[0]):java.util.Set.of()));users.saveAndFlush(member);
+    var request=spec[2].equals("GET")?get(spec[1]):post(spec[1]).with(csrf()).contentType(APPLICATION_JSON).content("{\"approved\":true,\"reason\":\"核实\"}");
+    mvc.perform(request.session(session)).andExpect(status().is(pass==1?200:403));
+   }
+  }
+  mvc.perform(post("/api/rankings/admin/aftercare/recoveries/1/resolve").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"temporary-test\"}")).andExpect(status().isForbidden());
+ }
 
 }

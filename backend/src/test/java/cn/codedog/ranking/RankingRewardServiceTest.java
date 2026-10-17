@@ -48,7 +48,7 @@ class RankingRewardServiceTest {
     jdbc.execute("""
       CREATE TABLE ranking_rewards(
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,reward_name VARCHAR(100) NOT NULL,
-        stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),required_points INT NOT NULL,image_data BLOB,image_content_type VARCHAR(50),enabled BOOLEAN NOT NULL,
+        stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),deleted_at TIMESTAMP(6),required_points INT NOT NULL,image_data BLOB,image_content_type VARCHAR(50),enabled BOOLEAN NOT NULL,
         created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6))
       """);
     jdbc.execute("""
@@ -71,7 +71,7 @@ class RankingRewardServiceTest {
         camp_id VARCHAR(100) NOT NULL,
         class_id VARCHAR(100) NOT NULL,
         student_id VARCHAR(100) NOT NULL,
-        points INT NOT NULL,
+        points INT NOT NULL,balance_before INT,balance_after INT,
         reason VARCHAR(255) NOT NULL,
         actor VARCHAR(100) NOT NULL
       )
@@ -81,7 +81,7 @@ class RankingRewardServiceTest {
         id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,
         student_name VARCHAR(100) NOT NULL,reward_id BIGINT,reward_name VARCHAR(100) NOT NULL,points_spent INT NOT NULL,
         balance_before INT NOT NULL,balance_after INT NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',redeemed_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+        request_key VARCHAR(80),status VARCHAR(20) NOT NULL DEFAULT 'PENDING',redeemed_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         fulfilled_at TIMESTAMP(6),fulfilled_by VARCHAR(50),
         FOREIGN KEY(reward_id) REFERENCES ranking_rewards(id) ON DELETE SET NULL)
       """);
@@ -157,7 +157,8 @@ class RankingRewardServiceTest {
 
     service.deleteReward("teacher-a", reward.id());
     var retained = service.redemptions("teacher-a").getFirst();
-    assertThat(retained.rewardId()).isNull();
+    assertThat(retained.rewardId()).isEqualTo(reward.id());
+    assertThat(service.rewards("teacher-a")).isEmpty();
     assertThat(retained.rewardName()).isEqualTo("编程笔记本");
   }
 
@@ -362,5 +363,28 @@ class RankingRewardServiceTest {
     assertThatThrownBy(() -> controller.rewardImage(a.id(),request)).isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> assertThat(((ResponseStatusException)error).getStatusCode().value()).isEqualTo(404));
   }
+
+ @Test void cancellationRefundsOnceAndKeepsDeletedRewardOffline(){
+  var reward=service.createReward("teacher-a","取消测试",100,true,null,1);
+  var order=transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id(),"request-cancel-123456"));
+  assertThat(transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id(),"request-cancel-123456")).id()).isEqualTo(order.id());
+  var aftercare=new cn.codedog.service.RankingAftercareService(jdbc,new cn.codedog.service.RankingPointsService(jdbc),null);
+  transactions().executeWithoutResult(status->aftercare.requestCancellation("teacher-a","student-1",order.id(),"误兑换"));
+  assertThatThrownBy(()->service.setFulfilled("teacher-a",order.id(),true,"teacher-a")).isInstanceOf(ResponseStatusException.class);
+  service.deleteReward("teacher-a",reward.id());
+  transactions().executeWithoutResult(status->aftercare.decide("teacher-a",order.id(),true,"身份核实","teacher-a"));
+  assertThat(service.balance("teacher-a","student-1").availablePoints()).isEqualTo(500);
+  assertThat(jdbc.queryForObject("SELECT stock FROM ranking_rewards WHERE id=?",Integer.class,reward.id())).isEqualTo(1);
+  assertThat(service.publicRewards("teacher-a")).isEmpty();
+  assertThatThrownBy(()->transactions().executeWithoutResult(status->aftercare.decide("teacher-a",order.id(),true,"重复","teacher-a"))).isInstanceOf(ResponseStatusException.class);
+ }
+ @Test void cancellationRejectsCrossTenantAndFulfilledOrders(){
+  var reward=service.createReward("teacher-a","取消限制",100,true,null,1);
+  var order=service.createStudentRedemption("teacher-a","student-1",reward.id());
+  var aftercare=new cn.codedog.service.RankingAftercareService(jdbc,new cn.codedog.service.RankingPointsService(jdbc),null);
+  assertThatThrownBy(()->aftercare.requestCancellation("teacher-b","student-1",order.id(),"越权")).isInstanceOf(ResponseStatusException.class);
+  service.setFulfilled("teacher-a",order.id(),true,"teacher-a");
+  assertThatThrownBy(()->aftercare.requestCancellation("teacher-a","student-1",order.id(),"已发放")).isInstanceOf(ResponseStatusException.class);
+ }
 
 }

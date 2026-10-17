@@ -1,6 +1,6 @@
 <script setup>
 import PointsLedger from "../components/PointsLedger.vue";
-import { showAlert } from "../uiDialogs.js";
+import { showConfirm, showAlert } from "../uiDialogs.js";
 import { insufficientRewardPoints, rewardRedemptionError } from "../rewardRedemption.js";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
@@ -22,12 +22,18 @@ import {
   rankingAvatarText, rankingRedemptionStatus, rankingRedemptionTime, rankingTrendView
 } from "../rankingAdmin.js";
 
+
+const aftercareMode=ref(''),aftercareReason=ref(''),aftercareStudentId=ref(''),aftercareOrder=ref(null),aftercareBusy=ref(false),aftercareError=ref('');
+function requestCancel(item){aftercareMode.value='cancel';aftercareOrder.value=item;aftercareReason.value='误兑换，申请取消';aftercareError.value='';}
+function requestRecovery(){aftercareMode.value='recovery';aftercareReason.value='';aftercareError.value='';}
+async function sendAftercare(){if(aftercareBusy.value)return;aftercareBusy.value=true;aftercareError.value='';try{if(aftercareMode.value==='cancel'){await api(`/public/rankings/student-redemptions/${aftercareOrder.value.id}/cancel-request`,{method:'POST',body:jsonBody({reason:aftercareReason.value})});redemptions.value=await api('/public/rankings/student-redemptions');await showAlert('取消申请已提交，等待老师审批；积分暂未退回。');}else{const v=await api('/public/rankings/student-auth/recovery',{method:'POST',body:jsonBody({phone:loginPhone.value,studentId:aftercareStudentId.value,reason:aftercareReason.value})});await showAlert(v.message);}aftercareMode.value='';}catch(e){aftercareError.value=e.message;}finally{aftercareBusy.value=false;}}
 const ledgerOpen=ref(false);
 const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
 const redemptions = ref([]);
 const balance = ref({ earnedPoints: 0, spentPoints: 0, availablePoints: 0 });
+const redeemRequestKey=ref("");
 const redeemOpen = ref(false);
 const selectedReward = ref(null);
 const redeemSaving = ref(false);
@@ -290,6 +296,7 @@ async function refreshRewardStock() {
 }
 
 async function openRewardRedeem(reward) {
+  redeemRequestKey.value=crypto.randomUUID();
   if (reward.stock <= 0) return;
   selectedReward.value = reward;
   redeemError.value = "";
@@ -321,7 +328,7 @@ async function redeemReward() {
       await showAlert("当前积分不足以兑换此商品");
       return;
     }
-    const created = await api(`/public/rankings/rewards/${selectedReward.value.id}/redeem`, { method: "POST" });
+    const created = await api(`/public/rankings/rewards/${selectedReward.value.id}/redeem`, { method: "POST",headers:{"Idempotency-Key":redeemRequestKey.value} });
     redemptions.value = [created, ...redemptions.value.filter((item) => item.id !== created.id)];
     balance.value = {
       ...balance.value,
@@ -426,9 +433,12 @@ onBeforeUnmount(() => {
         <div class="login-copy"><h1>登录查看你的排名</h1><p>使用老师登记的手机号进入专属积分榜。</p></div>
         <label class="login-field"><span>手机号</span><input v-model="loginPhone" inputmode="numeric" autocomplete="username" maxlength="11" placeholder="请输入编程猫注册手机号" /></label>
         <label class="login-field"><span>密码</span><input v-model="loginPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入密码" /></label>
+        <button type="button" class="logout-button" @click="requestRecovery">找回密码</button>
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
       </form>
+
+      <div v-if="aftercareMode" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="!aftercareBusy&&(aftercareMode='')"><form class="reward-redeem-modal ui-modal" role="dialog" aria-modal="true" aria-label="申请处理" @keydown.esc="!aftercareBusy&&(aftercareMode='')" @submit.prevent="sendAftercare"><h2>{{aftercareMode==='cancel'?'申请取消兑换':'找回密码'}}</h2><p v-if="aftercareMode==='recovery'">填写老师登记的手机号和学生ID，提交后联系老师核实身份。</p><label class="login-field" v-if="aftercareMode==='recovery'">手机号<input v-model="loginPhone" required pattern="1[0-9]{10}" maxlength="11"></label><label class="login-field" v-if="aftercareMode==='recovery'">学生ID<input v-model="aftercareStudentId" required maxlength="100"></label><label class="login-field">申请说明<textarea v-model="aftercareReason" maxlength="500" :required="aftercareMode==='cancel'"></textarea></label><p v-if="aftercareError" role="alert">{{aftercareError}}</p><div class="button-row"><button class="password-later-button" type="button" :disabled="aftercareBusy" @click="aftercareMode=''">返回</button><button class="login-button" type="submit" :disabled="aftercareBusy">{{aftercareBusy?'提交中':'提交申请'}}</button></div></form></div>
       <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="closeRewardRedeem">
         <section class="reward-redeem-modal ui-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
           <header><div><span class="reward-redeem-mark"><Gift aria-hidden="true" /></span><div><p class="password-modal-kicker">积分兑换</p><h2 id="rewardRedeemTitle">确认兑换奖品</h2></div></div><button class="icon-button" type="button" title="关闭" @click="closeRewardRedeem"><X :size="17" /></button></header>
@@ -535,7 +545,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="redemption-meta">
                   <strong>-{{ item.pointsSpent }} 积分</strong>
-                  <span :class="rankingRedemptionStatus(item.status).tone">{{ rankingRedemptionStatus(item.status).label }}</span>
+                  <span :class="rankingRedemptionStatus(item.status).tone">{{ rankingRedemptionStatus(item.status).label }}</span><button v-if="item.status==='PENDING'" type="button" class="logout-button" @click="requestCancel(item)">申请取消</button>
                 </div>
               </li>
             </ol>

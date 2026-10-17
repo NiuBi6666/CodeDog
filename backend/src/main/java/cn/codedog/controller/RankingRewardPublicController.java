@@ -74,7 +74,7 @@ public class RankingRewardPublicController {
       throw error;
     }
     try {
-      var value = rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id);
+      var value = request.getHeader("Idempotency-Key")==null ? rewards.createStudentRedemption(student.ownerUsername(),student.studentId(),id) : rewards.createStudentRedemption(student.ownerUsername(), student.studentId(), id,request.getHeader("Idempotency-Key"));
       audit.change("REDEMPTION", value.id(), java.util.Map.of(), java.util.Map.of(
         "studentId", value.studentId(), "rewardId", value.rewardId(), "rewardName", value.rewardName(),
         "pointsSpent", value.pointsSpent(), "balanceBefore", value.balanceBefore(),

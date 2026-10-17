@@ -44,7 +44,7 @@ class StudentAccountManagementIntegrationTest {
       CREATE TABLE IF NOT EXISTS ranking_student_accounts(id BIGINT AUTO_INCREMENT PRIMARY KEY,phone VARCHAR(20) UNIQUE NOT NULL,
       owner_username VARCHAR(50) NOT NULL,student_id VARCHAR(100) NOT NULL,student_name VARCHAR(100) NOT NULL,password_hash VARCHAR(100) NOT NULL,
       password_ciphertext CLOB,enabled BOOLEAN DEFAULT TRUE,created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,password_changed_at TIMESTAMP(6),UNIQUE(owner_username,student_id))
+      updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,password_changed_at TIMESTAMP(6),session_version INT NOT NULL DEFAULT 0,must_change_password BOOLEAN NOT NULL DEFAULT FALSE,UNIQUE(owner_username,student_id))
       """);
     owner="phone"+UUID.randomUUID().toString().substring(0,8);
     User teacher=new User();teacher.setUsername(owner);teacher.setPasswordHash(encoder.encode("teacher-test-password"));

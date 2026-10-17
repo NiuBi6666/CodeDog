@@ -42,6 +42,10 @@ public final class PermissionCatalog {
     public static final String BATCH_READ = "rankings.batches.read";
     public static final String IMPORT_CONFIRM = "rankings.import.confirm";
     public static final String IMPORT_REVERSE = "rankings.import.reverse";
+    public static final String CANCEL_READ="rankings.cancellations.read";
+    public static final String CANCEL_DECIDE="rankings.cancellations.decide";
+    public static final String RECOVERY_READ="rankings.recovery.read";
+    public static final String RECOVERY_VERIFY="rankings.recovery.verify";
     public static final String RANKINGS_IMPORT = "rankings.import";
     public static final String RANKINGS_DEVICES_READ = "rankings.devices.read";
     public static final String RANKINGS_DEVICES_PAIR = "rankings.devices.pair";
@@ -111,6 +115,10 @@ public final class PermissionCatalog {
             action(BATCH_READ, "查看导入批次"),
             action(IMPORT_CONFIRM, "确认积分导入"),
             action(IMPORT_REVERSE, "撤销积分导入"),
+            action(CANCEL_READ,"查看取消兑换申请"),
+            action(CANCEL_DECIDE,"审批取消及退款"),
+            action(RECOVERY_READ,"查看账号找回申请"),
+            action(RECOVERY_VERIFY,"核实账号找回申请"),
             action(RANKINGS_IMPORT, "导入排行榜数据"),
             action(RANKINGS_ACCOUNTS_IMPORT, "导入手机号并开通学生账号"),
             action(RANKINGS_ACCOUNTS_EDIT, "查看和修改学生登录手机号"),

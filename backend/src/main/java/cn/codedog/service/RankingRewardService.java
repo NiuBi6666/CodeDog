@@ -120,7 +120,7 @@ public class RankingRewardService {
   }
 
   public List<RankingRewardPayload.Reward> rewards(String owner) {
-    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? ORDER BY enabled DESC,required_points,id",
+    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND deleted_at IS NULL ORDER BY enabled DESC,required_points,id",
       (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), false), owner);
   }
 
@@ -129,7 +129,7 @@ public class RankingRewardService {
   }
 
   public List<RankingRewardPayload.Reward> publicRewards(String owner) {
-    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE ORDER BY required_points,id",
+    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE AND deleted_at IS NULL ORDER BY required_points,id",
       (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), true, rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), true), owner);
   }
 
@@ -171,7 +171,7 @@ public class RankingRewardService {
 
   @Transactional
   public void deleteReward(String owner, long id) {
-    if (jdbc.update("DELETE FROM ranking_rewards WHERE id=? AND owner_username=?", id, owner) == 0) throw notFound("奖品不存在");
+    if (jdbc.update("UPDATE ranking_rewards SET deleted_at=CURRENT_TIMESTAMP(6),enabled=FALSE WHERE id=? AND owner_username=?", id, owner) == 0) throw notFound("奖品不存在");
   }
 
   public RankingRewardPayload.RewardImage rewardImage(String owner, long id) {
@@ -213,7 +213,7 @@ public class RankingRewardService {
   @Transactional
   public RankingRewardPayload.Redemption createRedemption(String owner, RankingRewardPayload.RedemptionRequest request) {
     if (request == null) throw invalid("兑换信息不能为空");
-    return createRedemptionInternal(owner, text(request.studentId(), "学员 ID", 100), request.rewardId());
+    return createRedemptionInternal(owner, text(request.studentId(), "学员 ID", 100), request.rewardId(),owner);
   }
 
   @Transactional
@@ -221,7 +221,18 @@ public class RankingRewardService {
     return createRedemptionInternal(owner, text(studentValue, "学员 ID", 100), rewardId);
   }
 
-  private RankingRewardPayload.Redemption createRedemptionInternal(String owner, String studentId, long rewardId) {
+
+  @Transactional public RankingRewardPayload.Redemption createStudentRedemption(String owner,String student,long rewardId,String requestKey){
+    if(requestKey==null||requestKey.isBlank())return createStudentRedemption(owner,student,rewardId);
+    if(!requestKey.matches("[A-Za-z0-9-]{16,80}"))throw invalid("兑换请求标识无效，请重新打开兑换窗口");
+    new RankingPointsService(jdbc).lock(owner,student);
+    var existing=jdbc.queryForList("SELECT id,reward_id FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=? AND request_key=?",owner,student,requestKey);
+    if(!existing.isEmpty()){var value=existing.getFirst();if(value.get("reward_id")==null||((Number)value.get("reward_id")).longValue()!=rewardId)throw invalid("请求标识与商品不匹配");return redemptionById(owner,((Number)value.get("id")).longValue());}
+    var result=createRedemptionInternal(owner,student,rewardId);
+    jdbc.update("UPDATE ranking_reward_redemptions SET request_key=? WHERE owner_username=? AND id=?",requestKey,owner,result.id());return result;
+  }
+  private RankingRewardPayload.Redemption createRedemptionInternal(String owner,String studentId,long rewardId){return createRedemptionInternal(owner,studentId,rewardId,studentId);}
+  private RankingRewardPayload.Redemption createRedemptionInternal(String owner, String studentId, long rewardId,String actor) {
     new RankingPointsService(jdbc).lock(owner,studentId);
     // Lock every current student row before reading the balance so two tabs cannot spend the same points.
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
@@ -251,7 +262,7 @@ public class RankingRewardService {
       return statement;
     }, key);
     long redemptionId=Objects.requireNonNull(key.getKey()).longValue();
-    points.record(owner,studentId,"REDEMPTION","redeem:"+redemptionId,rawBefore,points.raw(owner,studentId),"兑换："+reward.name(),studentId);
+    points.record(owner,studentId,"REDEMPTION","redeem:"+redemptionId,rawBefore,points.raw(owner,studentId),"兑换："+reward.name(),actor);
     return redemptionById(owner, redemptionId);
   }
 
@@ -269,8 +280,8 @@ public class RankingRewardService {
   @Transactional
   public RankingRewardPayload.Redemption setFulfilled(String owner, long id, boolean fulfilled, String actor) {
     int changed = fulfilled
-      ? jdbc.update("UPDATE ranking_reward_redemptions SET status='FULFILLED',fulfilled_at=CURRENT_TIMESTAMP(6),fulfilled_by=? WHERE id=? AND owner_username=?", actor, id, owner)
-      : jdbc.update("UPDATE ranking_reward_redemptions SET status='PENDING',fulfilled_at=NULL,fulfilled_by=NULL WHERE id=? AND owner_username=?", id, owner);
+      ? jdbc.update("UPDATE ranking_reward_redemptions SET status='FULFILLED',fulfilled_at=CURRENT_TIMESTAMP(6),fulfilled_by=? WHERE id=? AND owner_username=? AND status='PENDING'", actor, id, owner)
+      : jdbc.update("UPDATE ranking_reward_redemptions SET status='PENDING',fulfilled_at=NULL,fulfilled_by=NULL WHERE id=? AND owner_username=? AND status='FULFILLED'", id, owner);
     if (changed == 0) throw notFound("兑换记录不存在");
     return redemptionById(owner, id);
   }

@@ -32,6 +32,8 @@ export function rankingTrendView(row = {}) {
 }
 
 export function rankingRedemptionStatus(status) {
+  if(status === "CANCEL_REQUESTED")return {label:"取消申请待审批",tone:"pending"};
+  if(status === "CANCELLED")return {label:"已取消 · 已退款",tone:"fulfilled"};
   return status === "FULFILLED"
     ? { label: "已发放", tone: "fulfilled" }
     : { label: "待老师发放", tone: "pending" };

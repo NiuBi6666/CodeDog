@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2, Upload,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
+import RankingAftercare from "../components/RankingAftercare.vue";
 import RankingOperations from "../components/RankingOperations.vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
@@ -416,12 +417,13 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
     </div>
 
     <div v-if="importPreview" class="notice"><h3>导入预览 · {{importPreview.rows.length}} 条结果</h3><p>确认后才会更新积分；预览30分钟有效。</p><div style="max-height:320px;overflow:auto"><table class="ranking-admin-table"><thead><tr><th>学员</th><th>课程</th><th>原积分</th><th>新积分</th><th>校验</th></tr></thead><tbody><tr v-for="(r,i) in importPreview.rows" :key="i"><td>{{r.name}} · {{r.studentId}}</td><td>{{r.lesson}}</td><td>{{r.before}}</td><td>{{r.after}}</td><td>{{r.error||'通过'}}</td></tr></tbody></table></div><div class="button-row"><button class="button button-quiet" :disabled="importConfirming" @click="importPreview=null">取消</button><button v-if="hasPermission('rankings.import.confirm')" class="button button-primary" :disabled="importConfirming||importPreview.hasErrors" @click="confirmImport">确认导入</button></div></div>
-    <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能"><button v-if="['rankings.ledger.read','rankings.reconciliation.read','rankings.reconciliation.run','rankings.batches.read'].some(hasPermission)" type="button" :class="{active:activeTab==='operations'}" @click="activeTab='operations'">积分流水与导入记录</button>
+    <nav class="ranking-workspace-tabs" aria-label="排行榜管理功能"><button v-if="auth.user?.admin||['rankings.cancellations.read','rankings.recovery.read'].some(hasPermission)" type="button" :class="{active:activeTab==='aftercare'}" @click="activeTab='aftercare'">取消兑换与账号找回</button><button v-if="['rankings.ledger.read','rankings.reconciliation.read','rankings.reconciliation.run','rankings.batches.read'].some(hasPermission)" type="button" :class="{active:activeTab==='operations'}" @click="activeTab='operations'">积分流水与导入记录</button>
       <button v-if="canBoardRead" type="button" :class="{ active: activeTab === 'rankings' }" @click="activeTab = 'rankings'"><Trophy :size="17"/>全量排名</button>
       <button v-if="canRewardsTab" type="button" :class="{ active: activeTab === 'rewards' }" @click="activeTab = 'rewards'"><Gift :size="17"/>奖品管理 <span v-if="canRewardsRead">{{ rewards.length }}</span></button>
       <button v-if="canRedemptionsTab" type="button" :class="{ active: activeTab === 'redemptions' }" @click="activeTab = 'redemptions'"><PackageCheck :size="17"/>兑换记录 <span v-if="canRedemptionsRead && pendingCount">{{ pendingCount }}</span></button>
       <button v-if="canAnnouncementsTab" type="button" :class="{ active: activeTab === 'announcements' }" @click="activeTab = 'announcements'"><Megaphone :size="17"/>公告管理 <span v-if="canAnnouncementsRead">{{ announcements.length }}</span></button>
     </nav>
+    <RankingAftercare v-if="activeTab==='aftercare'"/>
     <RankingOperations v-if="activeTab==='operations'" :students="rows"/>
 
     <template v-if="activeTab === 'rankings'">
@@ -515,7 +517,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <div v-if="!canRedemptionsRead" class="ranking-admin-state"><PackageCheck :size="25"/><span>当前账号没有查看兑换记录的权限</span></div>
       <div v-else-if="!redemptions.length" class="ranking-admin-state"><PackageCheck :size="25"/><span>暂无兑换记录</span></div>
       <div v-else class="ranking-admin-table-wrap"><table class="ranking-admin-table ranking-redemption-table"><thead><tr><th>学员</th><th>奖品</th><th>扣除积分</th><th>兑换时间</th><th>发放状态</th><th>操作</th></tr></thead>
-        <tbody><tr v-for="item in filteredRedemptions" :key="item.id"><td><strong>{{ item.studentName }}</strong><small class="ranking-cell-note">ID {{ item.studentId }}</small></td><td>{{ item.rewardName }}</td><td>{{ numberText(item.pointsSpent) }}</td><td>{{ formatDateTime(item.redeemedAt) }}</td><td><span class="ranking-status" :class="item.status === 'FULFILLED' ? 'is-enabled' : 'is-pending'">{{ item.status === 'FULFILLED' ? '已发放' : '待发放' }}</span><small v-if="item.fulfilledAt" class="ranking-cell-note">{{ formatDateTime(item.fulfilledAt) }}</small></td><td><button v-if="canRedemptionsFulfill" class="button button-quiet ranking-fulfill-button" type="button" @click="setFulfilled(item, item.status !== 'FULFILLED')"><CheckCircle2 :size="14"/>{{ item.status === 'FULFILLED' ? '恢复待发放' : '确认已发放' }}</button></td></tr></tbody>
+        <tbody><tr v-for="item in filteredRedemptions" :key="item.id"><td><strong>{{ item.studentName }}</strong><small class="ranking-cell-note">ID {{ item.studentId }}</small></td><td>{{ item.rewardName }}</td><td>{{ numberText(item.pointsSpent) }}</td><td>{{ formatDateTime(item.redeemedAt) }}</td><td><span class="ranking-status" :class="item.status === 'FULFILLED' ? 'is-enabled' : 'is-pending'">{{ item.status === 'FULFILLED' ? '已发放' : item.status === 'CANCELLED' ? '已取消 / 已退款' : item.status === 'CANCEL_REQUESTED' ? '申请取消中' : '待发放' }}</span><small v-if="item.fulfilledAt" class="ranking-cell-note">{{ formatDateTime(item.fulfilledAt) }}</small></td><td><button v-if="canRedemptionsFulfill&&['PENDING','FULFILLED'].includes(item.status)" class="button button-quiet ranking-fulfill-button" type="button" @click="setFulfilled(item, item.status !== 'FULFILLED')"><CheckCircle2 :size="14"/>{{ item.status === 'FULFILLED' ? '恢复待发放' : '确认已发放' }}</button></td></tr></tbody>
       </table></div>
     </section>
 
