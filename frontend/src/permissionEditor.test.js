@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
 function editor(admin = true, assigned = ["users.permissions.manage", "dashboard.view"]) {
@@ -8,9 +8,9 @@ function editor(admin = true, assigned = ["users.permissions.manage", "dashboard
     .replace(/^import .*;$/gm, "").replace("onMounted(load);", "");
   const api = vi.fn();
   const auth = { user: { username: "manager", admin, permissions: assigned } };
-  const state = new Function("computed", "ref", "api", "jsonBody", "notify", "auth", "hasPermission", "watch", "onBeforeUnmount", "nextTick", source + `
-    return { selected, draft, catalog, users, saving, error, openPermissions, closePermissions, selectAllPermissions, savePermissions, allPermissionsSelected, toggle, toggleGroup };
-  `)(computed, ref, api, JSON.stringify, vi.fn(), auth, (code) => admin || assigned.includes(code), vi.fn(), vi.fn(), async () => {});
+  const state = new Function("computed", "reactive", "ref", "api", "jsonBody", "notify", "auth", "hasPermission", "watch", "onBeforeUnmount", "nextTick", source + `
+    return { selected, draft, catalog, users, saving, error, openPermissions, closePermissions, selectAllPermissions, savePermissions, allPermissionsSelected, toggle, toggleGroup, createForm, createOpen, createSaving, createError, openCreate, closeCreate, createUser, keyword };
+  `)(computed, reactive, ref, api, JSON.stringify, vi.fn(), auth, (code) => admin || assigned.includes(code), vi.fn(), vi.fn(), async () => {});
   state.catalog.value = [{ key: "home", permissions: [{ code: "dashboard.view", type: "page" }, { code: "dashboard.stats", type: "data" }] }];
   state.users.value = [{ id: 7, username: "teacher", permissions: [] }];
   state.openPermissions(state.users.value[0]);
@@ -97,5 +97,31 @@ describe("permission editor", () => {
     state.selectAllPermissions();
     expect(state.selected.value.id).toBe(7);
     expect(state.draft.value.size).toBe(0);
+  });
+});
+
+describe("managed user creation",()=>{
+  it("does not open without creation permission",()=>{
+    const s=editor(false);s.openCreate();expect(s.createOpen.value).toBe(false);
+  });
+  it("rejects confirmation mismatch without making a request",async()=>{
+    const s=editor();s.openCreate();s.createForm.password="password123";s.createForm.confirmation="different";
+    await s.createUser();expect(s.api).not.toHaveBeenCalled();expect(s.createError.value).toContain("不一致");expect(s.createOpen.value).toBe(true);
+  });
+  it("creates, clears credentials, closes and refreshes the list",async()=>{
+    const s=editor();s.openCreate();Object.assign(s.createForm,{username:"newteacher",password:"password123",confirmation:"password123"});
+    s.keyword.value="old-search";s.api.mockResolvedValueOnce({username:"newteacher"}).mockResolvedValueOnce([{username:"newteacher"}]).mockResolvedValueOnce([]);
+    await s.createUser();expect(s.api).toHaveBeenCalledWith("/admin/users",{method:"POST",body:JSON.stringify({username:"newteacher",password:"password123",confirmation:"password123"})});
+    expect(s.createOpen.value).toBe(false);expect(s.createForm.password).toBe("");expect(s.keyword.value).toBe("");expect(s.users.value[0].username).toBe("newteacher");
+  });
+  it("keeps the dialog and useful error on duplicate username",async()=>{
+    const s=editor();s.openCreate();s.createForm.password=s.createForm.confirmation="password123";s.api.mockRejectedValue(new Error("用户名已存在"));
+    await s.createUser();expect(s.createOpen.value).toBe(true);expect(s.createError.value).toBe("用户名已存在");expect(s.createSaving.value).toBe(false);
+  });
+  it("prevents duplicate clicks and closing while creating",async()=>{
+    const s=editor();s.openCreate();s.createForm.password=s.createForm.confirmation="password123";
+    let resolve;s.api.mockImplementationOnce(()=>new Promise(r=>resolve=r)).mockResolvedValue([]);
+    const pending=s.createUser();await s.createUser();s.closeCreate();expect(s.api).toHaveBeenCalledTimes(1);expect(s.createOpen.value).toBe(true);
+    resolve({username:"newteacher"});await pending;
   });
 });

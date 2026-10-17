@@ -382,7 +382,7 @@ public class StructuredAuditService {
     }
     private String moduleForCode(String code) {
         if(code.startsWith("login")||code.startsWith("registration")) return "auth";
-        if(code.startsWith("password")||code.startsWith("permissions")||code.startsWith("crm_teacher")) return "account";
+        if(code.startsWith("password")||code.startsWith("permissions")||code.startsWith("crm_teacher")||code.startsWith("user_create")) return "account";
         if(code.startsWith("document")) return "documents";
         if(code.startsWith("class_progress")) return "classes";
         if(code.startsWith("student")) return "students";

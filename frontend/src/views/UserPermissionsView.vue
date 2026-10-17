@@ -1,10 +1,42 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, nextTick, ref, watch } from "vue";
-import { Link2, Save, Search, ShieldCheck, Unlink, X } from "@lucide/vue";
+import { computed, onMounted, onBeforeUnmount, nextTick, reactive, ref, watch } from "vue";
+import { Link2, Save, Search, ShieldCheck, Unlink, UserPlus, X } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
 import { auth, hasPermission } from "../auth";
 import { formatDateTime } from "../utils";
+
+const createOpen = ref(false);
+const createSaving = ref(false);
+const createError = ref("");
+const createForm = reactive({ username: "", password: "", confirmation: "" });
+const canCreateUsers = computed(() => hasPermission("users.create"));
+function openCreate() {
+  if (!canCreateUsers.value) return;
+  Object.assign(createForm, { username: "", password: "", confirmation: "" });
+  createError.value = ""; createOpen.value = true;
+}
+function closeCreate() {
+  if (createSaving.value) return;
+  createOpen.value = false;
+  Object.assign(createForm, { username: "", password: "", confirmation: "" });
+  createError.value = "";
+}
+async function createUser() {
+  if (createSaving.value || !canCreateUsers.value) return;
+  createError.value = "";
+  if (createForm.password !== createForm.confirmation) { createError.value = "两次输入的密码不一致"; return; }
+  createSaving.value = true;
+  try {
+    const user = await api("/admin/users", { method: "POST", body: jsonBody(createForm) });
+    createSaving.value = false;
+    closeCreate();
+    keyword.value = "";
+    notify(`用户 ${user.username} 已创建`);
+    await load();
+  } catch (failure) { createError.value = failure.message; }
+  finally { createSaving.value = false; }
+}
 
 const users = ref([]);
 const catalog = ref([]);
@@ -160,10 +192,10 @@ async function saveMapping(clear = false) {
 let previousFocus;
 let previousOverflow;
 function modalKeydown(event) {
-  if (!selected.value && !mappingSelected.value) return;
+  if (!selected.value && !mappingSelected.value && !createOpen.value) return;
   if (event.key === "Escape") {
     event.preventDefault();
-    if (mappingSelected.value) closeMapping(); else closePermissions();
+    if (createOpen.value) closeCreate(); else if (mappingSelected.value) closeMapping(); else closePermissions();
   } else if (event.key === "Tab") {
     const dialog = document.querySelector(".permission-dialog[role=dialog]");
     const nodes = [...(dialog?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || [])]
@@ -177,7 +209,7 @@ function modalKeydown(event) {
     }
   }
 }
-watch(() => Boolean(selected.value || mappingSelected.value), async (open) => {
+watch(() => Boolean(selected.value || mappingSelected.value || createOpen.value), async (open) => {
   if (open) {
     previousFocus = document.activeElement;
     previousOverflow = document.body.style.overflow;
@@ -202,6 +234,7 @@ onMounted(load);
   <AdminLayout page-title="用户与权限" active-page="users">
     <div class="admin-page-heading">
       <div><h1>用户与权限</h1><p>共 {{ users.length }} 个账号</p></div>
+      <button v-if="canCreateUsers" class="button button-primary" type="button" @click="openCreate"><UserPlus :size="16"/>新建用户</button>
     </div>
     <div v-if="error" class="notice notice-error">{{ error }}</div>
     <div class="permission-user-toolbar">
@@ -229,6 +262,21 @@ onMounted(load);
         </tbody>
       </table>
     </div>
+
+    <Teleport to="body">
+      <div v-if="createOpen" class="permission-dialog-backdrop ui-dialog-backdrop" role="presentation" @click.self="closeCreate">
+        <section class="permission-dialog ui-modal mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+          <header><div><h2 id="create-user-title">新建用户</h2><p>新账号默认仅可访问后台首页</p></div><button class="icon-button" type="button" aria-label="关闭" :disabled="createSaving" @click="closeCreate"><X :size="18"/></button></header>
+          <form id="create-user-form" class="mapping-form create-user-form" @submit.prevent="createUser">
+            <div v-if="createError" class="notice notice-error" role="alert">{{ createError }}</div>
+            <label>用户名<input v-model.trim="createForm.username" autocomplete="off" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+" placeholder="3-32 位字母、数字或 _ . -" required></label>
+            <label>密码<input v-model="createForm.password" type="password" autocomplete="new-password" minlength="8" maxlength="72" placeholder="请输入 8-72 位密码" required></label>
+            <label>确认密码<input v-model="createForm.confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="72" placeholder="请再次输入密码" required></label>
+          </form>
+          <footer><span></span><div class="button-row"><button class="button button-quiet" type="button" :disabled="createSaving" @click="closeCreate">取消</button><button class="button button-primary" type="submit" form="create-user-form" :disabled="createSaving"><UserPlus :size="16"/>{{ createSaving ? "创建中" : "创建账号" }}</button></div></footer>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="mappingSelected" class="permission-dialog-backdrop ui-dialog-backdrop" role="presentation">
@@ -277,6 +325,7 @@ onMounted(load);
 </template>
 
 <style scoped>
+.create-user-form { display: grid; gap: 16px; }
 .permission-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .permission-bulk-actions > span { color: #637984; font-size: 12px; }
 </style>

@@ -5,6 +5,7 @@ import cn.codedog.dao.UserRepository;
 import cn.codedog.security.PermissionCatalog;
 import cn.codedog.service.AuditService;
 import cn.codedog.service.PermissionService;
+import cn.codedog.service.UserRegistrationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -30,18 +31,27 @@ public class UserAdminController {
     private final AuditService audit;
     private final JdbcTemplate jdbc;
     private final PermissionService permissions;
+    private final UserRegistrationService registration;
 
     public UserAdminController(UserRepository users, AuditService audit, JdbcTemplate jdbc,
-                               PermissionService permissions) {
+                               PermissionService permissions, UserRegistrationService registration) {
         this.users = users;
         this.audit = audit;
         this.jdbc = jdbc;
         this.permissions = permissions;
+        this.registration = registration;
     }
 
     @GetMapping("/permissions")
     public List<PermissionCatalog.Group> permissions() {
         return PermissionCatalog.groups();
+    }
+
+    @PostMapping("/users")
+    @ResponseStatus(HttpStatus.CREATED)
+    public UserResponse createUser(@Valid @RequestBody AuthController.RegistrationRequest body, HttpServletRequest request) {
+        User user=registration.create(body.username(),body.password(),body.confirmation(),request,true);
+        return UserResponse.from(user,null);
     }
 
     @GetMapping("/users")

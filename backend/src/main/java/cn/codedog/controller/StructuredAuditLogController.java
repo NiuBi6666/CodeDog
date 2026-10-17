@@ -164,6 +164,7 @@ public class StructuredAuditLogController {
         return Map.ofEntries(Map.entry("login_succeeded","教师登录成功"),Map.entry("login_failed","教师登录失败"),
             Map.entry("student_login_succeeded","学生登录成功"),Map.entry("student_login_failed","学生登录失败"),
             Map.entry("registration_succeeded","注册教师"),Map.entry("registration_failed","注册失败"),
+            Map.entry("user_created","新建用户"),Map.entry("user_create_failed","新建用户失败"),
             Map.entry("password_changed","修改密码"),Map.entry("permissions_updated","配置用户权限"),
             Map.entry("document_created","新建文档"),Map.entry("document_updated","修改文档"),
             Map.entry("document_offline","下线文档"),Map.entry("document_normal","上线文档"),

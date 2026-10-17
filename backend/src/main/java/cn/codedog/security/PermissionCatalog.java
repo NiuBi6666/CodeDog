@@ -53,6 +53,7 @@ public final class PermissionCatalog {
     public static final String LOGS_VIEW = "logs.view";
     public static final String LOGS_EXPORT = "logs.export";
     public static final String USERS_VIEW = "users.view";
+    public static final String USERS_CREATE = "users.create";
     public static final String USERS_PERMISSIONS_MANAGE = "users.permissions.manage";
     public static final String USERS_CRM_MANAGE = "users.crm.manage";
 
@@ -124,6 +125,7 @@ public final class PermissionCatalog {
         )),
         new Group("users", "用户与权限", List.of(
             page(USERS_VIEW, "访问用户与权限页面"),
+            action(USERS_CREATE, "新建用户"),
             action(USERS_PERMISSIONS_MANAGE, "配置普通用户权限"),
             action(USERS_CRM_MANAGE, "配置 CRM 教师绑定")
         ))

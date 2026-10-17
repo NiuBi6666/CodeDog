@@ -2,8 +2,8 @@ package cn.codedog.controller;
 
 import cn.codedog.model.User;
 import cn.codedog.dao.UserRepository;
-import cn.codedog.security.PermissionCatalog;
 import cn.codedog.service.PermissionService;
+import cn.codedog.service.UserRegistrationService;
 import cn.codedog.service.PasswordRecoveryCipher;
 import cn.codedog.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,7 +13,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,7 +27,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.time.Instant;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,18 +38,20 @@ public class AuthController {
     private final PasswordEncoder encoder;
     private final AuditService audit;
     private final PermissionService permissions;
+    private final UserRegistrationService registration;
     private final PasswordRecoveryCipher passwordRecovery;
     private final HttpSessionSecurityContextRepository contextRepository = new HttpSessionSecurityContextRepository();
 
     public AuthController(AuthenticationManager authenticationManager, UserRepository users,
                           PasswordEncoder encoder, AuditService audit, PermissionService permissions,
-                          PasswordRecoveryCipher passwordRecovery) {
+                          PasswordRecoveryCipher passwordRecovery, UserRegistrationService registration) {
         this.authenticationManager = authenticationManager;
         this.users = users;
         this.encoder = encoder;
         this.audit = audit;
         this.permissions = permissions;
         this.passwordRecovery = passwordRecovery;
+        this.registration = registration;
     }
 
     @GetMapping("/csrf")
@@ -64,31 +64,8 @@ public class AuthController {
                                          HttpServletRequest request) {
         if (audit.recentRegistrations(request) >= 5)
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "注册操作过于频繁，请稍后再试");
-        if (!body.password().equals(body.confirmation()))
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "两次输入的密码不一致");
-
-        String username = body.username().trim();
-        if (users.existsByUsernameIgnoreCase(username))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名已存在");
-
-        User user = new User();
-        user.setUsername(username);
-        user.setPasswordHash(encoder.encode(body.password()));
-        user.setPasswordCiphertext(passwordRecovery.encrypt(body.password(), userPasswordContext(username)));
-        user.setAdmin(false);
-        user.setPermissions(new LinkedHashSet<>(PermissionCatalog.DEFAULT_PERMISSIONS));
-        user.setCreatedAt(Instant.now());
-        user.setUpdatedAt(Instant.now());
-        try {
-            users.saveAndFlush(user);
-        } catch (DataIntegrityViolationException error) {
-            audit.record("registration_failed:" + username, request);
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名或教师 ID 已存在");
-        }
-        audit.change("TEACHER", username, Map.of(), Map.of("username", username,
-            "teacherId", user.getTeacherPublicId(), "admin", false,
-            "permissions", user.getPermissions()));
-        audit.record("registration_succeeded:" + username, request);
+        User user = registration.create(body.username(), body.password(), body.confirmation(), request, false);
+        String username=user.getUsername();
         return new RegistrationResponse(true, username, user.getTeacherPublicId());
     }
 

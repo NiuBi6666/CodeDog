@@ -621,4 +621,45 @@ class RbacIntegrationTest {
         member.setPermissions(new LinkedHashSet<>());users.saveAndFlush(member);
         mvc.perform(post("/api/public/rankings/extension/bootstrap").session(session).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
     }
+
+    private String creationBody(String username) {
+        return "{\"username\":\""+username+"\",\"password\":\"new-user-test-password\",\"confirmation\":\"new-user-test-password\"}";
+    }
+    @Test void managedCreationRequiresPermissionAndHonorsRevocation() throws Exception {
+        String managerName=uniqueUsername("creator");
+        User manager=users.saveAndFlush(user(managerName,"member-password-123"));
+        MockHttpSession session=login(managerName,"member-password-123");
+        String name=uniqueUsername("newuser");
+        mvc.perform(post("/api/admin/users").with(csrf()).contentType(APPLICATION_JSON).content(creationBody(name))).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON).content(creationBody(name))).andExpect(status().isForbidden());
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of("users.view","users.create")));users.saveAndFlush(manager);
+        mvc.perform(post("/api/admin/users").session(session).contentType(APPLICATION_JSON).content(creationBody(name))).andExpect(status().isForbidden());
+        var result=mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON).content(creationBody(name)))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.username").value(name))
+            .andExpect(jsonPath("$.admin").value(false)).andExpect(jsonPath("$.teacherId").isNotEmpty())
+            .andExpect(jsonPath("$.permissions.length()").value(PermissionCatalog.DEFAULT_PERMISSIONS.size()))
+            .andExpect(jsonPath("$.password").doesNotExist()).andExpect(jsonPath("$.passwordHash").doesNotExist()).andReturn();
+        var created=users.findByUsername(name).orElseThrow();
+        assertThat(encoder.matches("new-user-test-password",created.getPasswordHash())).isTrue();
+        mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$.username").value(managerName));
+        var auditRow=jdbc.queryForMap("SELECT * FROM audit_log WHERE request_id=?",result.getResponse().getHeader("X-Request-ID"));
+        assertThat(auditRow.get("actor_name")).isEqualTo(managerName);
+        assertThat(auditRow.get("target_id")).isEqualTo(name);
+        assertThat(auditRow.get("module")).isEqualTo("account");
+        assertThat(auditRow.get("event_code")).isEqualTo("user_created");
+        assertThat(auditRow.get("changes_json").toString()).contains(name,"permissions").doesNotContain("new-user-test-password","passwordHash","password_ciphertext");
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of("users.view")));users.saveAndFlush(manager);
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON).content(creationBody(uniqueUsername("denied"))))
+            .andExpect(status().isForbidden());
+    }
+    @Test void administratorCreatesUserWithSameValidationAsRegistration() throws Exception {
+        var session=login("Liam","test-only-password");String name=uniqueUsername("adminmade");
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON).content(creationBody(name))).andExpect(status().isCreated());
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON).content(creationBody(name.toUpperCase(java.util.Locale.ROOT)))).andExpect(status().isConflict());
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON)
+            .content("{\"username\":\"validnewuser\",\"password\":\"password123\",\"confirmation\":\"different123\"}")).andExpect(status().isUnprocessableEntity());
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON).content(creationBody("bad name"))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/admin/users").session(session).with(csrf()).contentType(APPLICATION_JSON)
+            .content("{\"username\":\"validnewuser\",\"password\":\"123\",\"confirmation\":\"123\"}")).andExpect(status().isBadRequest());
+    }
 }

@@ -49,6 +49,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/password", "/api/auth/logout").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/admin/permissions", "/api/admin/users")
                     .access(permission(permissions, PermissionCatalog.USERS_VIEW))
+                .requestMatchers(HttpMethod.POST, "/api/admin/users")
+                    .access(permission(permissions, PermissionCatalog.USERS_CREATE))
                 .requestMatchers(HttpMethod.PUT, "/api/admin/users/*/permissions")
                     .access(permission(permissions, PermissionCatalog.USERS_PERMISSIONS_MANAGE))
                 .requestMatchers(HttpMethod.PUT, "/api/admin/users/*/crm-teacher")
