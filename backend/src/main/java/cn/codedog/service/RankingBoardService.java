@@ -32,6 +32,12 @@ public class RankingBoardService {
     return catalog(null);
   }
 
+  public RankingPayload.Catalog catalogForOwner(String owner) {
+    String teacherId = lookup("SELECT teacher_public_id FROM users WHERE username=?", owner);
+    if (teacherId == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "教师账号不存在");
+    return catalog(teacherId);
+  }
+
   public RankingPayload.Catalog catalog(String teacherValue) {
     TeacherOwner teacher = resolveTeacher(teacherValue);
     Map<String, MutableCamp> values = new LinkedHashMap<>();

@@ -369,6 +369,8 @@ class RbacIntegrationTest {
     void administratorMapsCrmTeacherAndBootstrapUsesMappedOwner() throws Exception {
         String username = uniqueUsername("mapped");
         User member = users.saveAndFlush(user(username, "member-password-123"));
+        member.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.devices.pair")));
+        users.saveAndFlush(member);
         MockHttpSession admin = login("Liam", "test-only-password");
         String crmTeacherId = "crm" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
 
@@ -382,6 +384,7 @@ class RbacIntegrationTest {
             .andExpect(jsonPath("$.crmTeacherId").value(crmTeacherId));
 
         mvc.perform(post("/api/public/rankings/extension/bootstrap")
+                .session(login(username, "member-password-123")).with(csrf())
                 .contentType(APPLICATION_JSON)
                 .content("""
                     {"crmTeacherId":"%s","deviceName":"integration-test"}
@@ -401,9 +404,12 @@ class RbacIntegrationTest {
     void extensionStoresExternalContactsWithoutOverwritingConflicts() throws Exception {
         String username = uniqueUsername("contacts");
         User member = users.saveAndFlush(user(username, "member-password-123"));
+        member.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.devices.pair")));
+        users.saveAndFlush(member);
         String crmTeacherId = "crm" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES(?,?)", crmTeacherId, username);
         String response = mvc.perform(post("/api/public/rankings/extension/bootstrap")
+                .session(login(username, "member-password-123")).with(csrf())
                 .contentType(APPLICATION_JSON)
                 .content("""
                     {"crmTeacherId":"%s","deviceName":"contact-sync-test"}
@@ -600,5 +606,19 @@ class RbacIntegrationTest {
 
     private String uniqueUsername(String prefix) {
         return prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+    @Test void extensionBootstrapPermissionIsCheckedOnEveryRequest() throws Exception {
+        String username=uniqueUsername("pair");
+        User member=users.saveAndFlush(user(username,"member-password-123"));
+        String crm="crm"+UUID.randomUUID().toString().replace("-","").substring(0,10);
+        jdbc.update("INSERT INTO ranking_teacher_mappings(crm_teacher_id,owner_username) VALUES(?,?)",crm,username);
+        MockHttpSession session=login(username,"member-password-123");
+        String body="{\"crmTeacherId\":\""+crm+"\",\"deviceName\":\"permission-test\"}";
+        mvc.perform(post("/api/public/rankings/extension/bootstrap").session(session).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        member.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.devices.pair")));users.saveAndFlush(member);
+        mvc.perform(post("/api/public/rankings/extension/bootstrap").session(session).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isCreated());
+        member.setPermissions(new LinkedHashSet<>());users.saveAndFlush(member);
+        mvc.perform(post("/api/public/rankings/extension/bootstrap").session(session).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
     }
 }

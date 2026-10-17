@@ -344,7 +344,7 @@ class RankingServiceTest {
 
   @Test
   void bootstrapsMappedCrmTeacherAndAuthenticatesIssuedToken() {
-    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 测试设备");
+    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 测试设备", "Liam");
 
     assertThat(connection.username()).isEqualTo("Liam");
     assertThat(connection.teacherId()).isEqualTo("CD-ADMIN001");
@@ -354,7 +354,7 @@ class RankingServiceTest {
 
   @Test
   void restoresMappedSessionFromLegacyDeviceToken() {
-    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 旧设备");
+    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 旧设备", "Liam");
 
     RankingPayload.ExtensionSession session = devices.session("Bearer " + connection.token());
 
@@ -366,7 +366,7 @@ class RankingServiceTest {
 
   @Test
   void rejectsRevokedDeviceSession() {
-    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 已撤销设备");
+    RankingPayload.Connection connection = devices.bootstrap("29413", "Chrome 已撤销设备", "Liam");
     jdbc.update("UPDATE ranking_extension_devices SET revoked_at=CURRENT_TIMESTAMP WHERE id=?", connection.deviceId());
 
     assertThatThrownBy(() -> devices.session("Bearer " + connection.token()))
@@ -376,7 +376,7 @@ class RankingServiceTest {
 
   @Test
   void rejectsUnknownCrmTeacher() {
-    assertThatThrownBy(() -> devices.bootstrap("unknown", "Chrome 测试设备"))
+    assertThatThrownBy(() -> devices.bootstrap("unknown", "Chrome 测试设备", "Liam"))
       .isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode().value()).isEqualTo(404));
   }
@@ -413,5 +413,31 @@ class RankingServiceTest {
     assertThat(entry.previousRank()).isEqualTo(previousRank);
     assertThat(entry.rankChange()).isEqualTo(change);
     assertThat(entry.trend()).isEqualTo(trend);
+  }
+
+  @Test void rejectsBootstrapForAnotherTeacherWithoutCreatingDevice() {
+    assertThatThrownBy(() -> devices.bootstrap("29413", "untrusted", "teacher-b"))
+      .isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> assertThat(((ResponseStatusException)error).getStatusCode().value()).isEqualTo(403));
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_extension_devices", Integer.class)).isZero();
+  }
+  @Test void ownerCatalogNeverFallsBackToAdministrator() {
+    assertThat(service.catalogForOwner("Liam").teacherName()).isEqualTo("Liam");
+    assertThatThrownBy(() -> service.catalogForOwner("missing-teacher"))
+      .isInstanceOf(ResponseStatusException.class);
+  }
+
+
+  @Test void legacyEndpointsIgnoreClientSuppliedTeacherAndUseStudentIdentity() {
+    var auth=org.mockito.Mockito.mock(StudentRankingAuthService.class);
+    var boards=org.mockito.Mockito.mock(RankingBoardService.class);
+    var request=new org.springframework.mock.web.MockHttpServletRequest();
+    request.setParameter("teacherId","CD-ADMIN001");
+    org.mockito.Mockito.when(auth.current(request)).thenReturn(new StudentRankingAuthService.StudentSession("teacher-b","s1","学生","19900000001",false));
+    var controller=new cn.codedog.controller.RankingPublicController(boards,null,null,auth,null);
+    controller.catalog(request);controller.board(request);
+    org.mockito.Mockito.verify(boards).catalogForOwner("teacher-b");
+    org.mockito.Mockito.verify(auth).board(request);
+    org.mockito.Mockito.verifyNoMoreInteractions(boards);
   }
 }

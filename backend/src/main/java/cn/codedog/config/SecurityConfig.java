@@ -37,9 +37,12 @@ public class SecurityConfig {
         csrf.setCookiePath("/");
         http
             .csrf(configurer -> configurer.csrfTokenRepository(csrf)
-                .ignoringRequestMatchers("/api/public/rankings/extension/**"))
+                .ignoringRequestMatchers("/api/public/rankings/extension/connect",
+                    "/api/public/rankings/extension/import", "/api/public/rankings/extension/contacts"))
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(requests -> requests
+                .requestMatchers(HttpMethod.POST, "/api/public/rankings/extension/bootstrap")
+                    .access(permission(permissions, PermissionCatalog.RANKINGS_DEVICES_PAIR))
                 .requestMatchers("/api/public/**", "/api/auth/csrf", "/api/auth/login",
                     "/api/auth/register", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()

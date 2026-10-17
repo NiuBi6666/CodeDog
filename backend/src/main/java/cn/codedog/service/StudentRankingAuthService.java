@@ -77,6 +77,8 @@ public class StudentRankingAuthService {
     String password = passwordValue == null ? "" : passwordValue;
     if (password.length() < 6 || password.length() > 72)
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码长度应为 6-72 个字符");
+    if ("123456".equals(password))
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码不能与初始密码相同，请设置其他密码");
     int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=?",
       passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(current.ownerUsername(), current.studentId())),
       current.phone(), current.ownerUsername(), current.studentId());
@@ -158,8 +160,9 @@ public class StudentRankingAuthService {
     String password = passwordValue == null ? "" : passwordValue;
     if (password.length() < 6 || password.length() > 72)
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "密码长度应为 6-72 个字符");
-    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),updated_at=CURRENT_TIMESTAMP(6) WHERE owner_username=? AND student_id=?",
-      passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(owner, studentId)), owner, studentId);
+    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=?,updated_at=CURRENT_TIMESTAMP(6) WHERE owner_username=? AND student_id=?",
+      passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(owner, studentId)),
+      "123456".equals(password) ? null : Timestamp.from(java.time.Instant.now()), owner, studentId);
     if (updated != 1) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学生账号不存在");
     return recoveredPassword(owner, studentId);
   }

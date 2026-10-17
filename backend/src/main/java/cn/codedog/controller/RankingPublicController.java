@@ -17,8 +17,8 @@ public class RankingPublicController {
                                  AuditService audit) {
     this.boards=boards;this.devices=devices;this.imports=imports;this.studentAuth=studentAuth;this.audit=audit;
   }
-  @GetMapping("/catalog") public RankingPayload.Catalog catalog(@RequestParam(required=false)String teacherId){return boards.catalog(teacherId);}
-  @GetMapping public RankingPayload.Board board(@RequestParam String campId,@RequestParam(required=false)String classId,@RequestParam(defaultValue="class")String scope,@RequestParam(required=false)String teacherId){return boards.board(teacherId,campId,classId,scope);}
+  @GetMapping("/catalog") public RankingPayload.Catalog catalog(HttpServletRequest request){return boards.catalogForOwner(studentAuth.current(request).ownerUsername());}
+  @GetMapping public RankingPayload.Board board(HttpServletRequest request){return studentAuth.board(request);}
   @GetMapping("/all") public RankingPayload.Board all(HttpServletRequest request){return studentAuth.board(request);}
   @GetMapping("/students/{studentId}/opportunities") public RankingPayload.OpportunitySummary opportunities(@PathVariable String studentId, HttpServletRequest request){return studentAuth.opportunities(request, studentId);}
   @GetMapping("/extension/status")
@@ -26,9 +26,9 @@ public class RankingPublicController {
   @GetMapping("/extension/session")
   public RankingPayload.ExtensionSession session(@RequestHeader(value="Authorization",required=false)String authorization){return devices.session(authorization);}
   @PostMapping("/extension/bootstrap") @ResponseStatus(HttpStatus.CREATED)
-  public RankingPayload.Connection bootstrap(@RequestBody BootstrapRequest body,HttpServletRequest request){
-    RankingPayload.Connection value=devices.bootstrap(body.crmTeacherId(),body.deviceName());
-    audit.owner(value.username());audit.actor("EXTENSION_DEVICE",String.valueOf(value.deviceId()),body.deviceName());
+  public RankingPayload.Connection bootstrap(@RequestBody BootstrapRequest body,HttpServletRequest request,java.security.Principal principal){
+    RankingPayload.Connection value=devices.bootstrap(body.crmTeacherId(),body.deviceName(),principal.getName());
+    audit.owner(value.username());
     audit.change("EXTENSION_DEVICE",value.deviceId(),java.util.Map.of(),java.util.Map.of(
       "deviceName",body.deviceName(),"ownerUsername",value.username(),"crmTeacherId",value.crmTeacherId(),"revoked",false));
     audit.record("ranking_extension_bootstrap:"+value.deviceId(),request);

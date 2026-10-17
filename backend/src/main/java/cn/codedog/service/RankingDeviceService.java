@@ -60,7 +60,7 @@ public class RankingDeviceService {
   }
 
   @Transactional
-  public RankingPayload.Connection bootstrap(String crmTeacherValue, String deviceValue) {
+  public RankingPayload.Connection bootstrap(String crmTeacherValue, String deviceValue, String authenticatedOwner) {
     String crmTeacherId = text(crmTeacherValue, "CRM 教师 ID", 100);
     if (!crmTeacherId.matches("^[A-Za-z0-9_-]+$")) {
       throw invalid("CRM 教师 ID 格式不正确");
@@ -68,6 +68,9 @@ public class RankingDeviceService {
     String owner = lookup("SELECT owner_username FROM ranking_teacher_mappings WHERE crm_teacher_id=?", crmTeacherId);
     if (owner == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "当前 CRM 教师尚未绑定 CodeDog 账号，请联系管理员");
+    }
+    if (!owner.equals(authenticatedOwner)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "CRM 教师与当前授权账号不匹配");
     }
     Integer active = jdbc.queryForObject(
         "SELECT COUNT(*) FROM ranking_extension_devices WHERE owner_username=? AND revoked_at IS NULL",

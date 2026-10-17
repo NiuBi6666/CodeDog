@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onBeforeUnmount, nextTick, ref, watch } from "vue";
 import { Link2, Save, Search, ShieldCheck, Unlink, X } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
@@ -148,6 +148,7 @@ async function saveMapping(clear = false) {
     });
     replaceUser(updated);
     notify(value ? "CRM 教师已绑定" : "CRM 教师绑定已清除");
+    mappingSaving.value = false;
     closeMapping();
   } catch (failure) {
     error.value = failure.message;
@@ -156,6 +157,44 @@ async function saveMapping(clear = false) {
   }
 }
 
+let previousFocus;
+let previousOverflow;
+function modalKeydown(event) {
+  if (!selected.value && !mappingSelected.value) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (mappingSelected.value) closeMapping(); else closePermissions();
+  } else if (event.key === "Tab") {
+    const dialog = document.querySelector(".permission-dialog[role=dialog]");
+    const nodes = [...(dialog?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || [])]
+      .filter(node => node.getClientRects().length);
+    if (!nodes.length) { event.preventDefault(); dialog?.focus(); return; }
+    const first = nodes[0], last = nodes[nodes.length - 1];
+    if (!dialog.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) {
+      event.preventDefault(); (event.shiftKey ? last : first).focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  }
+}
+watch(() => Boolean(selected.value || mappingSelected.value), async (open) => {
+  if (open) {
+    previousFocus = document.activeElement;
+    previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", modalKeydown, true);
+    await nextTick();
+    document.querySelector('.permission-dialog button[aria-label="关闭"]')?.focus();
+  } else {
+    document.removeEventListener("keydown", modalKeydown, true);
+    document.body.style.overflow = previousOverflow || "";
+    previousFocus?.focus();
+  }
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", modalKeydown, true);
+  if (previousOverflow !== undefined) document.body.style.overflow = previousOverflow;
+});
 onMounted(load);
 </script>
 

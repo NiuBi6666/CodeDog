@@ -8,9 +8,9 @@ function editor(admin = true, assigned = ["users.permissions.manage", "dashboard
     .replace(/^import .*;$/gm, "").replace("onMounted(load);", "");
   const api = vi.fn();
   const auth = { user: { username: "manager", admin, permissions: assigned } };
-  const state = new Function("computed", "ref", "api", "jsonBody", "notify", "auth", "hasPermission", source + `
+  const state = new Function("computed", "ref", "api", "jsonBody", "notify", "auth", "hasPermission", "watch", "onBeforeUnmount", "nextTick", source + `
     return { selected, draft, catalog, users, saving, error, openPermissions, closePermissions, selectAllPermissions, savePermissions, allPermissionsSelected, toggle, toggleGroup };
-  `)(computed, ref, api, JSON.stringify, vi.fn(), auth, (code) => admin || assigned.includes(code));
+  `)(computed, ref, api, JSON.stringify, vi.fn(), auth, (code) => admin || assigned.includes(code), vi.fn(), vi.fn(), async () => {});
   state.catalog.value = [{ key: "home", permissions: [{ code: "dashboard.view", type: "page" }, { code: "dashboard.stats", type: "data" }] }];
   state.users.value = [{ id: 7, username: "teacher", permissions: [] }];
   state.openPermissions(state.users.value[0]);

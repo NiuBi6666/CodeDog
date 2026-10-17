@@ -164,4 +164,38 @@ class StudentAccountManagementIntegrationTest {
     }
     assertThatThrownBy(()->parser.parse(xlsx(new String[][]{{"手机号","姓名","ID"},{phone(),"测试","s1"}}))).hasMessageContaining("A、B、C");
   }
+
+  @Test void legacyStudentEndpointsRequireStudentSession() throws Exception {
+    for (String path : List.of("/catalog", "?campId=camp&scope=camp&teacherId=arbitrary", "/all", "/rewards", "/announcement", "/rewards/1/image"))
+      mvc.perform(get("/api/public/rankings"+path)).andExpect(status().isUnauthorized());
+  }
+  @Test void bootstrapRequiresTeacherPermissionAndCsrf() throws Exception {
+    String body="{\"crmTeacherId\":\"29413\",\"deviceName\":\"untrusted\"}";
+    mvc.perform(post("/api/public/rankings/extension/bootstrap").with(csrf()).contentType(APPLICATION_JSON).content(body))
+      .andExpect(status().isUnauthorized());
+    var session=teacherLogin();
+    mvc.perform(post("/api/public/rankings/extension/bootstrap").session(session).with(csrf()).contentType(APPLICATION_JSON).content(body))
+      .andExpect(status().isForbidden());
+    grant("rankings.devices.pair");
+    mvc.perform(post("/api/public/rankings/extension/bootstrap").session(session).contentType(APPLICATION_JSON).content(body))
+      .andExpect(status().isForbidden());
+  }
+  @Test void defaultPasswordCannotBeAcceptedAsChanged() throws Exception {
+    String phone=phone();accounts.edit(owner,"s1",phone,"");
+    var session=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+phone+"\",\"password\":\"123456\"}"))
+      .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+    mvc.perform(post("/api/public/rankings/student-auth/change-password").session(session).with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"password\":\"123456\"}")).andExpect(status().isUnprocessableEntity());
+    assertThat(studentAuth.current(new org.springframework.mock.web.MockHttpServletRequest() {{setSession(session);}}).mustChangePassword()).isTrue();
+  }
+
+
+  @Test void administratorResetToInitialPasswordPreservesReminder() {
+    String number=phone();accounts.edit(owner,"s1",number,"");
+    studentAuth.resetPassword(owner,"s1","another-password");
+    assertThat(jdbc.queryForObject("SELECT password_changed_at FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",java.sql.Timestamp.class,owner)).isNotNull();
+    studentAuth.resetPassword(owner,"s1","123456");
+    assertThat(jdbc.queryForObject("SELECT password_changed_at FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",java.sql.Timestamp.class,owner)).isNull();
+  }
 }

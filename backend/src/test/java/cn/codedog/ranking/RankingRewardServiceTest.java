@@ -344,4 +344,22 @@ class RankingRewardServiceTest {
     jdbc.update("INSERT INTO ranking_students(owner_username,camp_id,class_id,student_id,student_name) VALUES(?,'camp','class',?,?)", owner, id, name);
     jdbc.update("INSERT INTO ranking_lesson_results(owner_username,camp_id,class_id,lesson_id,student_id,total_points) VALUES(?,'camp','class','lesson',?,?)", owner, id, points);
   }
+
+  @Test void studentEndpointsUseSessionOwnerForRewardsAnnouncementAndImages() {
+    var auth=org.mockito.Mockito.mock(cn.codedog.service.StudentRankingAuthService.class);
+    var request=new org.springframework.mock.web.MockHttpServletRequest();
+    org.mockito.Mockito.when(auth.current(request)).thenReturn(
+      new cn.codedog.service.StudentRankingAuthService.StudentSession("teacher-b","student-1","李同学","19900000001",false));
+    var controller=new cn.codedog.controller.RankingRewardPublicController(service,auth,null,null);
+    var image=new MockMultipartFile("image","gift.png","image/png",new byte[]{1,2,3,4});
+    var a=service.createReward("teacher-a","A奖品",10,true,image,1);
+    var b=service.createReward("teacher-b","B奖品",20,true,image,1);
+    service.updateAnnouncement("teacher-a","A公告");service.updateAnnouncement("teacher-b","B公告");
+    assertThat(controller.rewards(request)).extracting(RankingRewardPayload.Reward::name).containsExactly("B奖品");
+    assertThat(controller.announcement(request).text()).isEqualTo("B公告");
+    assertThat(controller.rewardImage(b.id(),request).getBody()).containsExactly(1,2,3,4);
+    assertThatThrownBy(() -> controller.rewardImage(a.id(),request)).isInstanceOf(ResponseStatusException.class)
+      .satisfies(error -> assertThat(((ResponseStatusException)error).getStatusCode().value()).isEqualTo(404));
+  }
+
 }

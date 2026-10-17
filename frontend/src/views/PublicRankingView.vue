@@ -238,7 +238,9 @@ async function submitPasswordChange() {
 
 async function logout() {
   try { await api("/public/rankings/student-auth/logout", { method: "POST" }); }
-  catch (_failure) { /* 清理本地学生会话仍然安全 */ }
+  catch (failure) {
+    if (failure.status !== 401) { showAlert("退出未成功，请重试：" + failure.message); return; }
+  }
   handleSessionExpired();
 }
 

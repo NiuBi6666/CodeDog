@@ -23,30 +23,49 @@ const canExport = computed(() => hasPermission("logs.export"));
 function syncFilters() {
   for (const key of Object.keys(filters)) filters[key] = route.query[key] || "";
 }
+let listRequest = 0;
 async function load() {
+  const request = ++listRequest;
   busy.value = true; error.value = "";
-  try { data.value = await api(`/logs?${buildAuditQuery(route.query, Number(route.query.page || 0))}`); }
-  catch (failure) { error.value = failure.message; }
-  finally { busy.value = false; }
+  try {
+    const value = await api(`/logs?${buildAuditQuery(route.query, Number(route.query.page || 0))}`);
+    if (request === listRequest) data.value = value;
+  }
+  catch (failure) { if (request === listRequest) error.value = failure.message; }
+  finally { if (request === listRequest) busy.value = false; }
 }
-function search() {
-  const query = Object.fromEntries([...buildAuditQuery(filters).entries()]);
-  router.push({ path: "/logs", query });
+async function applyQuery(query) {
+  const target = { path: "/logs", query };
+  if (router.resolve(target).fullPath === route.fullPath) {
+    syncFilters();
+    await load();
+  } else {
+    await router.push(target);
+  }
 }
+function search() { return applyQuery(Object.fromEntries(buildAuditQuery(filters).entries())); }
+function reset() {
+  for (const key of Object.keys(filters)) filters[key] = "";
+  return applyQuery({});
+}
+let detailRequest = 0;
 async function openDetail(id) {
+  const request = ++detailRequest;
   detailBusy.value = true; detail.value = null;
-  try { detail.value = await api(`/logs/${id}`); }
-  catch (failure) { notify(failure.message); }
-  finally { detailBusy.value = false; }
+  try {
+    const value = await api(`/logs/${id}`);
+    if (request === detailRequest) detail.value = value;
+  } catch (failure) { if (request === detailRequest) notify(failure.message); }
+  finally { if (request === detailRequest) detailBusy.value = false; }
 }
-function closeDetail() { detail.value = null; }
+function closeDetail() { ++detailRequest; detail.value = null; detailBusy.value = false; }
 async function copyValue(value) {
   await writeClipboard(formatAuditValue(value)); notify("已复制");
 }
 async function exportCsv() {
   exporting.value = true;
   try {
-    const response = await fetch(`/api/logs/export?${buildAuditQuery(filters)}`, { credentials: "same-origin" });
+    const response = await fetch(`/api/logs/export?${buildAuditQuery(route.query)}`, { credentials: "same-origin" });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(payload.error || "导出失败");
@@ -89,7 +108,7 @@ onMounted(() => { syncFilters(); load(); });
       <label><span>目标 ID</span><input v-model.trim="filters.targetId" placeholder="资源 ID"></label>
       <label class="audit-filter-wide"><span>Request ID</span><input v-model.trim="filters.requestId" placeholder="完整 Request ID"></label>
       <label class="audit-filter-wide"><span>关键词</span><input v-model.trim="filters.keyword" type="search" placeholder="操作、目标、操作者或 IP"></label>
-      <div class="audit-filter-actions"><button class="button button-primary" type="submit">查询</button><RouterLink class="button button-quiet" to="/logs">重置</RouterLink></div>
+      <div class="audit-filter-actions"><button class="button button-primary" type="submit">查询</button><button class="button button-quiet" type="button" @click="reset">重置</button></div>
     </form>
 
     <div class="document-table-wrap audit-table-wrap" :aria-busy="busy">

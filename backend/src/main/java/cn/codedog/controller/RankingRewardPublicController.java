@@ -31,7 +31,7 @@ public class RankingRewardPublicController {
   }
 
   @GetMapping("/announcement")
-  public RankingRewardPayload.Announcement announcement() { return rewards.publicAnnouncement(); }
+  public RankingRewardPayload.Announcement announcement(HttpServletRequest request) { return rewards.publicAnnouncement(studentAuth.current(request).ownerUsername()); }
 
   @GetMapping(value = "/announcement/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public ResponseEntity<SseEmitter> announcementEvents(HttpServletRequest request) {
@@ -41,7 +41,7 @@ public class RankingRewardPublicController {
   }
 
   @GetMapping("/rewards")
-  public List<RankingRewardPayload.Reward> rewards() { return rewards.publicRewards(); }
+  public List<RankingRewardPayload.Reward> rewards(HttpServletRequest request) { return rewards.publicRewards(studentAuth.current(request).ownerUsername()); }
 
   @GetMapping("/student-balance")
   public RankingRewardPayload.Balance balance(HttpServletRequest request) {
@@ -93,8 +93,8 @@ public class RankingRewardPublicController {
   }
 
   @GetMapping("/rewards/{id}/image")
-  public ResponseEntity<byte[]> rewardImage(@PathVariable long id) {
-    var image = rewards.publicRewardImage(id);
+  public ResponseEntity<byte[]> rewardImage(@PathVariable long id, HttpServletRequest request) {
+    var image = rewards.publicRewardImage(studentAuth.current(request).ownerUsername(), id);
     return ResponseEntity.ok()
       .cacheControl(CacheControl.noCache())
       .contentType(MediaType.parseMediaType(image.contentType()))

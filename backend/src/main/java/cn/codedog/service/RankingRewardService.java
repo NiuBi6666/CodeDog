@@ -125,7 +125,10 @@ public class RankingRewardService {
   }
 
   public List<RankingRewardPayload.Reward> publicRewards() {
-    String owner = publicOwner();
+    return publicRewards(publicOwner());
+  }
+
+  public List<RankingRewardPayload.Reward> publicRewards(String owner) {
     return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE ORDER BY required_points,id",
       (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), true, rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), true), owner);
   }
@@ -179,7 +182,10 @@ public class RankingRewardService {
   }
 
   public RankingRewardPayload.RewardImage publicRewardImage(long id) {
-    String owner = publicOwner();
+    return publicRewardImage(publicOwner(), id);
+  }
+
+  public RankingRewardPayload.RewardImage publicRewardImage(String owner, long id) {
     List<RankingRewardPayload.RewardImage> values = jdbc.query("SELECT image_data,image_content_type FROM ranking_rewards WHERE id=? AND owner_username=? AND enabled=TRUE AND image_data IS NOT NULL",
       (rs, n) -> new RankingRewardPayload.RewardImage(rs.getBytes(1), rs.getString(2)), id, owner);
     if (values.isEmpty()) throw notFound("奖品图片不存在");
