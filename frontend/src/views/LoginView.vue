@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from "vue";
-import { RouterLink, useRoute, useRouter } from "vue-router";
-import { UserPlus } from "@lucide/vue";
+import { useRoute, useRouter } from "vue-router";
 import { login } from "../auth";
 
 const route = useRoute();
@@ -43,7 +42,7 @@ async function submit() {
         <label><span>用户名</span><input v-model.trim="username" autocomplete="username" placeholder="请输入用户名" required></label>
         <label><span>密码</span><input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" required></label>
         <button class="login-submit" type="submit" :disabled="busy"><span>{{ busy ? "登录中..." : "登录" }}</span><span v-if="!busy" class="login-submit-arrow" aria-hidden="true">→</span></button>
-        <RouterLink class="login-secondary-action" to="/register"><UserPlus :size="16"/>注册用户</RouterLink>
+        <!-- 注册入口暂时隐藏；注册页面和后台接口保留，后续开放时恢复入口。 -->
       </form>
     </section>
   </main>
