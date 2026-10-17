@@ -218,7 +218,7 @@ onMounted(load);
             <button class="icon-button" type="button" title="关闭" aria-label="关闭" :disabled="saving" @click="closePermissions"><X :size="18"/></button>
           </header>
           <div class="permission-groups">
-            <div class="permission-bulk-actions"><span>一键全选或取消所有可授予的权限</span><button class="button button-quiet button-small" type="button" :disabled="saving || !canManagePermissions || !allEditablePermissions.length" :aria-pressed="allPermissionsSelected" @click="selectAllPermissions">{{ allPermissionsSelected ? "全部取消" : "全部全选" }}</button></div>
+            <div class="permission-bulk-actions"><span>一键全选或取消所有可授予的权限</span><button class="button button-quiet button-small" type="button" :disabled="saving || !canManagePermissions || !allEditablePermissions.length" :aria-pressed="allPermissionsSelected" @click="selectAllPermissions">{{ allPermissionsSelected ? "全部取消" : "全部选择" }}</button></div>
             <div v-if="error" class="notice notice-error" role="alert">{{ error }}</div>
             <section v-for="group in catalog" :key="group.key" class="permission-group">
               <label class="permission-group-title"><input type="checkbox" :checked="groupSelected(group)" :disabled="!editablePermissions(group).length" @change="toggleGroup(group)"><strong>{{ group.label }}</strong><span>全选</span></label>
