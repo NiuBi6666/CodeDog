@@ -2278,6 +2278,7 @@ a {
   isolation: isolate;
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
   overflow: hidden;
   padding: 104px 24px 48px;
@@ -2306,8 +2307,8 @@ a {
 }
 
 .login-panel {
-  width: min(100%, 420px);
-  padding: 32px;
+  width: min(100%, 500px);
+  padding: 44px 48px;
   border: 1px solid rgba(255, 244, 158, 0.32);
   border-radius: 8px;
   color: #ffffff;
@@ -2317,14 +2318,14 @@ a {
 }
 
 .login-heading {
-  margin-bottom: 26px;
+  margin-bottom: 32px;
   text-align: left;
 }
 
 .login-heading h1 {
   margin: 0;
   color: #ffffff;
-  font-size: 29px;
+  font-size: 28px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -2337,7 +2338,7 @@ a {
 
 .login-form {
   display: grid;
-  gap: 17px;
+  gap: 22px;
 }
 
 .login-form label {
@@ -2380,7 +2381,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-top: 3px;
+  margin-top: 8px;
   padding: 10px 18px;
   border: 1px solid #ffffff;
   border-radius: 8px;
@@ -2429,7 +2430,7 @@ a {
   }
 
   .login-panel {
-    padding: 26px 20px;
+    padding: 32px 26px;
   }
 
   .login-heading {
@@ -2437,7 +2438,7 @@ a {
   }
 
   .login-heading h1 {
-    font-size: 27px;
+    font-size: 25px;
   }
 }
 
