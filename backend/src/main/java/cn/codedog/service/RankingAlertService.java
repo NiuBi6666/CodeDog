@@ -1,0 +1,6 @@
+package cn.codedog.service;
+import java.util.*;import org.springframework.stereotype.Service;import org.springframework.jdbc.core.JdbcTemplate;
+@Service public class RankingAlertService {
+ private final JdbcTemplate j;public RankingAlertService(JdbcTemplate j){this.j=j;}
+ public Map<String,Object> alerts(String owner){return Map.of("lowStock",j.queryForList("SELECT r.id,r.reward_name,r.stock,COALESCE(q.low_stock_threshold,3) threshold FROM ranking_rewards r LEFT JOIN ranking_reward_rules q ON q.reward_id=r.id WHERE r.owner_username=? AND r.deleted_at IS NULL AND r.stock<=COALESCE(q.low_stock_threshold,3) ORDER BY r.stock,r.id",owner),"reconciliation",j.queryForList("SELECT c.* FROM ranking_reconciliations c WHERE c.owner_username=? AND c.result='MISMATCH' AND c.id=(SELECT MAX(x.id) FROM ranking_reconciliations x WHERE x.owner_username=c.owner_username AND x.student_id=c.student_id) ORDER BY c.id DESC LIMIT 100",owner),"pendingCancellations",j.queryForObject("SELECT COUNT(*) FROM ranking_reward_redemptions WHERE owner_username=? AND status='CANCEL_REQUESTED'",Long.class,owner),"pendingRecoveries",j.queryForObject("SELECT COUNT(*) FROM ranking_recovery_requests WHERE owner_username=? AND status IN ('PENDING_VERIFY','VERIFIED')",Long.class,owner));}
+}

@@ -34,7 +34,7 @@ class RbacIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingRewardRuleService rewardRules;
-    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingMessageService inbox;
+    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingAlertService alerts;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingAftercareService aftercare;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingPointsService operationsPoints;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingImportWorkflow operationsImports;
@@ -677,14 +677,14 @@ class RbacIntegrationTest {
     }
     @Test void pointsOperationsReadPermissionsAreIndependentAndRevocable() throws Exception {
       String name=uniqueUsername("pointops");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
-      for(var spec:java.util.List.of(new String[]{"rankings.ledger.read","/api/rankings/admin/operations/students/unknown/ledger"},new String[]{"rankings.reconciliation.read","/api/rankings/admin/operations/reconciliations"},new String[]{"rankings.batches.read","/api/rankings/admin/operations/import-batches"})){
+      for(var spec:java.util.List.of(new String[]{"rankings.reconciliation.read","/api/rankings/admin/operations/reconciliations"},new String[]{"rankings.batches.read","/api/rankings/admin/operations/import-batches"})){
         mvc.perform(get(spec[1]).session(session)).andExpect(status().isForbidden());
         member.setPermissions(new LinkedHashSet<>(java.util.Set.of(spec[0])));users.saveAndFlush(member);
         mvc.perform(get(spec[1]).session(session)).andExpect(status().isOk());
         member.setPermissions(new LinkedHashSet<>());users.saveAndFlush(member);
         mvc.perform(get(spec[1]).session(session)).andExpect(status().isForbidden());
       }
-      mvc.perform(get("/api/public/rankings/student-ledger")).andExpect(status().isUnauthorized());
+
     }
     @Test void pointsOperationsWritePermissionsAreIndependentAndRevocable() throws Exception {
       String name=uniqueUsername("pointswrite");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
@@ -729,16 +729,21 @@ class RbacIntegrationTest {
   var methods=java.util.Arrays.stream(cn.codedog.controller.RankingEngagementController.class.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList();
   assertThat(methods).doesNotContain("board","studentBoard","dates","date");
  }
+ @Test void removedInboxAndLedgerHaveNoHandlersOrPermissions() {
+  assertThat(PermissionCatalog.allCodes()).doesNotContain("rankings.messages.read","rankings.messages.update","rankings.ledger.read");
+  assertThat(java.util.Arrays.stream(cn.codedog.controller.RankingEngagementController.class.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList()).doesNotContain("messages","read","studentMessages","studentRead");
+  assertThat(java.util.Arrays.stream(cn.codedog.controller.RankingOperationsController.class.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList()).doesNotContain("ledger","studentLedger");
+ }
  @Test void engagementPermissionsAreIndependentAndImmediatelyRevocable() throws Exception {
   String name=uniqueUsername("engagement");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
-  for(var spec:java.util.List.of(new String[]{"rankings.reward_rules.read","GET","/api/rankings/admin/reward-rules"},new String[]{"rankings.reward_rules.edit","PUT","/api/rankings/admin/reward-rules/1"},new String[]{"rankings.messages.read","GET","/api/rankings/admin/messages"},new String[]{"rankings.messages.update","POST","/api/rankings/admin/messages/1/read"},new String[]{"rankings.alerts.read","GET","/api/rankings/admin/alerts"})){
+  for(var spec:java.util.List.of(new String[]{"rankings.reward_rules.read","GET","/api/rankings/admin/reward-rules"},new String[]{"rankings.reward_rules.edit","PUT","/api/rankings/admin/reward-rules/1"},new String[]{"rankings.alerts.read","GET","/api/rankings/admin/alerts"})){
    for(int pass=0;pass<3;pass++){member.setPermissions(new LinkedHashSet<>(pass==1?java.util.Set.of(spec[0]):java.util.Set.of()));users.saveAndFlush(member);
     var request=org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(org.springframework.http.HttpMethod.valueOf(spec[1]),spec[2]).with(csrf()).contentType(APPLICATION_JSON).content("{}");
     mvc.perform(request.session(session)).andExpect(status().is(pass==1?200:403));
    }
   }
 
-  mvc.perform(get("/api/public/rankings/student-messages")).andExpect(status().isUnauthorized());
+
  }
 
  @Test void recoveryDrillReportIsNonDelegableAdministratorOnly() throws Exception {

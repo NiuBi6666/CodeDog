@@ -400,7 +400,7 @@ class RankingRewardServiceTest {
   transactions().executeWithoutResult(status->aftercare.requestCancellation("teacher-a","student-1",order.id(),"申请取消"));transactions().executeWithoutResult(status->aftercare.decide("teacher-a",order.id(),true,"核实","teacher-a"));
   transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()));
   assertThatThrownBy(()->rules.save("teacher-b",reward.id(),new cn.codedog.service.RankingRewardRuleService.Rule(1,1,null,null,"无权限"))).hasMessageContaining("奖品不存在");
-  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_messages WHERE owner_username='teacher-a' AND recipient_kind='TEACHER'",Integer.class)).isPositive();
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_messages WHERE owner_username='teacher-a' AND recipient_kind='TEACHER'",Integer.class)).isZero();
  }
 
 }

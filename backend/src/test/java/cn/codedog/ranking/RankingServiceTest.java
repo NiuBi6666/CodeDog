@@ -449,7 +449,7 @@ class RankingServiceTest {
     var report=points.reconcile("Liam");
     assertThat(((Number)report.get("anomalies")).intValue()).isGreaterThan(0);
     assertThat(points.raw("Liam",student.studentId())).isEqualTo(before);
-    assertThat(points.ledger("teacher-b",student.studentId(),0).get("total")).isEqualTo(0L);
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_point_ledger WHERE owner_username=? AND student_id=?",Long.class,"teacher-b",student.studentId())).isZero();
   }
   @Test void manualAdjustmentHasOneDetailedLedgerEntry(){
     addStudent("Liam","adjust-test","测试","2026-01-01T10:00:00Z",1,1,1);

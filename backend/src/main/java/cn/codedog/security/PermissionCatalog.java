@@ -35,7 +35,6 @@ public final class PermissionCatalog {
     public static final String RANKINGS_POINTS_EDIT = "rankings.points.edit";
     public static final String RANKINGS_ACCOUNTS_IMPORT = "rankings.accounts.import";
     public static final String RANKINGS_ACCOUNTS_EDIT = "rankings.accounts.edit";
-    public static final String LEDGER_READ = "rankings.ledger.read";
     public static final String RECONCILE_READ = "rankings.reconciliation.read";
     public static final String RECONCILE_REPAIR = "rankings.reconciliation.repair";
     public static final String RECONCILE_RUN = "rankings.reconciliation.run";
@@ -108,7 +107,6 @@ public final class PermissionCatalog {
             action(RANKINGS_REDEMPTIONS_CREATE, "登记兑换"),
             action(RANKINGS_REDEMPTIONS_FULFILL, "确认或撤销发放"),
             action(RANKINGS_POINTS_EDIT, "手动调整学员积分"),
-            action(LEDGER_READ, "查看积分流水"),
             action(RECONCILE_READ, "查看对账结果"),
             action(RECONCILE_REPAIR, "核实并修复积分台账"),
             action(RECONCILE_RUN, "执行积分对账"),
@@ -118,7 +116,7 @@ public final class PermissionCatalog {
             action(CANCEL_READ,"查看取消兑换申请"),
             action(CANCEL_DECIDE,"审批取消及退款"),
             action(RECOVERY_READ,"查看账号找回申请"),
-            action("rankings.reward_rules.read","查看奖品兑换规则"),action("rankings.reward_rules.edit","修改奖品兑换规则"),action("rankings.messages.read","查看站内消息"),action("rankings.messages.update","标记站内消息已读"),action("rankings.alerts.read","查看待办与预警"),
+            action("rankings.reward_rules.read","查看奖品兑换规则"),action("rankings.reward_rules.edit","修改奖品兑换规则"),action("rankings.alerts.read","查看待办与预警"),
             action("rankings.completeness.read","查看数据完整性"),action("rankings.expected.create","新增预期课节"),action("rankings.expected.edit","修改预期课节"),action("rankings.expected.delete","删除预期课节"),
             action(RECOVERY_VERIFY,"核实账号找回申请"),
             action(RANKINGS_IMPORT, "导入排行榜数据"),

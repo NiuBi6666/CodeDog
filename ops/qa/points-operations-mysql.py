@@ -63,5 +63,4 @@ a=confirm(preview());b=confirm(preview('否'));assert b['changedRows']==1
 req(prefix+f'/import-batches/{a["batchId"]}/reverse','POST',{'reason':'后续覆盖拒绝'},expected=(409,))
 stale=preview();confirm(preview('是'));confirm(stale,(409,))
 report=req(prefix+'/reconciliations','POST',{});assert report['anomalies']==0,report
-ledger=req(prefix+'/students/'+student+'/ledger');assert len(ledger['items'])>=6
 print('PASS: MySQL migration, preview without score changes, confirmation, duplicate import, concurrent last-stock redemption, negative-balance reversal rollback, reversal, duplicate reversal, overwritten result conflict, stale preview, ledger reconciliation')
