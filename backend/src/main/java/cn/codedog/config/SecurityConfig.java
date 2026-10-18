@@ -132,7 +132,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/rankings/admin/**").denyAll()
                 .requestMatchers(HttpMethod.GET, "/api/dashboard").access(permission(permissions, PermissionCatalog.DASHBOARD_VIEW))
                 .requestMatchers(HttpMethod.POST, "/api/students/query").access(permission(permissions, PermissionCatalog.STUDENTS_QUERY))
-                .requestMatchers(HttpMethod.POST, "/api/class-progress/import").access(permission(permissions, PermissionCatalog.CLASS_PROGRESS_IMPORT))
                 .requestMatchers(HttpMethod.GET, "/api/questionnaire/sso").access(permission(permissions, PermissionCatalog.QUESTIONNAIRE_VIEW))
                 .requestMatchers(HttpMethod.GET, "/api/logs/export")
                     .access(permission(permissions, PermissionCatalog.LOGS_EXPORT))

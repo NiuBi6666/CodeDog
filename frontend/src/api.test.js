@@ -65,7 +65,7 @@ describe("CSRF recovery", () => {
     const { api } = await import("./api");
     const body = new FormData();
     body.append("files", new Blob(["xlsx"]), "class.xlsx");
-    await api("/class-progress/import", { method: "POST", body });
+    await api("/rankings/accounts/import", { method: "POST", body });
 
     const request = fetchMock.mock.calls[1][1];
     expect(request.body).toBe(body);

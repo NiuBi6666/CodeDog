@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { ensureUser, hasPermission } from "./auth";
-import ClassProgressView from "./views/ClassProgressImportView.vue";
 import DashboardView from "./views/DashboardView.vue";
 import DocumentEditView from "./views/DocumentEditView.vue";
 import DocumentListView from "./views/DocumentListView.vue";
@@ -31,7 +30,6 @@ const routes = [
   { path: "/register", component: RegisterView, meta: { bodyClass: "auth-page", title: "注册 - CodeDog" } },
   { path: "/index", component: DashboardView, meta: { auth: true, permission: "dashboard.view", bodyClass: "admin-layout", title: "首页 - CodeDog" } },
   { path: "/student/query", component: StudentQueryView, meta: { auth: true, permission: "students.view", bodyClass: "admin-layout", title: "查询学生 - CodeDog" } },
-  { path: "/class/progress", component: ClassProgressView, meta: { auth: true, permission: "class_progress.view", bodyClass: "admin-layout", title: "课堂完成情况 - CodeDog" } },
   { path: "/questionnaire", component: QuestionnaireView, meta: { auth: true, permission: "questionnaire.view", bodyClass: "admin-layout", title: "问卷与作业 - CodeDog" } },
   { path: "/rankings", component: RankingView, meta: { auth: true, permission: "rankings.view", bodyClass: "admin-layout", title: "学生排名 - CodeDog" } },
   { path: "/doc/list", component: DocumentListView, meta: { auth: true, permission: "documents.view", bodyClass: "admin-layout", title: "文档管理 - CodeDog" } },

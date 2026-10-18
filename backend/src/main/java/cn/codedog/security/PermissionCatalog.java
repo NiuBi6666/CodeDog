@@ -13,10 +13,6 @@ public final class PermissionCatalog {
     public static final String STUDENTS_QUERY = "students.query";
     public static final String STUDENTS_COPY = "students.copy";
     public static final String STUDENTS_EXPORT = "students.export";
-    public static final String CLASS_PROGRESS_VIEW = "class_progress.view";
-    public static final String CLASS_PROGRESS_IMPORT = "class_progress.import";
-    public static final String CLASS_PROGRESS_COPY = "class_progress.copy";
-    public static final String CLASS_PROGRESS_EXPORT = "class_progress.export";
     public static final String QUESTIONNAIRE_VIEW = "questionnaire.view";
     public static final String RANKINGS_VIEW = "rankings.view";
     public static final String RANKINGS_BOARD_READ = "rankings.board.read";
@@ -81,12 +77,6 @@ public final class PermissionCatalog {
             action(STUDENTS_QUERY, "执行学生查询"),
             action(STUDENTS_COPY, "复制查询结果"),
             action(STUDENTS_EXPORT, "导出查询结果")
-        )),
-        new Group("class_progress", "课堂完成情况", List.of(
-            page(CLASS_PROGRESS_VIEW, "访问课堂完成情况页面"),
-            action(CLASS_PROGRESS_IMPORT, "导入班级 Excel"),
-            action(CLASS_PROGRESS_COPY, "复制课堂结果"),
-            action(CLASS_PROGRESS_EXPORT, "导出课堂结果")
         )),
         new Group("questionnaire", "问卷与作业", List.of(
             page(QUESTIONNAIRE_VIEW, "访问问卷与作业")

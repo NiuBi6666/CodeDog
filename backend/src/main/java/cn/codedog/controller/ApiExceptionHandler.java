@@ -1,8 +1,6 @@
 package cn.codedog.controller;
 
 import cn.codedog.service.DocumentService;
-import cn.codedog.service.ClassProgressService;
-import cn.codedog.service.ClassProgressImportService;
 import cn.codedog.service.AuditContext;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -24,11 +22,6 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(DocumentService.ValidationException.class)
     ResponseEntity<?> invalid(DocumentService.ValidationException error) {
-        return ResponseEntity.unprocessableEntity().body(Map.of("error", error.getMessage()));
-    }
-
-    @ExceptionHandler(ClassProgressImportService.ValidationException.class)
-    ResponseEntity<?> invalidClassProgressFile(ClassProgressImportService.ValidationException error) {
         return ResponseEntity.unprocessableEntity().body(Map.of("error", error.getMessage()));
     }
 
@@ -57,20 +50,4 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(error.getStatusCode()).body(Map.of("error", error.getReason() == null ? "请求失败" : error.getReason()));
     }
 
-    @ExceptionHandler(ClassProgressService.NotConfiguredException.class)
-    ResponseEntity<?> integrationNotConfigured(ClassProgressService.NotConfiguredException error) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .body(Map.of("error", error.getMessage(), "code", "CODEMAO_AUTH_REQUIRED"));
-    }
-
-    @ExceptionHandler(ClassProgressService.UpstreamAuthenticationException.class)
-    ResponseEntity<?> upstreamAuthentication(ClassProgressService.UpstreamAuthenticationException error) {
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-            .body(Map.of("error", error.getMessage(), "code", "CODEMAO_AUTH_REQUIRED"));
-    }
-
-    @ExceptionHandler(ClassProgressService.UpstreamException.class)
-    ResponseEntity<?> upstream(ClassProgressService.UpstreamException error) {
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", error.getMessage()));
-    }
 }

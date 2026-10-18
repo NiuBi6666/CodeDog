@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
-import { ClipboardCheck, ExternalLink, FileSpreadsheet, FileText, Home, ListChecks, Menu, ScrollText, Search, ShieldCheck, Trophy } from "@lucide/vue";
+import { ExternalLink, FileSpreadsheet, FileText, Home, ListChecks, Menu, ScrollText, Search, ShieldCheck, Trophy } from "@lucide/vue";
 import { auth, hasPermission, logout } from "../auth";
 
 defineProps({
@@ -36,7 +36,6 @@ async function signOut() {
         <p>功能导航</p>
         <RouterLink v-if="hasPermission('dashboard.view')" :class="{ active: activePage === 'dashboard' }" to="/index"><Home class="nav-icon" :size="17"/><span>首页</span></RouterLink>
         <RouterLink v-if="hasPermission('students.view')" :class="{ active: activePage === 'students' }" to="/student/query"><Search class="nav-icon" :size="17"/><span>查询学生</span></RouterLink>
-        <RouterLink v-if="hasPermission('class_progress.view')" :class="{ active: activePage === 'class-progress' }" to="/class/progress"><ClipboardCheck class="nav-icon" :size="17"/><span>课堂完成情况</span></RouterLink>
         <RouterLink v-if="hasPermission('questionnaire.view')" :class="{ active: activePage === 'questionnaire' }" to="/questionnaire"><ListChecks class="nav-icon" :size="17"/><span>问卷与作业</span></RouterLink>
         <RouterLink v-if="hasPermission('rankings.view')" :class="{ active: activePage === 'rankings' }" to="/rankings"><Trophy class="nav-icon" :size="17"/><span>学生排名</span></RouterLink>
         <RouterLink v-if="hasPermission('exams.view')" :class="{ active: activePage === 'exams' }" to="/exams"><FileSpreadsheet class="nav-icon" :size="17"/><span>成绩管理</span></RouterLink>

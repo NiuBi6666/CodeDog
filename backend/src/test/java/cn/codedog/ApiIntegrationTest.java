@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -24,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class ApiIntegrationTest {
+    @Autowired org.springframework.context.ApplicationContext context;
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired StudentRepository students;
@@ -187,15 +187,14 @@ class ApiIntegrationTest {
     }
 
     @Test
-    void classProgressImportRemainsPrivateAndRejectsInvalidFiles() throws Exception {
-        MockMultipartFile invalid = new MockMultipartFile("files", "bad.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "not-an-xlsx".getBytes());
-        mvc.perform(multipart("/api/class-progress/import").file(invalid).with(csrf()))
-            .andExpect(status().isUnauthorized());
-        mvc.perform(multipart("/api/class-progress/import").file(invalid).session(session).with(csrf()))
-            .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.error").value("bad.xlsx：文件损坏或不是有效的 Excel 文件"));
-        mvc.perform(get("/api/class-progress/bootstrap").session(session))
+    void retiredClassProgressHasNoPermissionsOrRegisteredEndpoints() throws Exception {
+        assertThat(cn.codedog.security.PermissionCatalog.allCodes())
+            .noneMatch(code -> code.startsWith("class_progress."));
+        var mappings = context.getBean("requestMappingHandlerMapping",
+            org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping.class);
+        assertThat(mappings.getHandlerMethods().keySet())
+            .noneMatch(mapping -> mapping.toString().contains("/class-progress"));
+        mvc.perform(post("/api/class-progress/import").session(session).with(csrf()))
             .andExpect(status().isForbidden());
     }
 
