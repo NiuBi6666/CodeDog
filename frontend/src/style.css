@@ -2164,26 +2164,6 @@ a {
   margin-bottom: 14px;
 }
 
-.permission-user-toolbar label {
-  display: flex;
-  width: min(100%, 300px);
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 11px;
-  border: 1px solid #d6dfe2;
-  border-radius: 6px;
-  color: #708087;
-  background: #ffffff;
-}
-
-.permission-user-toolbar input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-}
-
 .permission-user-table td:first-child strong,
 .permission-user-table td:first-child span {
   display: block;

@@ -6,6 +6,7 @@ import { api, jsonBody, notify } from "../api";
 import { auth, hasPermission } from "../auth";
 import { formatDateTime } from "../utils";
 
+const userSearchInput = ref(null);
 const createOpen = ref(false);
 const createSaving = ref(false);
 const createError = ref("");
@@ -238,7 +239,11 @@ onMounted(load);
     </div>
     <div v-if="error" class="notice notice-error">{{ error }}</div>
     <div class="permission-user-toolbar">
-      <label><Search :size="16"/><input v-model.trim="keyword" type="search" placeholder="搜索用户名或教师 ID"></label>
+      <div class="permission-user-search" role="search">
+        <Search class="user-search-icon" :size="17" aria-hidden="true"/>
+        <input ref="userSearchInput" v-model.trim="keyword" type="search" aria-label="搜索用户名或教师 ID" placeholder="搜索用户名或教师 ID">
+        <button v-if="keyword" class="user-search-clear" type="button" aria-label="清除搜索" title="清除搜索" @click="keyword = ''; userSearchInput?.focus()"><X :size="15" aria-hidden="true"/></button>
+      </div>
     </div>
     <div class="document-table-wrap" :aria-busy="loading">
       <table class="document-table permission-user-table">
@@ -325,6 +330,20 @@ onMounted(load);
 </template>
 
 <style scoped>
+.permission-user-search { display: flex; align-items: center; gap: 9px; width: min(100%, 320px); height: 40px; box-sizing: border-box; padding: 0 10px 0 12px; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-surface); transition: border-color .15s ease, box-shadow .15s ease; }
+.permission-user-search:hover { border-color: #a8bfbd; }
+.permission-user-search:focus-within { border-color: var(--ui-primary); box-shadow: 0 0 0 3px rgba(20, 125, 118, .1); }
+.user-search-icon { flex: 0 0 auto; color: var(--ui-muted); }
+.permission-user-search:focus-within .user-search-icon { color: var(--ui-primary); }
+.permission-user-search input { flex: 1; width: 0; min-width: 0; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ui-text); font: inherit; font-size: 14px; appearance: none; }
+.permission-user-search input:focus, .permission-user-search input:focus-visible { outline: none; box-shadow: none; }
+.permission-user-search input::placeholder { color: #86979c; }
+.permission-user-search input::-webkit-search-cancel-button, .permission-user-search input::-webkit-search-decoration { appearance: none; }
+.user-search-clear { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ui-muted); cursor: pointer; }
+.user-search-clear:hover { color: var(--ui-primary); background: #edf6f4; }
+.user-search-clear:focus-visible { outline-offset: 0; }
+@media (prefers-reduced-motion: reduce) { .permission-user-search { transition: none; } }
+
 .create-user-form { display: grid; gap: 16px; }
 .permission-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .permission-bulk-actions > span { color: #637984; font-size: 12px; }
