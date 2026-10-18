@@ -63,6 +63,10 @@ const passwordChangeLoading = ref(false);
 let refreshTimer;
 let announcementStream;
 
+const passwordChangeHint = computed(() => studentSession.value?.canChangePassword === false
+  ? `每个自然月可修改一次密码，本月已修改过密码，${studentSession.value.nextPasswordChangeDate} 00:00:00起可再次修改；如忘记密码请联系老师。`
+  : "每个自然月可修改一次密码");
+
 const rows = computed(() => board.value?.rankings || []);
 const selectedIndex = computed(() => rows.value.findIndex((row) => String(row.studentId) === String(selectedStudentId.value)));
 const visibleRows = computed(() => rows.value);
@@ -490,9 +494,7 @@ onBeforeUnmount(() => {
           <div class="password-modal-copy">
             <p class="password-modal-kicker">账号安全提醒</p>
             <h2 id="passwordModalTitle">{{ studentSession?.mustChangePassword ? "请修改初始密码" : "修改密码" }}</h2>
-            <p v-if="studentSession?.mustChangePassword">请修改初始密码，建议与上课密码一致</p>
-            <p v-else>每个自然月可修改一次密码，以北京时间为准。</p>
-            <p v-if="studentSession?.canChangePassword === false" role="status">本月已修改过密码，{{ studentSession.nextPasswordChangeDate }}起可再次修改；如忘记密码请联系老师。</p>
+            <p class="password-change-hint" role="status">{{ passwordChangeHint }}</p>
           </div>
           <form class="password-change-form" @submit.prevent="submitPasswordChange">
             <label class="login-field"><span>旧密码</span><input v-model="oldPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入当前使用的密码" /></label>
@@ -1604,7 +1606,7 @@ button {
 .password-modal-copy { min-width: 0; }
 .password-modal-kicker { margin: 0 0 5px; color: #55ddff; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
 .password-modal-copy h2 { margin: 0; color: #f4f8ff; font-size: 22px; }
-.password-modal-copy > p:last-child { margin: 7px 0 0; color: #a4b7d9; font-size: 12px; line-height: 1.55; }
+.password-modal-copy > .password-change-hint { margin: 7px 0 0; color: #a4b7d9; font-size: 14px; line-height: 1.55; }
 
 .password-change-form {
   display: grid;
