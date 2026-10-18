@@ -86,10 +86,17 @@ public class StudentRankingAuthService {
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码长度应为 6-72 个字符");
     if ("123456".equals(password))
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码不能与初始密码相同，请设置其他密码");
-    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),must_change_password=FALSE,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=?",
+    // A conditional update serializes concurrent changes and uses the Beijing calendar month.
+    Timestamp monthStart = Timestamp.from(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
+      .withDayOfMonth(1).atStartOfDay(java.time.ZoneId.of("Asia/Shanghai")).toInstant());
+    int sessionVersion = Integer.parseInt(java.util.Objects.toString(request.getSession().getAttribute("studentSessionVersion"), "0"));
+    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),must_change_password=FALSE,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=? AND session_version=? AND (password_changed_at IS NULL OR password_changed_at<? OR must_change_password=TRUE)",
       passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(current.ownerUsername(), current.studentId())),
-      current.phone(), current.ownerUsername(), current.studentId());
-    if (updated != 1) throw unauthorized();
+      current.phone(), current.ownerUsername(), current.studentId(), sessionVersion, monthStart);
+    if (updated != 1) {
+      current(request); // A stale session must never bypass a concurrent credential reset.
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "本月已修改过密码，请于下月1日再试；如忘记密码请联系老师");
+    }
     request.getSession().setAttribute("studentSessionVersion",Integer.parseInt(java.util.Objects.toString(request.getSession().getAttribute("studentSessionVersion"),"0"))+1);
     audit.change("STUDENT", current.studentId(), java.util.Map.of("credentialState", "existing"),
       java.util.Map.of("credentialState", "rotated"));
@@ -153,7 +160,12 @@ public class StudentRankingAuthService {
   }
 
   private StudentSession profile(Account account) {
-    return new StudentSession(account.ownerUsername(), account.studentId(), account.studentName(), account.phone(), account.passwordChangedAt() == null || account.mustChangePassword());
+    java.time.ZoneId zone = java.time.ZoneId.of("Asia/Shanghai");
+    java.time.LocalDate nextChange = account.passwordChangedAt() == null ? null
+      : account.passwordChangedAt().toInstant().atZone(zone).toLocalDate().withDayOfMonth(1).plusMonths(1);
+    boolean canChange = account.mustChangePassword() || nextChange == null || !java.time.LocalDate.now(zone).isBefore(nextChange);
+    return new StudentSession(account.ownerUsername(), account.studentId(), account.studentName(), account.phone(),
+      account.passwordChangedAt() == null || account.mustChangePassword(), canChange, canChange ? null : nextChange.toString());
   }
 
   public RecoveredPassword recoveredPassword(String owner, String studentId) {
@@ -193,5 +205,9 @@ public class StudentRankingAuthService {
                          String passwordHash, String passwordCiphertext, boolean enabled, Timestamp passwordChangedAt,int sessionVersion,boolean mustChangePassword) {}
   public record RecoveredPassword(String studentId, String studentName, String phone, String password) {}
   public record StudentSession(String ownerUsername, String studentId, String studentName, String phone,
-                               boolean mustChangePassword) {}
+                               boolean mustChangePassword, boolean canChangePassword, String nextPasswordChangeDate) {
+    public StudentSession(String ownerUsername, String studentId, String studentName, String phone, boolean mustChangePassword) {
+      this(ownerUsername, studentId, studentName, phone, mustChangePassword, true, null);
+    }
+  }
 }

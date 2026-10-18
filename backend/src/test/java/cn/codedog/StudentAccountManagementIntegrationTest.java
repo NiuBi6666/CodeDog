@@ -208,4 +208,63 @@ class StudentAccountManagementIntegrationTest {
   }
  @Test void recoveryRequestOnlyTargetsCurrentOwnerAfterConflictResolution(){String id="recover"+UUID.randomUUID().toString().substring(0,8),other="old"+UUID.randomUUID().toString().substring(0,8),number=phone();add(owner,id,"归属核实学员");add(other,id,"归属核实学员");accounts.edit(owner,id,number,"");accounts.edit(other,id,number,"");jdbc.update("INSERT INTO ranking_current_ownership(student_id,owner_username,state) VALUES(?,?,'ACTIVE')",id,owner);aftercare.requestRecovery(number,id,"找回");assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_recovery_requests WHERE student_id=? AND owner_username=?",Integer.class,id,owner)).isEqualTo(1);assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_recovery_requests WHERE student_id=? AND owner_username=?",Integer.class,id,other)).isZero();}
 
+  @Test void studentPasswordChangesAreLimitedByBeijingCalendarMonthButAdminResetsAreNot() throws Exception {
+    String number=phone(); accounts.edit(owner,"s1",number,"");
+    var session=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+number+"\",\"password\":\"123456\"}"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(true)).andReturn().getRequest().getSession(false);
+    String url="/api/public/rankings/student-auth/change-password";
+    mvc.perform(post(url).contentType(APPLICATION_JSON).with(csrf()).content("{\"password\":\"new-password\"}"))
+      .andExpect(status().isUnauthorized());
+    mvc.perform(post(url).session(session).contentType(APPLICATION_JSON).content("{\"password\":\"new-password\"}"))
+      .andExpect(status().isForbidden());
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"new-password\"}"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(false))
+      .andExpect(jsonPath("$.nextPasswordChangeDate").value(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).withDayOfMonth(1).plusMonths(1).toString()));
+    String hash=jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner);
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"second-password\"}"))
+      .andExpect(status().isConflict());
+    assertThat(jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner)).isEqualTo(hash);
+    // The instant immediately before Beijing month start belongs to the previous month.
+    var boundary=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).withDayOfMonth(1).atStartOfDay(java.time.ZoneId.of("Asia/Shanghai")).toInstant();
+    jdbc.update("UPDATE ranking_student_accounts SET password_changed_at=? WHERE owner_username=? AND student_id='s1'",java.sql.Timestamp.from(boundary.minusSeconds(1)),owner);
+    mvc.perform(get("/api/public/rankings/student-auth/session").session(session)).andExpect(jsonPath("$.canChangePassword").value(true));
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"next-month-password\"}"))
+      .andExpect(status().isOk());
+    studentAuth.resetPassword(owner,"s1","temporary-one");
+    studentAuth.resetPassword(owner,"s1","temporary-two");
+    mvc.perform(get("/api/public/rankings/student-auth/session").session(session)).andExpect(status().isUnauthorized());
+    var fresh=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+number+"\",\"password\":\"temporary-two\"}"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(true)).andReturn().getRequest().getSession(false);
+    mvc.perform(post(url).session(fresh).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"after-reset-password\"}"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(false));
+    String auditText=jdbc.queryForObject("SELECT changes_json FROM audit_log WHERE action='student_password_changed' AND owner_username=? ORDER BY id DESC LIMIT 1",String.class,owner);
+    assertThat(auditText).contains("credentialState").doesNotContain("after-reset-password",hash);
+  }
+
+  @Test void concurrentStudentPasswordChangesOnlyCommitOnce() throws Exception {
+    String number=phone();accounts.edit(owner,"s1",number,"");
+    var first=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+number+"\",\"password\":\"123456\"}"))
+      .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+    var second=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+number+"\",\"password\":\"123456\"}"))
+      .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+    var start=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);
+    try {
+      var futures=new ArrayList<Future<Integer>>();
+      for(var session:List.of(first,second)) futures.add(pool.submit(()->{
+        start.await();return mvc.perform(post("/api/public/rankings/student-auth/change-password").session(session).with(csrf())
+          .contentType(APPLICATION_JSON).content("{\"password\":\"concurrent-secret\"}"))
+          .andReturn().getResponse().getStatus();
+      }));
+      start.countDown();var results=new ArrayList<Integer>();for(var f:futures)results.add(f.get(20,TimeUnit.SECONDS));
+      assertThat(results.stream().filter(code->code==200).count()).isEqualTo(1);
+      assertThat(results).allMatch(code->code==200||code==401||code==409);
+      assertThat(jdbc.queryForObject("SELECT session_version FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",Integer.class,owner)).isEqualTo(1);
+      assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action='student_password_changed' AND owner_username=?",Integer.class,owner)).isEqualTo(1);
+    } finally {pool.shutdownNow();}
+  }
+
 }

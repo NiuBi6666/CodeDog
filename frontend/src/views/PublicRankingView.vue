@@ -213,13 +213,25 @@ function openPasswordPrompt(session) {
   confirmPassword.value = "";
 }
 
+function openPasswordSettings() {
+  passwordPromptOpen.value = true;
+  passwordChangeError.value = "";
+  newPassword.value = "";
+  confirmPassword.value = "";
+}
+
 function deferPasswordChange() {
   passwordPromptOpen.value = false;
   passwordChangeError.value = "";
 }
 
 async function submitPasswordChange() {
+  if (passwordChangeLoading.value) return;
   passwordChangeError.value = "";
+  if (studentSession.value?.canChangePassword === false) {
+    passwordChangeError.value = `本月已修改过密码，${studentSession.value.nextPasswordChangeDate}起可再次修改`;
+    return;
+  }
   if (newPassword.value.length < 6 || newPassword.value.length > 72) {
     passwordChangeError.value = "新密码长度应为 6-72 个字符";
     return;
@@ -237,6 +249,7 @@ async function submitPasswordChange() {
     passwordPromptOpen.value = false;
     newPassword.value = "";
     confirmPassword.value = "";
+    await showAlert("密码修改成功，下次登录请使用新密码；本月不可再次自行修改。");
   } catch (failure) {
     passwordChangeError.value = failure.message || "密码修改失败，请稍后重试";
   } finally {
@@ -422,6 +435,7 @@ onBeforeUnmount(() => {
             <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
             <strong>{{ balance.availablePoints }} 可用积分</strong>
           </div>
+          <button class="ghost-button password-settings-button" type="button" @click="openPasswordSettings">修改密码</button>
           <button class="logout-button" type="button" title="退出学生登录" aria-label="退出学生登录" @click="logout"><LogOut aria-hidden="true" /></button>
         </div>
       </header>
@@ -466,8 +480,10 @@ onBeforeUnmount(() => {
           <div class="password-modal-mark"><Code2 aria-hidden="true" /></div>
           <div class="password-modal-copy">
             <p class="password-modal-kicker">账号安全提醒</p>
-            <h2 id="passwordModalTitle">请修改初始密码</h2>
-            <p>请修改初始密码，建议与上课密码一致</p>
+            <h2 id="passwordModalTitle">{{ studentSession?.mustChangePassword ? "请修改初始密码" : "修改密码" }}</h2>
+            <p v-if="studentSession?.mustChangePassword">请修改初始密码，建议与上课密码一致</p>
+            <p v-else>每个自然月可修改一次密码，以北京时间为准。</p>
+            <p v-if="studentSession?.canChangePassword === false" role="status">本月已修改过密码，{{ studentSession.nextPasswordChangeDate }}起可再次修改；如忘记密码请联系老师。</p>
           </div>
           <form class="password-change-form" @submit.prevent="submitPasswordChange">
             <label class="login-field"><span>新密码</span><input v-model="newPassword" type="password" autocomplete="new-password" maxlength="72" placeholder="请输入新密码" /></label>
@@ -475,7 +491,7 @@ onBeforeUnmount(() => {
             <p v-if="passwordChangeError" class="login-error" role="alert">{{ passwordChangeError }}</p>
             <div class="password-modal-actions">
               <button class="password-later-button" type="button" @click="deferPasswordChange">暂不修改</button>
-              <button class="login-button" type="submit" :disabled="passwordChangeLoading"><RefreshCw v-if="passwordChangeLoading" class="spin" aria-hidden="true" /><span>{{ passwordChangeLoading ? "保存中…" : "保存新密码" }}</span></button>
+              <button class="login-button" type="submit" :disabled="passwordChangeLoading || studentSession?.canChangePassword === false"><RefreshCw v-if="passwordChangeLoading" class="spin" aria-hidden="true" /><span>{{ passwordChangeLoading ? "保存中…" : "保存新密码" }}</span></button>
             </div>
           </form>
         </section>
@@ -771,7 +787,7 @@ button {
 
 .player-console {
   display: grid;
-  grid-template-columns: 38px minmax(118px, 1fr) auto 36px;
+  grid-template-columns: 38px minmax(118px, 1fr) auto auto 36px;
   align-items: center;
   min-width: 430px;
   min-height: 54px;
@@ -1666,6 +1682,14 @@ button {
   .player-console {
     grid-template-columns: 34px minmax(0, 1fr) 34px;
   }
+
+  .password-settings-button {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .player-console .logout-button { grid-row: 1; grid-column: 3; }
 
   .player-score {
     grid-row: 2;
