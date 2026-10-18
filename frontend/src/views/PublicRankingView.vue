@@ -30,9 +30,6 @@ const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
 const redemptions = ref([]);
-const rewardRules=ref([]);
-async function loadRewardRules(){try{rewardRules.value=await api("/public/rankings/student-reward-rules");}catch(e){console.warn("兑换规则暂不可用");}}
-function ruleFor(id){return rewardRules.value.find(r=>r.reward_id===id);}
 const balance = ref({ earnedPoints: 0, spentPoints: 0, availablePoints: 0 });
 const redeemRequestKey=ref("");
 const redeemOpen = ref(false);
@@ -112,7 +109,6 @@ async function loadBoard() {
     rewards.value = rewardValues || [];
     balance.value = balanceValue || { earnedPoints: 0, spentPoints: 0, availablePoints: 0 };
     redemptions.value = redemptionValues || [];
-    loadRewardRules();
     selectedStudentId.value = String(studentSession.value?.studentId || "");
     loadOpportunities(selectedStudentId.value);
   } catch (failure) {
@@ -349,7 +345,6 @@ async function redeemReward() {
       balance.value = balanceValue;
       board.value = boardValue;
       redemptions.value = redemptionValues || [];
-    loadRewardRules();
     } catch (refreshFailure) {
       if (refreshFailure.status === 401) handleSessionExpired();
     }
@@ -462,7 +457,7 @@ onBeforeUnmount(() => {
       <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="closeRewardRedeem">
         <section class="reward-redeem-modal ui-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
           <header><div><span class="reward-redeem-mark"><Gift aria-hidden="true" /></span><div><p class="password-modal-kicker">积分兑换</p><h2 id="rewardRedeemTitle">确认兑换奖品</h2></div></div><button class="icon-button" type="button" title="关闭" @click="closeRewardRedeem"><X :size="17" /></button></header>
-          <div class="reward-redeem-body"><p v-if="ruleFor(selectedReward.id)?.instructions">发放说明：{{ruleFor(selectedReward.id).instructions}}</p><p v-if="ruleFor(selectedReward.id)?.starts_at||ruleFor(selectedReward.id)?.ends_at">兑换时间：{{ruleFor(selectedReward.id).starts_at?new Date(ruleFor(selectedReward.id).starts_at).toLocaleString():'不限'}} — {{ruleFor(selectedReward.id).ends_at?new Date(ruleFor(selectedReward.id).ends_at).toLocaleString():'不限'}}</p><div class="reward-redeem-item"><div class="reward-image"><img v-if="selectedReward.imageUrl" :src="selectedReward.imageUrl" :alt="selectedReward.name"><Gift v-else aria-hidden="true" /></div><div><strong>{{ selectedReward.name }}</strong><small>需要 {{ selectedReward.requiredPoints }} 积分 · 剩余 {{ selectedReward.stock }} 件</small></div></div><p>当前可用积分：<b>{{ balance.availablePoints }}</b>；兑换后剩余：<b>{{ Math.max(0, balance.availablePoints - selectedReward.requiredPoints) }}</b></p><p v-if="redeemError" class="redeem-error" role="alert">{{ redeemError }}</p></div>
+          <div class="reward-redeem-body"><div class="reward-redeem-item"><div class="reward-image"><img v-if="selectedReward.imageUrl" :src="selectedReward.imageUrl" :alt="selectedReward.name"><Gift v-else aria-hidden="true" /></div><div><strong>{{ selectedReward.name }}</strong><small>需要 {{ selectedReward.requiredPoints }} 积分 · 剩余 {{ selectedReward.stock }} 件</small></div></div><p>当前可用积分：<b>{{ balance.availablePoints }}</b>；兑换后剩余：<b>{{ Math.max(0, balance.availablePoints - selectedReward.requiredPoints) }}</b></p><p v-if="redeemError" class="redeem-error" role="alert">{{ redeemError }}</p></div>
           <footer><button class="password-later-button" type="button" @click="closeRewardRedeem">取消</button><button class="login-button" type="button" :disabled="redeemSaving || selectedReward.stock <= 0" @click="redeemReward"><RefreshCw v-if="redeemSaving" class="spin" aria-hidden="true" /><span>{{ redeemSaving ? "兑换中…" : "确认兑换" }}</span></button></footer>
         </section>
       </div>
@@ -537,7 +532,7 @@ onBeforeUnmount(() => {
                   <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name">
                   <Gift v-else aria-hidden="true" />
                 </div>
-                <div class="reward-copy"><h4>{{ reward.name }}</h4><small v-if="ruleFor(reward.id)?.per_student_limit" class="reward-stock">每人累计限兑 {{ruleFor(reward.id).per_student_limit}} 次</small><small v-if="ruleFor(reward.id)?.instructions" class="reward-stock">{{ruleFor(reward.id).instructions}}</small><strong>{{ reward.requiredPoints }}<small> 积分</small></strong><small class="reward-stock">{{ reward.stock > 0 ? `剩余 ${reward.stock} 件` : "已兑完 · 无法兑换" }}</small></div>
+                <div class="reward-copy"><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong><small class="reward-stock">{{ reward.stock > 0 ? `剩余 ${reward.stock} 件` : "已兑完 · 无法兑换" }}</small></div>
               </article>
             </div>
             <div v-else class="reward-empty"><Gift aria-hidden="true" /><span><strong>奖品正在补货</strong><small>老师添加奖品后会显示在这里</small></span></div>

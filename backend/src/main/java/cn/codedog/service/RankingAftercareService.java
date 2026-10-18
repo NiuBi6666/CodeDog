@@ -10,7 +10,7 @@ import java.util.*;
  @Transactional public void requestCancellation(String owner,String student,long id,String note){
   String current=owner;var original=jdbc.queryForList("SELECT owner_username FROM ranking_reward_redemptions WHERE id=? AND student_id=?",id,student);if(original.isEmpty())throw RankingPointsService.conflict("兑换记录不存在");String source=(String)original.getFirst().get("owner_username");
   if(!source.equals(current)&&jdbc.queryForObject("SELECT COUNT(*) FROM ranking_transfers WHERE student_id=? AND from_owner=?",Integer.class,student,source)==0)throw RankingPointsService.conflict("不能访问其他老师的订单");
-  for(String o:new TreeSet<>(List.of(current,source)))jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",o);RankingOwnershipService.requireCurrent(jdbc,current,student,false);owner=source;
+  for(String o:new TreeSet<>(List.of(current,source)))jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",o);RankingOwnershipGuard.requireCurrent(jdbc,current,student,false);owner=source;
   points.lock(owner,student);var rows=jdbc.queryForList("SELECT status FROM ranking_reward_redemptions WHERE owner_username=? AND student_id=? AND id=? FOR UPDATE",owner,student,id);
   if(rows.isEmpty())throw RankingPointsService.conflict("兑换记录不存在");String state=(String)rows.getFirst().get("status");if(state.equals("CANCEL_REQUESTED"))return;
   if(!state.equals("PENDING"))throw RankingPointsService.conflict("只有未发放的订单可以申请取消");

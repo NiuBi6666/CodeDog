@@ -33,8 +33,6 @@ class RbacIntegrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
-    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingRewardRuleService rewardRules;
-    @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingAlertService alerts;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingAftercareService aftercare;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingPointsService operationsPoints;
     @org.springframework.boot.test.mock.mockito.MockBean cn.codedog.service.RankingImportWorkflow operationsImports;
@@ -42,7 +40,6 @@ class RbacIntegrationTest {
     @BeforeEach
     void ensureRankingMappingTables() {
         OperationsTestSchema.create(jdbc);
-        org.mockito.Mockito.when(rewardRules.save(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Map.of("saved",true));
         org.mockito.Mockito.when(aftercare.decide(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyBoolean(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("status","CANCELLED"));
         org.mockito.Mockito.when(aftercare.verify(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyBoolean(),org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("status","VERIFIED"));
         org.mockito.Mockito.when(operationsPoints.reconcile(org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Map.of("checked",0,"anomalies",0));
@@ -708,42 +705,11 @@ class RbacIntegrationTest {
   mvc.perform(post("/api/rankings/admin/aftercare/recoveries/1/resolve").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"temporary-test\"}")).andExpect(status().isForbidden());
  }
 
- @Test void continuityPermissionsGrantRevokeAndTransfersStayAdministratorOnly() throws Exception {
-  String name=uniqueUsername("continuity");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
-  for(var spec:java.util.List.of(new String[]{"rankings.completeness.read","GET","/api/rankings/admin/expected-lessons"},new String[]{"rankings.expected.create","POST","/api/rankings/admin/expected-lessons"},new String[]{"rankings.expected.edit","PUT","/api/rankings/admin/expected-lessons/999999"},new String[]{"rankings.expected.delete","DELETE","/api/rankings/admin/expected-lessons/999999"})){
-   for(int pass=0;pass<3;pass++){member.setPermissions(new LinkedHashSet<>(pass==1?java.util.Set.of(spec[0]):java.util.Set.of()));users.saveAndFlush(member);
-    var request=org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(org.springframework.http.HttpMethod.valueOf(spec[1]),spec[2]).with(csrf()).contentType(APPLICATION_JSON).content("{}");
-    mvc.perform(request.session(session)).andExpect(status().is(pass==1?(spec[1].equals("GET")?200:409):403));
-   }
-  }
-  member.setPermissions(new LinkedHashSet<>(cn.codedog.security.PermissionCatalog.allCodes()));users.saveAndFlush(member);
-  mvc.perform(get("/api/rankings/admin/transfers").session(session)).andExpect(status().isForbidden());
+ @Test void retiredRankingModulesHaveNoPermissionsOrAccessibleEndpoints() throws Exception {
+  assertThat(PermissionCatalog.allCodes()).doesNotContain("rankings.reward_rules.read","rankings.reward_rules.edit","rankings.alerts.read","rankings.completeness.read","rankings.expected.create","rankings.expected.edit","rankings.expected.delete","rankings.monthly.read","rankings.messages.read","rankings.ledger.read");
+  var session=login("Liam","test-only-password");
+  for(String path:java.util.List.of("/api/rankings/admin/reward-rules","/api/rankings/admin/alerts","/api/rankings/admin/transfers","/api/rankings/admin/completeness","/api/rankings/admin/expected-lessons","/api/public/rankings/student-reward-rules","/api/public/rankings/student-ledger","/api/public/rankings/student-messages"))mvc.perform(get(path).session(session)).andExpect(status().is4xxClientError());
   mvc.perform(post("/api/rankings/admin/transfers/preview").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
-  member.setEnabled(false);users.saveAndFlush(member);
-  mvc.perform(get("/api/rankings/admin/expected-lessons").session(session)).andExpect(status().isForbidden());
-  mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isUnauthorized());
- }
-
- @Test void removedMonthlyFeaturesHaveNoHandlersOrPermissions() {
-  assertThat(PermissionCatalog.allCodes()).doesNotContain("rankings.monthly.read","rankings.lesson_dates.edit");
-  var methods=java.util.Arrays.stream(cn.codedog.controller.RankingEngagementController.class.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList();
-  assertThat(methods).doesNotContain("board","studentBoard","dates","date");
- }
- @Test void removedInboxAndLedgerHaveNoHandlersOrPermissions() {
-  assertThat(PermissionCatalog.allCodes()).doesNotContain("rankings.messages.read","rankings.messages.update","rankings.ledger.read");
-  assertThat(java.util.Arrays.stream(cn.codedog.controller.RankingEngagementController.class.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList()).doesNotContain("messages","read","studentMessages","studentRead");
-  assertThat(java.util.Arrays.stream(cn.codedog.controller.RankingOperationsController.class.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList()).doesNotContain("ledger","studentLedger");
- }
- @Test void engagementPermissionsAreIndependentAndImmediatelyRevocable() throws Exception {
-  String name=uniqueUsername("engagement");User member=users.saveAndFlush(user(name,"member-password-123"));var session=login(name,"member-password-123");
-  for(var spec:java.util.List.of(new String[]{"rankings.reward_rules.read","GET","/api/rankings/admin/reward-rules"},new String[]{"rankings.reward_rules.edit","PUT","/api/rankings/admin/reward-rules/1"},new String[]{"rankings.alerts.read","GET","/api/rankings/admin/alerts"})){
-   for(int pass=0;pass<3;pass++){member.setPermissions(new LinkedHashSet<>(pass==1?java.util.Set.of(spec[0]):java.util.Set.of()));users.saveAndFlush(member);
-    var request=org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(org.springframework.http.HttpMethod.valueOf(spec[1]),spec[2]).with(csrf()).contentType(APPLICATION_JSON).content("{}");
-    mvc.perform(request.session(session)).andExpect(status().is(pass==1?200:403));
-   }
-  }
-
-
  }
 
  @Test void recoveryDrillReportIsNonDelegableAdministratorOnly() throws Exception {

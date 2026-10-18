@@ -116,8 +116,8 @@ public final class PermissionCatalog {
             action(CANCEL_READ,"查看取消兑换申请"),
             action(CANCEL_DECIDE,"审批取消及退款"),
             action(RECOVERY_READ,"查看账号找回申请"),
-            action("rankings.reward_rules.read","查看奖品兑换规则"),action("rankings.reward_rules.edit","修改奖品兑换规则"),action("rankings.alerts.read","查看待办与预警"),
-            action("rankings.completeness.read","查看数据完整性"),action("rankings.expected.create","新增预期课节"),action("rankings.expected.edit","修改预期课节"),action("rankings.expected.delete","删除预期课节"),
+
+
             action(RECOVERY_VERIFY,"核实账号找回申请"),
             action(RANKINGS_IMPORT, "导入排行榜数据"),
             action(RANKINGS_ACCOUNTS_IMPORT, "导入手机号并开通学生账号"),

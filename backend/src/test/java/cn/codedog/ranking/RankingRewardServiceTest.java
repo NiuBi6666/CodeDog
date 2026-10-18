@@ -387,20 +387,11 @@ class RankingRewardServiceTest {
   assertThatThrownBy(()->aftercare.requestCancellation("teacher-a","student-1",order.id(),"已发放")).isInstanceOf(ResponseStatusException.class);
  }
 
- @Test void rewardRulesEnforceWindowAndLimitAndCancelledOrdersReleaseLimit(){
-  var reward=service.createReward("teacher-a","兑换规则",10,true,null,3);var rules=new cn.codedog.service.RankingRewardRuleService(jdbc);
-  rules.save("teacher-a",reward.id(),new cn.codedog.service.RankingRewardRuleService.Rule(2,1,Instant.now().plusSeconds(300),null,"联系老师领取"));
-  assertThatThrownBy(()->transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()))).hasMessageContaining("尚未开始");
-  rules.save("teacher-a",reward.id(),new cn.codedog.service.RankingRewardRuleService.Rule(2,1,null,Instant.now().minusSeconds(1),"联系老师领取"));
-  assertThatThrownBy(()->transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()))).hasMessageContaining("已结束");
-  rules.save("teacher-a",reward.id(),new cn.codedog.service.RankingRewardRuleService.Rule(2,1,null,null,"联系老师领取"));
-  var order=transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()));
-  assertThatThrownBy(()->transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()))).hasMessageContaining("累计限兑");
-  var aftercare=new cn.codedog.service.RankingAftercareService(jdbc,new cn.codedog.service.RankingPointsService(jdbc),null);
-  transactions().executeWithoutResult(status->aftercare.requestCancellation("teacher-a","student-1",order.id(),"申请取消"));transactions().executeWithoutResult(status->aftercare.decide("teacher-a",order.id(),true,"核实","teacher-a"));
+ @Test void retiredRewardRulesDoNotRestrictRedemptionButStockStillDoes(){
+  var reward=service.createReward("teacher-a","基础兑换",1,true,null,2);
+  jdbc.update("INSERT INTO ranking_reward_rules(reward_id,owner_username,low_stock_threshold,per_student_limit,starts_at,instructions) VALUES(?,'teacher-a',1,1,?,'已下线的历史规则')",reward.id(),java.sql.Timestamp.from(Instant.now().plusSeconds(3600)));
   transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()));
-  assertThatThrownBy(()->rules.save("teacher-b",reward.id(),new cn.codedog.service.RankingRewardRuleService.Rule(1,1,null,null,"无权限"))).hasMessageContaining("奖品不存在");
-  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_messages WHERE owner_username='teacher-a' AND recipient_kind='TEACHER'",Integer.class)).isZero();
+  transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()));
+  assertThatThrownBy(()->transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()))).isInstanceOf(ResponseStatusException.class);
  }
-
 }

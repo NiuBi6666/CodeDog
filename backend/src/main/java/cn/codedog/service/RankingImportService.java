@@ -96,7 +96,7 @@ public class RankingImportService {
             String studentId = text(student.studentId(), "学员 ID", 100);
             String studentName = text(student.studentName(), "学员姓名", 100);
             RankingScore.Score score = scorePolicy.calculate(student);
-            RankingOwnershipService.requireCurrent(jdbc,owner,studentId,true);
+            RankingOwnershipGuard.requireCurrent(jdbc,owner,studentId,true);
             upsertStudent(owner, campId, classId, studentId, studentName);
             String hash = sha256(scorePolicy.ruleVersion + "|" + studentName + "|" + score);
             ExistingResult existing = existingResult(owner, campId, classId, lessonId, studentId);

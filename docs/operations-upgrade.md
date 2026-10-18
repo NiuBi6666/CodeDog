@@ -49,3 +49,8 @@ Validation: 133 backend and 69 frontend tests passed. Isolated real MySQL verifi
 Run `python3 ops/qa/recovery-drill.py` on the authorized server. It restores the latest authorized archive to uniquely named private MySQL/backend containers on an internal Docker network, publishes no host ports and uses an ephemeral client inside that same internal network, disables scheduling/legacy import/CRM cookies, and verifies account associations, exact reward image bytes, source files/configuration, order foreign references, ledger balances, migrations, administrator login and anonymous denials. No production business data is modified. The temporary recovered configuration copy and containers are removed; the original backup and private JSON evidence are retained. The report states backup start/end bounds rather than inventing an exact database-snapshot timestamp.
 
 After production has migration V125, `python3 ops/qa/recovery-drill.py publish /home/ubuntu/codedog-recovery-drill-.../report.json` inserts a successful report and its operations audit event. Only server operators and the highest administrator can publish/read this evidence; it is not exposed to ordinary teachers. No password, token or encryption key is included in the report.
+
+
+## 2026-10-18 模块下线
+
+月榜、站内消息、积分明细、规则与预警、交接与数据完整性已依用户要求移除。相关页面、接口、权限、交接工作流和附加兑换规则不再存在；基础积分/库存校验、老师归属隔离、兑换退款、找回密码、导入及对账保留。历史数据库记录和已执行Flyway迁移保留，不删除历史归属、积分或订单。恢复演练仅保留服务器脚本与最高管理员诊断API，不提供已删除的模块页面。此前各批验收章节仅为历史记录。已移除包含退役工作流的旧自动化脚本；当前页面回归使用 ops/qa/recovery-layout-browser.cjs，业务回归保留积分操作及售后脚本。

@@ -74,7 +74,7 @@ public class StudentRankingAuthService {
       clear(session);
       throw unauthorized();
     }
-    try{RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);}catch(RuntimeException e){clear(session);throw unauthorized();}
+    try{RankingOwnershipGuard.requireCurrent(jdbc,owner,studentId,false);}catch(RuntimeException e){clear(session);throw unauthorized();}
     session.setAttribute(STUDENT_NAME_ATTRIBUTE, account.studentName());
     return profile(account);
   }
@@ -139,7 +139,7 @@ public class StudentRankingAuthService {
   private void put(HttpSession session, Account account) {
     session.setAttribute(OWNER_ATTRIBUTE, account.ownerUsername());
     session.setAttribute(STUDENT_ID_ATTRIBUTE, account.studentId());
-    try{RankingOwnershipService.requireCurrent(jdbc,account.ownerUsername(),account.studentId(),false);}catch(RuntimeException e){clear(session);throw unauthorized();}
+    try{RankingOwnershipGuard.requireCurrent(jdbc,account.ownerUsername(),account.studentId(),false);}catch(RuntimeException e){clear(session);throw unauthorized();}
     session.setAttribute(STUDENT_NAME_ATTRIBUTE, account.studentName());
     session.setAttribute(PHONE_ATTRIBUTE, account.phone());
     session.setAttribute("studentSessionVersion",account.sessionVersion());

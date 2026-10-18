@@ -329,12 +329,12 @@ public class RankingBoardService {
       throw invalid("目标积分必须是 0 至 999999999 的整数");
     }
     new RankingPointsService(jdbc).lock(owner,studentId);
-    RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);
+    RankingOwnershipGuard.requireCurrent(jdbc,owner,studentId,false);
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND camp_id=? AND class_id=? AND student_id=? FOR UPDATE",
         (rs, n) -> rs.getString(1), owner, campId, classId, studentId);
     if (names.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不在指定营期班级中");
     new RankingPointsService(jdbc).lock(owner,studentId);
-    RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);
+    RankingOwnershipGuard.requireCurrent(jdbc,owner,studentId,false);
     AggregateRow before = aggregateAllRows(owner).stream().filter(row -> row.studentId().equals(studentId)).findFirst()
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不存在"));
     RankingPointsService points = new RankingPointsService(jdbc);

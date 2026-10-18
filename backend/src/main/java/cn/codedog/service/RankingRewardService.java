@@ -235,7 +235,7 @@ public class RankingRewardService {
   private RankingRewardPayload.Redemption createRedemptionInternal(String owner,String studentId,long rewardId){return createRedemptionInternal(owner,studentId,rewardId,studentId);}
   private RankingRewardPayload.Redemption createRedemptionInternal(String owner, String studentId, long rewardId,String actor) {
     new RankingPointsService(jdbc).lock(owner,studentId);
-    RankingOwnershipService.requireCurrent(jdbc,owner,studentId,false);
+    RankingOwnershipGuard.requireCurrent(jdbc,owner,studentId,false);
     // Lock every current student row before reading the balance so two tabs cannot spend the same points.
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
     if (names.isEmpty()) throw notFound("学员不存在");
@@ -244,7 +244,6 @@ public class RankingRewardService {
     if (rewardValues.isEmpty()) throw notFound("奖品不存在");
     RewardValue reward = rewardValues.getFirst();
     if (!reward.enabled()) throw invalid("该奖品已停用");
-    new RankingRewardRuleService(jdbc).enforce(owner,studentId,rewardId);
     if (reward.stock() <= 0) throw invalid("该奖品已兑完，请选择其他奖品");
     RankingPointsService points = new RankingPointsService(jdbc);
     long rawBefore = points.raw(owner,studentId);

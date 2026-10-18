@@ -81,7 +81,7 @@ public class StudentAccountManagementService {
     try {
       return transactions.execute(tx->{
         jdbc.queryForList("SELECT username FROM users WHERE username=? FOR UPDATE",owner);
-        RankingOwnershipService.requireCurrent(jdbc,owner,id,false);
+        RankingOwnershipGuard.requireCurrent(jdbc,owner,id,false);
         // Lock all class memberships for this owner/student before opening or changing an account.
         List<String> names=studentNames(owner,id,true);
         if(names.isEmpty())throw missing();

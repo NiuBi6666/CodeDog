@@ -18,7 +18,7 @@ import java.nio.charset.StandardCharsets;
   List<Map<String,Object>> rows=new ArrayList<>();Set<String> keys=new HashSet<>();
   for(var c:payload.classes())for(var l:c.lessons())for(var s:l.students()){
    String error="";Integer score=null;
-   try{RankingOwnershipService.requireCurrent(jdbc,owner,s.studentId(),false);if(s.studentId()==null||s.studentId().isBlank()||s.studentName()==null||s.studentName().isBlank())throw new IllegalArgumentException("缺少学生ID或姓名");if(!keys.add(c.classId()+"|"+l.lessonId()+"|"+s.studentId()))throw new IllegalArgumentException("文件中存在重复课程结果");score=RankingScore.calculatePerfectTasks(s.completionRate(),s.inclass(),s.homework()).totalPoints();}catch(RuntimeException e){error=e.getMessage()==null?"数据不合法":e.getMessage();}
+   try{RankingOwnershipGuard.requireCurrent(jdbc,owner,s.studentId(),false);if(s.studentId()==null||s.studentId().isBlank()||s.studentName()==null||s.studentName().isBlank())throw new IllegalArgumentException("缺少学生ID或姓名");if(!keys.add(c.classId()+"|"+l.lessonId()+"|"+s.studentId()))throw new IllegalArgumentException("文件中存在重复课程结果");score=RankingScore.calculatePerfectTasks(s.completionRate(),s.inclass(),s.homework()).totalPoints();}catch(RuntimeException e){error=e.getMessage()==null?"数据不合法":e.getMessage();}
    var old=jdbc.queryForList("SELECT total_points FROM ranking_lesson_results WHERE owner_username=? AND camp_id=? AND class_id=? AND lesson_id=? AND student_id=?",owner,payload.campId(),c.classId(),l.lessonId(),s.studentId());
    rows.add(Map.of("studentId",s.studentId()==null?"":s.studentId(),"name",s.studentName()==null?"":s.studentName(),"lesson",l.lessonName(),"before",old.isEmpty()?0:old.getFirst().get("total_points"),"after",score==null?0:score,"error",error));
   }
@@ -47,7 +47,7 @@ import java.nio.charset.StandardCharsets;
   if(batches.isEmpty()||batches.getFirst().get("reversed_at")!=null)throw RankingPointsService.conflict("批次不存在或已撤销");
   var changes=jdbc.queryForList("SELECT * FROM ranking_import_changes WHERE owner_username=? AND batch_id=? ORDER BY student_id,id",owner,id);
   if(changes.isEmpty())throw RankingPointsService.conflict("历史批次无可靠快照，不能自动撤销");
-  for(var change:changes){String s=(String)change.get("student_id");points.lock(owner,s);RankingOwnershipService.requireCurrent(jdbc,owner,s,false);
+  for(var change:changes){String s=(String)change.get("student_id");points.lock(owner,s);RankingOwnershipGuard.requireCurrent(jdbc,owner,s,false);
    var current=jdbc.queryForList("SELECT content_hash,import_batch_id FROM ranking_lesson_results WHERE owner_username=? AND camp_id=? AND class_id=? AND lesson_id=? AND student_id=? FOR UPDATE",owner,change.get("camp_id"),change.get("class_id"),change.get("lesson_id"),s);
    if(current.isEmpty()||((Number)current.getFirst().get("import_batch_id")).longValue()!=id||!current.getFirst().get("content_hash").equals(change.get("after_hash")))throw RankingPointsService.conflict("学员 "+s+" 的记录已被后续批次更新，整批未撤销");
    long before=points.raw(owner,s);
