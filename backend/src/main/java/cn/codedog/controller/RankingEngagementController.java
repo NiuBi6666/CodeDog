@@ -1,12 +1,8 @@
 package cn.codedog.controller;
 import cn.codedog.service.*;import org.springframework.web.bind.annotation.*;import jakarta.servlet.http.HttpServletRequest;import java.security.Principal;import java.util.*;
 @RestController public class RankingEngagementController {
- private final RankingMonthlyService monthly;private final RankingRewardRuleService rules;private final RankingMessageService messages;private final StudentRankingAuthService auth;private final AuditService audit;
- public RankingEngagementController(RankingMonthlyService m,RankingRewardRuleService q,RankingMessageService n,StudentRankingAuthService a,AuditService l){monthly=m;rules=q;messages=n;auth=a;audit=l;}
- @GetMapping("/api/rankings/admin/monthly-board") public Object board(Principal p,@RequestParam(required=false) String month){return monthly.board(p.getName(),month,null);}
- @GetMapping("/api/rankings/admin/lesson-dates") public Object dates(Principal p){return monthly.dates(p.getName());}
- @PutMapping("/api/rankings/admin/lesson-dates") public Object date(Principal p,@RequestBody RankingMonthlyService.LessonDate b,HttpServletRequest r){var v=monthly.date(p.getName(),b);audit.change("LESSON_DATE",b.lessonId(),Map.of(),v);audit.record("ranking_lesson_date_updated",r);return v;}
- @GetMapping("/api/public/rankings/student-monthly-board") public Object studentBoard(HttpServletRequest r,@RequestParam(required=false) String month){var s=auth.current(r);return monthly.board(s.ownerUsername(),month,s.studentId());}
+ private final RankingRewardRuleService rules;private final RankingMessageService messages;private final StudentRankingAuthService auth;private final AuditService audit;
+ public RankingEngagementController(RankingRewardRuleService q,RankingMessageService n,StudentRankingAuthService a,AuditService l){rules=q;messages=n;auth=a;audit=l;}
  @GetMapping("/api/rankings/admin/reward-rules") public Object rules(Principal p){return rules.rules(p.getName(),false);}
  @PutMapping("/api/rankings/admin/reward-rules/{id}") public Object rule(@PathVariable long id,@RequestBody RankingRewardRuleService.Rule b,Principal p,HttpServletRequest r){var v=rules.save(p.getName(),id,b);audit.change("REWARD_RULE",id,Map.of(),v);audit.record("ranking_reward_rule_updated",r);return v;}
  @GetMapping("/api/public/rankings/student-reward-rules") public Object studentRules(HttpServletRequest r){var s=auth.current(r);return rules.rules(s.ownerUsername(),true);}

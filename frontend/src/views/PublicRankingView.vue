@@ -1,6 +1,5 @@
 <script setup>
 import RankingInbox from "../components/RankingInbox.vue";
-import RankingMonthlyBoard from "../components/RankingMonthlyBoard.vue";
 import PointsLedger from "../components/PointsLedger.vue";
 import { showConfirm, showAlert } from "../uiDialogs.js";
 import { insufficientRewardPoints, rewardRedemptionError } from "../rewardRedemption.js";
@@ -34,10 +33,10 @@ const board = ref(null);
 const announcement = ref("");
 const rewards = ref([]);
 const redemptions = ref([]);
-const inboxOpen=ref(false),monthlyOpen=ref(false),rewardRules=ref([]);
+const inboxOpen=ref(false),rewardRules=ref([]);
 async function loadRewardRules(){try{rewardRules.value=await api("/public/rankings/student-reward-rules");}catch(e){console.warn("兑换规则暂不可用");}}
 function ruleFor(id){return rewardRules.value.find(r=>r.reward_id===id);}
-function messageNavigate(target){if(target==="ledger"){ledgerOpen.value=true;monthlyOpen.value=false;}else if(target==="redemptions"){document.querySelector(".redemption-history")?.scrollIntoView({behavior:"smooth"});}inboxOpen.value=false;}
+function messageNavigate(target){if(target==="ledger"){ledgerOpen.value=true;}else if(target==="redemptions"){document.querySelector(".redemption-history")?.scrollIntoView({behavior:"smooth"});}inboxOpen.value=false;}
 const balance = ref({ earnedPoints: 0, spentPoints: 0, availablePoints: 0 });
 const redeemRequestKey=ref("");
 const redeemOpen = ref(false);
@@ -444,12 +443,12 @@ onBeforeUnmount(() => {
         <label class="login-field"><span>手机号</span><input v-model="loginPhone" inputmode="numeric" autocomplete="username" maxlength="11" placeholder="请输入编程猫注册手机号" /></label>
         <label v-if="needsStudentId" class="login-field"><span>学生ID</span><input v-model="loginStudentId" maxlength="100" placeholder="共用手机号，请补充学生ID"></label>
         <label class="login-field"><span>密码</span><input v-model="loginPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入密码" /></label>
-        <button type="button" class="logout-button" @click="requestRecovery">找回密码</button>
+        <div class="login-help"><button type="button" class="login-recovery-button" @click="requestRecovery">找回密码</button></div>
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="authLoading"><RefreshCw v-if="authLoading" class="spin" aria-hidden="true" /><span>{{ authLoading ? "正在登录…" : "进入积分榜" }}</span></button>
       </form>
 
-      <div v-if="aftercareMode" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="!aftercareBusy&&(aftercareMode='')"><form class="reward-redeem-modal ui-modal" role="dialog" aria-modal="true" aria-label="申请处理" @keydown.esc="!aftercareBusy&&(aftercareMode='')" @submit.prevent="sendAftercare"><h2>{{aftercareMode==='cancel'?'申请取消兑换':'找回密码'}}</h2><p v-if="aftercareMode==='recovery'">填写老师登记的手机号和学生ID，提交后联系老师核实身份。</p><label class="login-field" v-if="aftercareMode==='recovery'">手机号<input v-model="loginPhone" required pattern="1[0-9]{10}" maxlength="11"></label><label class="login-field" v-if="aftercareMode==='recovery'">学生ID<input v-model="aftercareStudentId" required maxlength="100"></label><label class="login-field">申请说明<textarea v-model="aftercareReason" maxlength="500" :required="aftercareMode==='cancel'"></textarea></label><p v-if="aftercareError" role="alert">{{aftercareError}}</p><div class="button-row"><button class="password-later-button" type="button" :disabled="aftercareBusy" @click="aftercareMode=''">返回</button><button class="login-button" type="submit" :disabled="aftercareBusy">{{aftercareBusy?'提交中':'提交申请'}}</button></div></form></div>
+      <div v-if="aftercareMode" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="!aftercareBusy&&(aftercareMode='')"><form class="reward-redeem-modal ui-modal aftercare-dialog" role="dialog" aria-modal="true" aria-label="申请处理" @keydown.esc="!aftercareBusy&&(aftercareMode='')" @submit.prevent="sendAftercare"><h2>{{aftercareMode==='cancel'?'申请取消兑换':'找回密码'}}</h2><p v-if="aftercareMode==='recovery'">填写老师登记的手机号和学生ID，提交后联系老师核实身份。</p><label class="login-field" v-if="aftercareMode==='recovery'">手机号<input v-model="loginPhone" required pattern="1[0-9]{10}" maxlength="11"></label><label class="login-field" v-if="aftercareMode==='recovery'">学生ID<input v-model="aftercareStudentId" required maxlength="100"></label><label class="login-field">申请说明<textarea v-model="aftercareReason" maxlength="500" :required="aftercareMode==='cancel'"></textarea></label><p v-if="aftercareError" role="alert">{{aftercareError}}</p><div class="button-row"><button class="password-later-button" type="button" :disabled="aftercareBusy" @click="aftercareMode=''">返回</button><button class="login-button" type="submit" :disabled="aftercareBusy">{{aftercareBusy?'提交中':'提交申请'}}</button></div></form></div>
       <div v-if="redeemOpen && selectedReward" class="reward-redeem-backdrop ui-dialog-backdrop" @click.self="closeRewardRedeem">
         <section class="reward-redeem-modal ui-modal" role="dialog" aria-modal="true" aria-labelledby="rewardRedeemTitle" @click.stop>
           <header><div><span class="reward-redeem-mark"><Gift aria-hidden="true" /></span><div><p class="password-modal-kicker">积分兑换</p><h2 id="rewardRedeemTitle">确认兑换奖品</h2></div></div><button class="icon-button" type="button" title="关闭" @click="closeRewardRedeem"><X :size="17" /></button></header>
@@ -478,8 +477,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="studentSession && announcement" class="board-announcement"><Megaphone aria-hidden="true"/><p>{{ announcement }}</p></div>
 
-      <div v-if="studentSession" class="student-extra-actions"><button @click="monthlyOpen=!monthlyOpen">月榜与历史榜</button><button @click="inboxOpen=!inboxOpen">站内消息</button></div>
-      <RankingMonthlyBoard v-if="studentSession&&monthlyOpen" student/>
+      <div v-if="studentSession" class="student-extra-actions"><button @click="inboxOpen=!inboxOpen">站内消息</button></div>
       <RankingInbox v-if="studentSession&&inboxOpen" student @navigate="messageNavigate"/>
       <PointsLedger v-if="studentSession&&ledgerOpen" student/>
       <main v-if="studentSession" class="ranking-layout" @click.stop>
@@ -600,6 +598,25 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.login-help { grid-column:3; display:flex; justify-content:flex-end; z-index:1; }
+.login-recovery-button { width:auto; min-height:32px; padding:4px 0 4px 12px; border:0; background:transparent; color:#a9bbda; font:inherit; font-size:13px; white-space:nowrap; cursor:pointer; }
+.login-recovery-button:hover { color:#5ae5ff; }
+.login-recovery-button:focus-visible { outline:2px solid #5ae5ff; outline-offset:4px; border-radius:4px; }
+.aftercare-dialog { display:grid; gap:16px; }
+.aftercare-dialog h2,.aftercare-dialog p { margin:0; }
+.aftercare-dialog p { color:#a9bbda; line-height:1.7; }
+.aftercare-dialog .login-field { grid-column:auto; gap:8px; color:#a9bbda; font-size:13px; }
+.aftercare-dialog textarea { box-sizing:border-box; width:100%; min-height:88px; resize:vertical; padding:12px 15px; border:1px solid #3f5e91; border-radius:10px; background:#0b1731; color:#f4f7ff; font:inherit; }
+.aftercare-dialog .button-row { display:flex; justify-content:flex-end; gap:12px; }
+.aftercare-dialog .button-row button { min-width:110px; grid-column:auto; }
+@media(max-width:900px) {
+ .student-login-panel { grid-template-columns:minmax(0,1fr); gap:18px; padding:32px 24px; min-height:0; }
+ .student-login-panel .login-mark { grid-column:1; margin-inline:auto; }
+ .student-login-panel .login-copy { grid-column:1; padding-right:0; text-align:center; }
+ .student-login-panel .login-copy h1,.student-login-panel .login-copy p { margin-inline:auto; }
+ .student-login-panel .login-field,.student-login-panel .login-help,.student-login-panel .login-error,.student-login-panel .login-button { grid-column:1; }
+}
+
 .student-extra-actions{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.student-extra-actions button{border:1px solid #456687;border-radius:8px;background:#1a3555;color:#b6edff;padding:10px 16px;cursor:pointer}
 
 :global(body.ranking-public-page) {

@@ -123,8 +123,6 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/operations/import-batches").access(permission(permissions, PermissionCatalog.BATCH_READ))
                 .requestMatchers(HttpMethod.POST, "/api/rankings/admin/operations/import-batches/*/reverse").access(permission(permissions, PermissionCatalog.IMPORT_REVERSE))
                 .requestMatchers(HttpMethod.POST,"/api/rankings/admin/operations/reconciliations/repair").access(permission(permissions,PermissionCatalog.RECONCILE_REPAIR))
-                .requestMatchers(HttpMethod.GET,"/api/rankings/admin/monthly-board","/api/rankings/admin/lesson-dates").access(permission(permissions,"rankings.monthly.read"))
-                .requestMatchers(HttpMethod.PUT,"/api/rankings/admin/lesson-dates").access(permission(permissions,"rankings.lesson_dates.edit"))
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/reward-rules").access(permission(permissions,"rankings.reward_rules.read"))
                 .requestMatchers(HttpMethod.PUT,"/api/rankings/admin/reward-rules/*").access(permission(permissions,"rankings.reward_rules.edit"))
                 .requestMatchers(HttpMethod.GET,"/api/rankings/admin/messages").access(permission(permissions,"rankings.messages.read"))
