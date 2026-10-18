@@ -112,3 +112,43 @@ body .toast { border-radius: 8px; font-family: var(--ui-font); font-size: 13px; 
 @media (prefers-reduced-motion: reduce) {
   body .ui-modal *, body.admin-layout :is(.button, .icon-button) { scroll-behavior: auto; transition: none; animation: none; }
 }
+
+/* Teacher workspace: shared geometry; student palettes and components stay independent. */
+body.admin-layout {
+  --ui-control-radius: 8px;
+  --ui-radius: 16px;
+  --ui-modal-shadow: 0 20px 40px rgba(0, 0, 0, .15);
+}
+body.admin-layout :is(.admin-panel, .metric-item, .ranking-admin-summary article, .exam-panel, .document-table-wrap) { border-radius: var(--ui-radius); }
+body.admin-layout .ui-modal { border-radius: var(--ui-radius); box-shadow: var(--ui-modal-shadow); }
+body.admin-layout .metric-item { padding: 22px; gap: 18px; }
+body.admin-layout .metric-item strong { font-size: 32px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+body.admin-layout .metric-symbol { width: 50px; height: 50px; border-radius: 14px; }
+body.admin-layout .metric-teal .metric-symbol { background: #e0f3ef; }
+body.admin-layout .metric-green .metric-symbol { background: #e7f5eb; }
+body.admin-layout .metric-gray .metric-symbol { background: #edf1f4; }
+body.admin-layout .metric-blue .metric-symbol { background: #e8f0fc; }
+body.admin-layout .ranking-admin-table tbody tr { height: 56px; }
+body.admin-layout .ranking-actions-column { width: 160px; }
+body.admin-layout .ranking-row-actions { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+body.admin-layout .ranking-primary-action { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 6px 0; border: 0; background: transparent; color: var(--ui-primary); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+body.admin-layout .ranking-primary-action:hover { color: var(--ui-primary-hover); text-decoration: underline; }
+body.admin-layout .toolbar-icon-button, body.admin-layout .ranking-more-button { width: 38px; height: 38px; border-color: transparent; background: transparent; }
+body.admin-layout .toolbar-icon-button:hover:not(:disabled), body.admin-layout .ranking-more-button:hover:not(:disabled) { border-color: transparent; background: var(--ui-soft); }
+body.admin-layout .ranking-row-menu { position: fixed; z-index: 90; width: 168px; padding: 6px; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface); box-shadow: var(--ui-modal-shadow); }
+body.admin-layout .ranking-row-menu button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 40px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-text); font: inherit; font-size: 13px; cursor: pointer; }
+body.admin-layout .ranking-row-menu button:hover { background: var(--ui-soft); color: var(--ui-primary); }
+body.admin-layout .permission-group { margin-bottom: 14px; padding: 16px; border: 1px solid #e0e8eb; border-radius: 12px; background: #f6f9fa; }
+body.admin-layout .permission-group:last-child { border-bottom: 1px solid #e0e8eb; }
+body.admin-layout .permission-group-title { padding-bottom: 10px; border-bottom: 1px solid #e4ecee; }
+body.admin-layout .permission-options { padding-left: 0; gap: 8px; }
+body.admin-layout .permission-options label { border-color: transparent; border-radius: 8px; background: #fff; }
+body.admin-layout .permission-options label:has(input:checked) { border-color: #b9dcd5; background: #f0faf6; }
+body.admin-layout .permission-options small { padding: 3px 7px; border-radius: 999px; font-weight: 500; background: #eff2f4; color: #61737e; }
+body.admin-layout .permission-options .permission-kind-page { background: #e8effb; color: #496a9e; }
+body.admin-layout .permission-options .permission-kind-data { background: #e5f3ec; color: #377b61; }
+body.admin-layout .permission-options .permission-kind-action { background: #f2edfa; color: #7b639c; }
+@media(max-width: 560px) {
+  body.admin-layout .permission-group { padding: 12px; }
+  body.admin-layout .permission-options label > span { flex-wrap: wrap; gap: 4px; }
+}

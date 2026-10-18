@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { ClipboardCheck, FilePlus2, FileText, FileSpreadsheet, ListChecks, ScrollText, Search, ShieldCheck, Trophy, UserRound } from "@lucide/vue";
+import { CheckCircle2, CircleOff, ClipboardCheck, FilePlus2, FileText, FileSpreadsheet, ListChecks, ScrollText, Search, ShieldCheck, Trophy, UserRound } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api } from "../api";
 import { auth, hasPermission } from "../auth";
@@ -32,8 +32,8 @@ onMounted(async () => {
     <template v-if="data">
       <section v-if="showMetrics" class="metric-grid" aria-label="数据概览">
         <article v-if="showDocumentStats" class="metric-item metric-teal"><span class="metric-symbol"><FileText :size="20"/></span><div><strong>{{ data.documentTotal }}</strong><span>全部文档</span></div></article>
-        <article v-if="showDocumentStats" class="metric-item metric-green"><span class="metric-symbol">✓</span><div><strong>{{ data.documentNormal }}</strong><span>正常文档</span></div></article>
-        <article v-if="showDocumentStats" class="metric-item metric-gray"><span class="metric-symbol">−</span><div><strong>{{ data.documentOffline }}</strong><span>下线文档</span></div></article>
+        <article v-if="showDocumentStats" class="metric-item metric-green"><span class="metric-symbol"><CheckCircle2 :size="23"/></span><div><strong>{{ data.documentNormal }}</strong><span>正常文档</span></div></article>
+        <article v-if="showDocumentStats" class="metric-item metric-gray"><span class="metric-symbol"><CircleOff :size="23"/></span><div><strong>{{ data.documentOffline }}</strong><span>下线文档</span></div></article>
         <article v-if="showStudentStats" class="metric-item metric-blue"><span class="metric-symbol"><UserRound :size="20"/></span><div><strong>{{ data.studentCount }}</strong><span>学生名单</span></div></article>
       </section>
       <div v-if="hasQuickActions || showLatestDocument" class="dashboard-grid" :class="{ 'dashboard-grid-single': !hasQuickActions || !showLatestDocument }">

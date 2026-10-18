@@ -1,9 +1,9 @@
 <script setup>
 import { showConfirm } from "../uiDialogs.js";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ArrowDown, ArrowUp, Award, CalendarClock, CheckCircle2, CircleOff, Copy, ExternalLink, Gift, ImagePlus,
-  Eye, EyeOff, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2, Upload,
+  Eye, EyeOff, Ellipsis, Megaphone, Minus, PackageCheck, Pencil, Plus, RefreshCw, Save, Search, Share2, Upload,
   Trash2, Trophy, UsersRound, X
 } from "@lucide/vue";
 import RankingAftercare from "../components/RankingAftercare.vue";
@@ -14,6 +14,31 @@ import { auth, hasPermission } from "../auth";
 import { rankingShareUrl, rankingSummary, rankingTrendView } from "../rankingAdmin.js";
 import { formatDateTime } from "../utils";
 
+const rowMenuStudent = ref(null);
+const rowMenuStyle = ref({});
+const rowMenuTrigger = ref(null);
+function closeRowMenu() { rowMenuStudent.value = null; }
+function positionRowMenu() {
+  if (!rowMenuStudent.value || !rowMenuTrigger.value) return;
+  const rect = rowMenuTrigger.value.getBoundingClientRect();
+  if (rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth) { closeRowMenu(); return; }
+  const menu = document.querySelector(".ranking-row-menu");
+  const height = menu?.offsetHeight || 96;
+  rowMenuStyle.value = {
+    left: `${Math.max(8, Math.min(rect.right - 168, window.innerWidth - 176))}px`,
+    top: `${rect.bottom + height + 6 > window.innerHeight - 8 ? Math.max(8, rect.top - height - 6) : rect.bottom + 6}px`
+  };
+}
+function dismissRowMenu(event) { if (!event.target.closest?.(".ranking-row-menu, .ranking-more-button")) closeRowMenu(); }
+async function toggleRowMenu(row, event) {
+  if (rowMenuStudent.value?.studentId === row.studentId) { closeRowMenu(); return; }
+  rowMenuTrigger.value = event.currentTarget;
+  rowMenuStudent.value = row;
+  await nextTick();
+  positionRowMenu();
+  document.querySelector(".ranking-row-menu button")?.focus({ preventScroll: true });
+}
+function runRowAction(action) { const row = rowMenuStudent.value; closeRowMenu(); if (row) action(row); }
 const board = ref(null);
 const accountStatuses = ref({});
 const phoneImportInput = ref(null);
@@ -394,10 +419,10 @@ async function savePoints() {
   finally { pointsSaving.value = false; }
 }
 async function copyStudentPassword() { await writeClipboard(recoveredPassword.value); notify("学生密码已复制"); }
-function closeOnEscape(event) { if (event.key === "Escape") { shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); closeStudentPhone(); } }
+function closeOnEscape(event) { if (event.key === "Escape") { if (rowMenuStudent.value) { closeRowMenu(); rowMenuTrigger.value?.focus(); return; } shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); closeStudentPhone(); } }
 
-onMounted(() => { document.addEventListener("keydown", closeOnEscape); activeTab.value = firstAllowedTab(); loadAll(); });
-onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
+onMounted(() => { document.addEventListener("keydown", closeOnEscape); document.addEventListener("click", dismissRowMenu); window.addEventListener("resize", closeRowMenu); window.addEventListener("scroll", positionRowMenu, true); activeTab.value = firstAllowedTab(); loadAll(); });
+onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); document.removeEventListener("click", dismissRowMenu); window.removeEventListener("resize", closeRowMenu); window.removeEventListener("scroll", positionRowMenu, true); });
 </script>
 
 <template>
@@ -406,11 +431,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       <div><h1>学生排名</h1><p>管理全量积分排名、排行榜公告、奖品与发放记录</p></div>
       <div class="ranking-heading-actions">
         <input ref="pointImportInput" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple @change="importPointFiles">
-        <button v-if="canImportPoints" class="button button-quiet" type="button" :disabled="pointsImporting" @click="openPointsImport"><Upload :size="15"/>{{ pointsImporting ? '导入中' : '导入积分' }}</button>
+        <button v-if="canImportPoints" class="button button-primary" type="button" :disabled="pointsImporting" @click="openPointsImport"><Upload :size="15"/>{{ pointsImporting ? '导入中' : '导入积分' }}</button>
         <input ref="phoneImportInput" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="importPhones">
         <button v-if="canImportPhones" class="button button-quiet" type="button" :disabled="phonesImporting" title="A列用户ID、B列姓名、C列手机号；仅更新当前老师名下账号，不改积分" @click="openPhoneImport"><Upload :size="15"/>{{ phonesImporting ? '导入中' : '导入手机号' }}</button>
-        <button v-if="canRefresh" class="button button-quiet" type="button" :disabled="loading" @click="loadAll"><RefreshCw :class="{ 'spin-icon': loading }" :size="15"/>刷新</button>
-        <button v-if="canShare" class="button button-primary" type="button" @click="shareOpen = true"><Share2 :size="15"/>分享</button>
+        <button v-if="canRefresh" class="icon-button toolbar-icon-button" type="button" title="刷新" aria-label="刷新" :disabled="loading" @click="loadAll"><RefreshCw :class="{ 'spin-icon': loading }" :size="18"/></button>
+        <button v-if="canShare" class="icon-button toolbar-icon-button" type="button" title="分享" aria-label="分享" @click="shareOpen = true"><Share2 :size="18"/></button>
       </div>
     </div>
     <div v-if="error" class="notice notice-error">{{ error }}</div>
@@ -449,7 +474,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
         <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
         <div v-else-if="board && !filteredRows.length" class="ranking-admin-state"><Search :size="23"/><span>没有找到匹配的学员</span></div>
         <div v-else-if="board" class="ranking-admin-table-wrap">
-          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>账号状态</th><th>所属班级</th><th>当前积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit">积分调整</th><th v-if="canEditPhone">登录手机号</th><th v-if="auth.user?.admin">密码</th></tr></thead>
+          <table class="ranking-admin-table"><thead><tr><th>名次</th><th>学员</th><th>账号状态</th><th>所属班级</th><th>当前积分</th><th>积分构成</th><th>正确率</th><th>等级</th><th>趋势</th><th v-if="canPointsEdit || canEditPhone || auth.user?.admin" class="ranking-actions-column">操作</th></tr></thead>
             <tbody><tr v-for="row in filteredRows" :key="row.studentId">
               <td><span class="ranking-number" :class="`rank-${Math.min(row.rank, 4)}`">{{ row.rank }}</span></td>
               <td><div class="ranking-student"><img class="ranking-student-avatar" src="/favicon-dog-20260913.png" alt="" width="38" height="38"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td>
@@ -458,7 +483,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
               <td><div class="ranking-score-parts"><span>课程 {{ row.totalPoints }}</span><span v-if="row.adjustmentPoints">调整 {{ row.adjustmentPoints > 0 ? '+' : '' }}{{ row.adjustmentPoints }}</span><span v-if="row.spentPoints">兑换 -{{ row.spentPoints }}</span></div></td>
               <td>{{ Number(row.accuracyRate || 0).toFixed(1) }}%</td><td><span class="ranking-level" :class="`ranking-level-${row.level}`">{{ row.levelName }}</span></td>
               <td><span class="ranking-trend" :class="`ranking-trend-${rankingTrendView(row).direction}`" :title="rankingTrendView(row).title"><ArrowUp v-if="rankingTrendView(row).direction === 'up'" :size="14"/><ArrowDown v-else-if="rankingTrendView(row).direction === 'down'" :size="14"/><Minus v-else :size="14"/>{{ rankingTrendView(row).direction === 'same' ? '' : Math.abs(row.rankChange) }}</span></td>
-              <td v-if="canPointsEdit"><button class="button button-quiet button-small" type="button" @click="openPoints(row)"><Pencil :size="14"/>调整积分</button></td><td v-if="canEditPhone"><button class="button button-quiet button-small" type="button" @click="openStudentPhone(row)"><Pencil :size="14"/>修改手机号</button></td><td v-if="auth.user?.admin"><button class="button button-quiet button-small" type="button" @click="openStudentPassword(row)"><Eye :size="14"/>查看密码</button></td>
+              <td v-if="canPointsEdit || canEditPhone || auth.user?.admin" class="ranking-actions-column"><div class="ranking-row-actions">
+                <button v-if="canPointsEdit" class="ranking-primary-action" type="button" @click="openPoints(row)"><Pencil :size="14"/>调整积分</button>
+                <button v-if="canEditPhone || auth.user?.admin" class="icon-button ranking-more-button" type="button" :aria-label="`${row.studentName}的更多操作`" title="更多操作" :aria-expanded="rowMenuStudent?.studentId === row.studentId" aria-controls="ranking-row-actions-menu" @click.stop="toggleRowMenu(row, $event)"><Ellipsis :size="18"/></button>
+              </div></td>
             </tr></tbody>
           </table>
         </div>
@@ -569,6 +597,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
       </form>
     </div>
 
+    <div v-if="rowMenuStudent" id="ranking-row-actions-menu" class="ranking-row-menu" :style="rowMenuStyle" aria-label="学员更多操作" @click.stop>
+      <button v-if="canEditPhone" type="button" @click="runRowAction(openStudentPhone)"><Pencil :size="15"/>修改手机号</button>
+      <button v-if="auth.user?.admin" type="button" @click="runRowAction(openStudentPassword)"><Eye :size="15"/>查看密码</button>
+    </div>
     <div v-if="shareOpen && canShare" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="shareOpen = false"><section class="ranking-share-dialog ui-modal"><header><div><span><Share2 :size="18"/></span><div><h2>分享学生排行榜</h2><p>当前账号名下全部学员总榜</p></div></div><button class="icon-button" type="button" title="关闭" @click="shareOpen = false"><X :size="17"/></button></header><div class="ranking-share-content"><label>分享链接</label><input :value="shareUrl" readonly @focus="$event.target.select()"></div><footer><a class="button button-quiet" :href="shareUrl" target="_blank" rel="noopener"><ExternalLink :size="15"/>打开预览</a><button class="button button-primary" type="button" @click="copyShareLink"><Copy :size="15"/>复制链接</button></footer></section></div>
   </AdminLayout>
 </template>

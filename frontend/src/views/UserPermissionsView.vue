@@ -312,7 +312,7 @@ onMounted(load);
               <div class="permission-options">
                 <label v-for="permission in group.permissions" :key="permission.code">
                   <input type="checkbox" :checked="draft.has(permission.code)" :disabled="!canChangePermission(permission)" @change="toggle(group, permission)">
-                  <span><strong>{{ permission.label }}</strong><small>{{ permission.type === "page" ? "页面" : permission.type === "data" ? "数据" : "按钮" }}</small></span>
+                  <span><strong>{{ permission.label }}</strong><small :class="`permission-kind-${permission.type}`">{{ permission.type === "page" ? "页面" : permission.type === "data" ? "数据" : "按钮" }}</small></span>
                 </label>
               </div>
             </section>
