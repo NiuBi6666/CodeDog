@@ -26,7 +26,7 @@ public class StudentRankingAuthController {
   @PostMapping("/student-auth/change-password")
   public StudentRankingAuthService.StudentSession changePassword(@Valid @RequestBody PasswordChangeRequest body,
                                                                  HttpServletRequest request) {
-    return auth.changePassword(body.password(), request);
+    return auth.changePassword(body.oldPassword(), body.password(), request);
   }
 
   @PostMapping("/student-auth/logout")
@@ -49,5 +49,6 @@ public class StudentRankingAuthController {
     @NotBlank @Size(max = 72, message = "密码不能超过 72 个字符") String password, String studentId) {}
 
   public record PasswordChangeRequest(
+    @NotBlank(message = "请输入旧密码") @Size(max = 72, message = "旧密码不能超过 72 个字符") String oldPassword,
     @NotBlank @Size(min = 6, max = 72, message = "新密码长度应为 6-72 个字符") String password) {}
 }

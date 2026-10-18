@@ -108,7 +108,7 @@ class StudentAccountManagementIntegrationTest {
       .andExpect(status().isOk()).andExpect(jsonPath("$.ownerUsername").value(owner)).andReturn();
     var student=(MockHttpSession)login.getRequest().getSession(false);
     mvc.perform(post("/api/public/rankings/student-auth/change-password").session(student).with(csrf()).contentType(APPLICATION_JSON)
-      .content("{\"password\":\"changed-password\"}")).andExpect(status().isOk());
+      .content("{\"oldPassword\":\"123456\",\"password\":\"changed-password\"}")).andExpect(status().isOk());
     String newHash=jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE phone=?",String.class,number);
     String replacement=phone();
     var replacementFile=xlsx(new String[][]{{"用户ID","姓名","手机号"},{"s1","同学一",replacement}});
@@ -194,7 +194,7 @@ class StudentAccountManagementIntegrationTest {
       .content("{\"phone\":\""+phone+"\",\"password\":\"123456\"}"))
       .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
     mvc.perform(post("/api/public/rankings/student-auth/change-password").session(session).with(csrf()).contentType(APPLICATION_JSON)
-      .content("{\"password\":\"123456\"}")).andExpect(status().isUnprocessableEntity());
+      .content("{\"oldPassword\":\"123456\",\"password\":\"123456\"}")).andExpect(status().isUnprocessableEntity());
     assertThat(studentAuth.current(new org.springframework.mock.web.MockHttpServletRequest() {{setSession(session);}}).mustChangePassword()).isTrue();
   }
 
@@ -214,22 +214,22 @@ class StudentAccountManagementIntegrationTest {
       .content("{\"phone\":\""+number+"\",\"password\":\"123456\"}"))
       .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(true)).andReturn().getRequest().getSession(false);
     String url="/api/public/rankings/student-auth/change-password";
-    mvc.perform(post(url).contentType(APPLICATION_JSON).with(csrf()).content("{\"password\":\"new-password\"}"))
+    mvc.perform(post(url).contentType(APPLICATION_JSON).with(csrf()).content("{\"oldPassword\":\"123456\",\"password\":\"new-password\"}"))
       .andExpect(status().isUnauthorized());
-    mvc.perform(post(url).session(session).contentType(APPLICATION_JSON).content("{\"password\":\"new-password\"}"))
+    mvc.perform(post(url).session(session).contentType(APPLICATION_JSON).content("{\"oldPassword\":\"123456\",\"password\":\"new-password\"}"))
       .andExpect(status().isForbidden());
-    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"new-password\"}"))
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"oldPassword\":\"123456\",\"password\":\"new-password\"}"))
       .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(false))
       .andExpect(jsonPath("$.nextPasswordChangeDate").value(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).withDayOfMonth(1).plusMonths(1).toString()));
     String hash=jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner);
-    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"second-password\"}"))
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"oldPassword\":\"new-password\",\"password\":\"second-password\"}"))
       .andExpect(status().isConflict());
     assertThat(jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner)).isEqualTo(hash);
     // The instant immediately before Beijing month start belongs to the previous month.
     var boundary=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).withDayOfMonth(1).atStartOfDay(java.time.ZoneId.of("Asia/Shanghai")).toInstant();
     jdbc.update("UPDATE ranking_student_accounts SET password_changed_at=? WHERE owner_username=? AND student_id='s1'",java.sql.Timestamp.from(boundary.minusSeconds(1)),owner);
     mvc.perform(get("/api/public/rankings/student-auth/session").session(session)).andExpect(jsonPath("$.canChangePassword").value(true));
-    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"next-month-password\"}"))
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"oldPassword\":\"new-password\",\"password\":\"next-month-password\"}"))
       .andExpect(status().isOk());
     studentAuth.resetPassword(owner,"s1","temporary-one");
     studentAuth.resetPassword(owner,"s1","temporary-two");
@@ -237,7 +237,7 @@ class StudentAccountManagementIntegrationTest {
     var fresh=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
       .content("{\"phone\":\""+number+"\",\"password\":\"temporary-two\"}"))
       .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(true)).andReturn().getRequest().getSession(false);
-    mvc.perform(post(url).session(fresh).with(csrf()).contentType(APPLICATION_JSON).content("{\"password\":\"after-reset-password\"}"))
+    mvc.perform(post(url).session(fresh).with(csrf()).contentType(APPLICATION_JSON).content("{\"oldPassword\":\"temporary-two\",\"password\":\"after-reset-password\"}"))
       .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(false));
     String auditText=jdbc.queryForObject("SELECT changes_json FROM audit_log WHERE action='student_password_changed' AND owner_username=? ORDER BY id DESC LIMIT 1",String.class,owner);
     assertThat(auditText).contains("credentialState").doesNotContain("after-reset-password",hash);
@@ -256,7 +256,7 @@ class StudentAccountManagementIntegrationTest {
       var futures=new ArrayList<Future<Integer>>();
       for(var session:List.of(first,second)) futures.add(pool.submit(()->{
         start.await();return mvc.perform(post("/api/public/rankings/student-auth/change-password").session(session).with(csrf())
-          .contentType(APPLICATION_JSON).content("{\"password\":\"concurrent-secret\"}"))
+          .contentType(APPLICATION_JSON).content("{\"oldPassword\":\"123456\",\"password\":\"concurrent-secret\"}"))
           .andReturn().getResponse().getStatus();
       }));
       start.countDown();var results=new ArrayList<Integer>();for(var f:futures)results.add(f.get(20,TimeUnit.SECONDS));
@@ -265,6 +265,29 @@ class StudentAccountManagementIntegrationTest {
       assertThat(jdbc.queryForObject("SELECT session_version FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",Integer.class,owner)).isEqualTo(1);
       assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action='student_password_changed' AND owner_username=?",Integer.class,owner)).isEqualTo(1);
     } finally {pool.shutdownNow();}
+  }
+
+  @Test void changingPasswordRequiresCorrectOldPasswordAndFailureDoesNotConsumeQuota() throws Exception {
+    String number=phone();accounts.edit(owner,"s1",number,"");
+    var session=(MockHttpSession)mvc.perform(post("/api/public/rankings/student-auth/login").with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"phone\":\""+number+"\",\"password\":\"123456\"}"))
+      .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+    String url="/api/public/rankings/student-auth/change-password";
+    String hash=jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner);
+    for(String body:List.of("{\"password\":\"updated-secret\"}","{\"oldPassword\":\"\",\"password\":\"updated-secret\"}"))
+      mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"oldPassword\":\"wrong-secret\",\"password\":\"updated-secret\"}"))
+      .andExpect(status().isUnprocessableEntity());
+    assertThat(jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner)).isEqualTo(hash);
+    assertThat(jdbc.queryForObject("SELECT password_changed_at FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",java.sql.Timestamp.class,owner)).isNull();
+    mvc.perform(get("/api/public/rankings/student-auth/session").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(true));
+    mvc.perform(post(url).session(session).with(csrf()).contentType(APPLICATION_JSON)
+      .content("{\"oldPassword\":\"123456\",\"password\":\"updated-secret\"}"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.canChangePassword").value(false));
+    assertThat(encoder.matches("updated-secret",jdbc.queryForObject("SELECT password_hash FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",String.class,owner))).isTrue();
+    var logs=jdbc.queryForList("SELECT changes_json,detail_json,error_message FROM audit_log WHERE owner_username=?",owner).toString();
+    assertThat(logs).doesNotContain("wrong-secret","updated-secret",hash,"123456");
   }
 
 }

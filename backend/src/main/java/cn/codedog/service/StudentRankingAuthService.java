@@ -79,8 +79,14 @@ public class StudentRankingAuthService {
     return profile(account);
   }
 
-  public StudentSession changePassword(String passwordValue, HttpServletRequest request) {
+  public StudentSession changePassword(String oldPassword, String passwordValue, HttpServletRequest request) {
     StudentSession current = current(request);
+    Account account = find(current.phone(), current.ownerUsername(), current.studentId());
+    if (account == null) throw unauthorized();
+    if (oldPassword == null || oldPassword.isBlank() || !passwordEncoder.matches(oldPassword, account.passwordHash())) {
+      audit.record("student_password_change_rejected:incorrect_current_credential", request);
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "旧密码不正确，请重新输入");
+    }
     String password = passwordValue == null ? "" : passwordValue;
     if (password.length() < 6 || password.length() > 72)
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "新密码长度应为 6-72 个字符");
@@ -90,9 +96,9 @@ public class StudentRankingAuthService {
     Timestamp monthStart = Timestamp.from(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
       .withDayOfMonth(1).atStartOfDay(java.time.ZoneId.of("Asia/Shanghai")).toInstant());
     int sessionVersion = Integer.parseInt(java.util.Objects.toString(request.getSession().getAttribute("studentSessionVersion"), "0"));
-    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),must_change_password=FALSE,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=? AND session_version=? AND (password_changed_at IS NULL OR password_changed_at<? OR must_change_password=TRUE)",
+    int updated = jdbc.update("UPDATE ranking_student_accounts SET password_hash=?,password_ciphertext=?,password_changed_at=CURRENT_TIMESTAMP(6),must_change_password=FALSE,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP(6) WHERE phone=? AND owner_username=? AND student_id=? AND session_version=? AND password_hash=? AND (password_changed_at IS NULL OR password_changed_at<? OR must_change_password=TRUE)",
       passwordEncoder.encode(password), passwordRecovery.encrypt(password, studentPasswordContext(current.ownerUsername(), current.studentId())),
-      current.phone(), current.ownerUsername(), current.studentId(), sessionVersion, monthStart);
+      current.phone(), current.ownerUsername(), current.studentId(), sessionVersion, account.passwordHash(), monthStart);
     if (updated != 1) {
       current(request); // A stale session must never bypass a concurrent credential reset.
       throw new ResponseStatusException(HttpStatus.CONFLICT, "本月已修改过密码，请于下月1日再试；如忘记密码请联系老师");

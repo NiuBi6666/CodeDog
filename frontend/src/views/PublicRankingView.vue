@@ -55,6 +55,7 @@ const loginStudentId=ref("");const needsStudentId=ref(false);
 const loginPassword = ref("");
 const loginError = ref("");
 const passwordPromptOpen = ref(false);
+const oldPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
 const passwordChangeError = ref("");
@@ -209,6 +210,7 @@ async function login() {
 function openPasswordPrompt(session) {
   passwordPromptOpen.value = Boolean(session?.mustChangePassword);
   passwordChangeError.value = "";
+  oldPassword.value = "";
   newPassword.value = "";
   confirmPassword.value = "";
 }
@@ -216,12 +218,14 @@ function openPasswordPrompt(session) {
 function openPasswordSettings() {
   passwordPromptOpen.value = true;
   passwordChangeError.value = "";
+  oldPassword.value = "";
   newPassword.value = "";
   confirmPassword.value = "";
 }
 
 function deferPasswordChange() {
   passwordPromptOpen.value = false;
+  oldPassword.value = "";
   passwordChangeError.value = "";
 }
 
@@ -230,6 +234,10 @@ async function submitPasswordChange() {
   passwordChangeError.value = "";
   if (studentSession.value?.canChangePassword === false) {
     passwordChangeError.value = `本月已修改过密码，${studentSession.value.nextPasswordChangeDate}起可再次修改`;
+    return;
+  }
+  if (!oldPassword.value) {
+    passwordChangeError.value = "请输入旧密码";
     return;
   }
   if (newPassword.value.length < 6 || newPassword.value.length > 72) {
@@ -244,9 +252,10 @@ async function submitPasswordChange() {
   try {
     studentSession.value = await api("/public/rankings/student-auth/change-password", {
       method: "POST",
-      body: jsonBody({ password: newPassword.value })
+      body: jsonBody({ oldPassword: oldPassword.value, password: newPassword.value })
     });
     passwordPromptOpen.value = false;
+    oldPassword.value = "";
     newPassword.value = "";
     confirmPassword.value = "";
     await showAlert("密码修改成功，下次登录请使用新密码；本月不可再次自行修改。");
@@ -486,6 +495,7 @@ onBeforeUnmount(() => {
             <p v-if="studentSession?.canChangePassword === false" role="status">本月已修改过密码，{{ studentSession.nextPasswordChangeDate }}起可再次修改；如忘记密码请联系老师。</p>
           </div>
           <form class="password-change-form" @submit.prevent="submitPasswordChange">
+            <label class="login-field"><span>旧密码</span><input v-model="oldPassword" type="password" autocomplete="current-password" maxlength="72" placeholder="请输入当前使用的密码" /></label>
             <label class="login-field"><span>新密码</span><input v-model="newPassword" type="password" autocomplete="new-password" maxlength="72" placeholder="请输入新密码" /></label>
             <label class="login-field"><span>确认新密码</span><input v-model="confirmPassword" type="password" autocomplete="new-password" maxlength="72" placeholder="请再次输入新密码" /></label>
             <p v-if="passwordChangeError" class="login-error" role="alert">{{ passwordChangeError }}</p>
