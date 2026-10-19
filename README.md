@@ -7,25 +7,6 @@
 - 数据库：MySQL 8.4
 - 部署：Docker Compose、Nginx、HTTPS
 
-## 页面路径
-
-- 生产地址：`https://codedog.online`、`https://www.codedog.online`
-- `/`：跳转到管理首页
-- `/index`：管理首页
-- `/student/query`：按姓名查询学生 ID，或按 ID 查询姓名
-- `/class/progress`：按营期、班级和课次查询每道编程题的完成情况
-- `/questionnaire`：问卷与作业管理（基于 TDuck，CodeDog 登录后通过单点登录直接进入）
-- `/doc/list`：文档搜索与管理
-- `/doc/create`：新建文档
-- `/doc/show/:id`：公开只读文档
-- `/doc/edit/:id`：编辑文档
-- `/logs`：查询登录、文档、学生查询和账户安全操作日志
-- `/password`：修改管理员密码
-
-旧的 `/documents/:id`、`/admin/documents` 和 `/admin/documents/:id/edit` 地址继续兼容。
-文档对外使用唯一的 8 位 UUID；旧数字 ID 链接仍可访问，并会自动规范为 UUID 地址。
-编辑器支持图片、表格、代码块和 KaTeX 数学公式，并尽量保留从钉钉文档粘贴的上下标、字号、缩进、行高与列表格式。
-
 ## 本地开发
 
 后端需要 Java 21、Maven 和 MySQL：
