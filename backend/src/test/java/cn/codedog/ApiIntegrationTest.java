@@ -210,6 +210,15 @@ class ApiIntegrationTest {
             .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void honorEndpointsDoNotAcceptTeacherOrAnonymousIdentity() throws Exception {
+        mvc.perform(get("/api/public/rankings/student-board")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/public/rankings/student-board").session(session)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/public/rankings/student-honor/celebration")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/public/rankings/student-honor/celebration").with(csrf())).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/public/rankings/student-honor/celebration").with(csrf()).session(session)).andExpect(status().isUnauthorized());
+    }
+
     private Student student(String id, String name) {
         Student student = new Student(); student.setUserId(id); student.setName(name);
         student.setGender("男"); student.setAge("13"); student.setGrade("七年级"); student.setClassName("一班");

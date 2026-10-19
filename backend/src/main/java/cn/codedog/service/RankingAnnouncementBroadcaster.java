@@ -33,6 +33,12 @@ public class RankingAnnouncementBroadcaster {
     }
   }
 
+  public void styleUpdated(String owner) {
+    var values=subscribers.get(owner);if(values==null)return;
+    for(var emitter:values)try{emitter.send(SseEmitter.event().name("student-style-updated").data(Map.of("refresh",true)));}
+    catch(IOException|IllegalStateException ignored){remove(owner,emitter);}
+  }
+
   private boolean send(SseEmitter emitter, RankingRewardPayload.Announcement announcement) {
     try {
       emitter.send(SseEmitter.event().name("announcement").data(announcement));

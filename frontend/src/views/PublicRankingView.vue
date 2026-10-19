@@ -14,9 +14,11 @@ import {
   LogOut,
   Sparkles,
   Trophy,
+  Crown,
   X
 } from "@lucide/vue";
 import { api, jsonBody } from "../api";
+import HonorJourney from "../components/HonorJourney.vue";
 import RankEmblem from "../components/RankEmblem.vue";
 import StudentStyleDialog from "../components/StudentStyleDialog.vue";
 const styleButton=ref(null);
@@ -26,7 +28,7 @@ const styleTitle=computed(()=>styleState.value?.options?.find(o=>o.type==='title
 async function loadStyle(){const id=studentSession.value?.studentId;const value=await api('/public/rankings/student-style');if(!value?.selection||!Array.isArray(value.options))throw new Error('装扮数据加载失败，请重试');if(id&&id===studentSession.value?.studentId)styleState.value=value;}
 async function openStyle(){styleLoading.value=true;styleError.value='';try{await loadStyle();styleOpen.value=true;}catch(e){styleError.value=e.message||'装扮加载失败，请重试';}finally{styleLoading.value=false;}}
 async function closeStyle(){styleOpen.value=false;await nextTick();styleButton.value?.focus();}
-function savedStyle(value){styleState.value=value;closeStyle();}
+function savedStyle(value){styleState.value=value;closeStyle();queueBoardRefresh();}
 function rewardTier(reward){return reward.requiredPoints>=100?{code:'epic',name:'珍藏'}:reward.requiredPoints>=30?{code:'rare',name:'进阶'}:{code:'standard',name:'精选'};}
 
 import {
@@ -39,6 +41,13 @@ function requestCancel(item){aftercareMode.value='cancel';aftercareOrder.value=i
 function requestRecovery(){aftercareMode.value='recovery';aftercareReason.value='';aftercareError.value='';}
 async function sendAftercare(){if(aftercareBusy.value)return;aftercareBusy.value=true;aftercareError.value='';try{if(aftercareMode.value==='cancel'){await api(`/public/rankings/student-redemptions/${aftercareOrder.value.id}/cancel-request`,{method:'POST',body:jsonBody({reason:aftercareReason.value})});redemptions.value=await api('/public/rankings/student-redemptions');await showAlert('取消申请已提交，等待老师审批；积分暂未退回。');}else{const v=await api('/public/rankings/student-auth/recovery',{method:'POST',body:jsonBody({phone:loginPhone.value,studentId:aftercareStudentId.value,reason:aftercareReason.value})});await showAlert(v.message);}aftercareMode.value='';}catch(e){aftercareError.value=e.message;}finally{aftercareBusy.value=false;}}
 const board = ref(null);
+const journeyOpen=ref(false),promotion=ref(null);let honorRefreshTimer;let claimingHonor=false;
+const myHonor=computed(()=>board.value?.myHonor||null);
+function rowHonor(row){return board.value?.honors?.[row.studentId]||{level:row.level,name:row.levelName,stars:1};}
+function rowStyle(row){return board.value?.styles?.[row.studentId]||{frame:'base',title:'rookie',titleName:'代码新星'};}
+function queueBoardRefresh(){window.clearTimeout(honorRefreshTimer);honorRefreshTimer=window.setTimeout(()=>{if(!studentSession.value)return;if(loading.value){queueBoardRefresh();return;}loadBoard();},200);}
+async function claimHonor(){if(!board.value?.promotionDue||claimingHonor)return;claimingHonor=true;try{const value=await api('/public/rankings/student-honor/celebration',{method:'POST'});if(value.celebrate)promotion.value=value.honor;}catch(_){/* Board remains usable if a celebration cannot be claimed. */}finally{claimingHonor=false;}}
+
 const announcement = ref("");
 const rewards = ref([]);
 const redemptions = ref([]);
@@ -124,6 +133,7 @@ async function loadBoard() {
       api("/public/rankings/student-balance"), api("/public/rankings/student-redemptions")
     ]);
     board.value = boardValue;
+    claimHonor();
     rewards.value = rewardValues || [];
     balance.value = balanceValue || { earnedPoints: 0, spentPoints: 0, availablePoints: 0 };
     redemptions.value = redemptionValues || [];
@@ -169,6 +179,7 @@ function connectAnnouncementStream() {
       // Ignore malformed event data and keep the current announcement visible.
     }
   });
+  stream.addEventListener("student-style-updated",queueBoardRefresh);
   stream.onerror = () => {
     if (announcementStream !== stream) stream.close();
   };
@@ -176,6 +187,7 @@ function connectAnnouncementStream() {
 
 
 function handleSessionExpired() {
+  journeyOpen.value=false;promotion.value=null;window.clearTimeout(honorRefreshTimer);
   styleState.value=null;styleOpen.value=false;pointsPulse.value=false;balanceInitialized=false;
   studentSession.value = null;
   board.value = null;
@@ -386,6 +398,7 @@ async function redeemReward() {
       ]);
       balance.value = balanceValue;
       board.value = boardValue;
+    claimHonor();
       redemptions.value = redemptionValues || [];
     await nextTick();balanceInitialized=true;
     } catch (refreshFailure) {
@@ -440,6 +453,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearInterval(refreshTimer);
   window.clearTimeout(pulseTimer);
+  window.clearTimeout(honorRefreshTimer);
   closeAnnouncementStream();
   document.removeEventListener("click", handleOutsideClick);
   document.removeEventListener("keydown", handleEscape);
@@ -448,7 +462,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ranking-public" :class="[`skin-${styleState?.selection.background || 'grid'}`, `frame-${styleState?.selection.frame || 'base'}`,`title-${styleState?.selection.title || 'rookie'}`]">
+  <div class="ranking-public" :class="[`skin-${styleState?.selection.background || 'grid'}`, `frame-${styleState?.selection.frame || 'base'}`,`title-${styleState?.selection.title || 'rookie'}`,`honor-level-${myHonor?.level||1}`]">
     <div class="adventure-shell">
       <header class="adventure-header">
         <div class="adventure-brand">
@@ -460,10 +474,10 @@ onBeforeUnmount(() => {
           <span class="player-avatar">{{ rankingAvatarText(selectedStudent?.studentName) }}</span>
           <div class="player-identity">
             <span>当前学员</span>
-            <strong>{{ studentSession.studentName }}</strong><small class="player-title">{{ styleTitle }}</small>
+            <strong>{{ studentSession.studentName }}</strong><div class="player-honors"><button v-if="myHonor" class="honor-trigger" type="button" aria-label="查看我的晋升历程与特权" @click="journeyOpen=true"><RankEmblem :level="myHonor.level" :name="myHonor.name" :stars="myHonor.stars"/></button><button class="title-trigger player-title" type="button" aria-label="查看称号与特权" @click="journeyOpen=true">{{ styleTitle }}</button></div>
           </div>
           <div class="player-score">
-            <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
+            <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · 我的排名` : "等待数据" }}</small>
             <strong :class="{'points-pulse':pointsPulse}"><span class="coin-symbol" aria-hidden="true">✦</span> {{ balance.availablePoints }} <small>可用积分</small></strong><Transition name="points-change"><span v-if="pointsPulse" class="points-change" :class="{'is-gain':pointsDelta>0}" role="status">{{ pointsDelta>0?'+':'' }}{{ pointsDelta }}</span></Transition>
           </div>
           <button ref="styleButton" class="ghost-button style-settings-button" type="button" :disabled="styleLoading" @click="openStyle"><Sparkles :size="14"/>{{ styleLoading?'加载中…':'我的装扮' }}</button>
@@ -472,6 +486,8 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
+      <HonorJourney v-if="journeyOpen&&myHonor" :honor="myHonor" :tiers="board.honorTiers||[]" @close="journeyOpen=false"/>
+      <div v-if="promotion" class="honor-promotion" role="status"><Sparkles :size="23"/><div><strong>荣耀晋升 · {{ promotion.name }}</strong><p>累计获得 {{ promotion.experience }} 积分，新的荣誉已经解锁！</p></div><button type="button" @click="journeyOpen=true;promotion=null">查看特权</button><button type="button" aria-label="关闭晋升提示" @click="promotion=null"><X :size="16"/></button></div>
       <p v-if="styleError" class="style-load-error" role="alert">{{ styleError }}</p>
       <StudentStyleDialog v-if="styleOpen&&styleState" :state="styleState" :name="studentSession?.studentName" @close="closeStyle" @saved="savedStyle"/>
       <div v-if="!authReady" class="auth-status" role="status">正在检查学生登录状态…</div>
@@ -546,7 +562,7 @@ onBeforeUnmount(() => {
               <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="中间名次已省略"><EllipsisVertical aria-hidden="true" /></div>
               <article
               class="ladder-row"
-              :class="[`level-${row.level}`, row.rank <= 3 ? `place-${row.rank}` : '', { selected: String(row.studentId) === selectedStudentId }]"
+              :class="[`level-${rowHonor(row).level}`, `wear-frame-${rowStyle(row).frame}`, `wear-title-${rowStyle(row).title}`, row.rank <= 3 ? `place-${row.rank}` : '', { selected: String(row.studentId) === selectedStudentId }]"
               :data-student-id="String(row.studentId)"
               tabindex="0"
               role="button"
@@ -559,14 +575,15 @@ onBeforeUnmount(() => {
               @keydown.enter.prevent="toggleRowDetails(row, $event)"
               @keydown.space.prevent="toggleRowDetails(row, $event)"
             >
-              <span class="ladder-rank">{{ row.rank }}</span>
+              <span class="ladder-rank" :aria-label="`第 ${row.rank} 名`"><Crown v-if="row.rank<=3" class="rank-crown" :size="25" aria-hidden="true"/><small v-if="row.rank<=3">{{ row.rank }}</small><template v-else>{{ row.rank }}</template></span>
               <span class="avatar">{{ rankingAvatarText(row.studentName) }}</span>
-              <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><RankEmblem :level="row.level" :name="row.levelName"/></div>
+              <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><div class="row-honors"><RankEmblem :level="rowHonor(row).level" :name="rowHonor(row).name" :stars="rowHonor(row).stars"/><span class="equipped-title">{{ rowStyle(row).titleName }}</span></div></div>
               <strong class="ladder-points">{{ row.availablePoints ?? row.totalPoints }}<small>积分</small></strong>
             </article>
               <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="后续名次已省略"><EllipsisVertical aria-hidden="true" /></div>
             </template>
           </div>
+        <p v-if="board?.motivation" class="ranking-motivation"><Sparkles :size="15" aria-hidden="true"/>{{ board.motivation }}</p>
         </section>
 
         <section class="game-panel supply-panel" aria-labelledby="rewardVaultTitle">
@@ -1828,7 +1845,7 @@ button {
 .ranking-public{--game-cyan:#50d6ee;--game-lime:#d6fc75;--game-violet:#b699ff}
 .skin-aurora{background:radial-gradient(ellipse at 85% 0%,#17495180,transparent 55%),radial-gradient(ellipse at 0% 70%,#35306b66,transparent 60%)}
 .skin-orbit{background:repeating-radial-gradient(ellipse at 100% 0%,transparent 0 130px,#4d63821c 131px 132px),radial-gradient(ellipse at top,#27294d80,transparent 70%)}
-.player-console{gap:12px}.player-score{position:relative}.player-score>strong{color:var(--game-lime);font-family:Consolas,"SFMono-Regular",monospace;text-shadow:0 0 20px #c6f56b22;font-variant-numeric:tabular-nums}.player-score>strong>small{font:11px "PingFang SC",sans-serif;color:#b7c6d6}.coin-symbol{color:#ecffad;font-size:18px}.player-title{color:#9fbaeb!important}.style-settings-button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-color:#635789;color:#c8b5ff}.style-load-error{color:#ff9baa;text-align:right;font-size:12px}
+.player-console{gap:12px}.player-score{position:relative}.player-score>strong{background:#223b35;border:1px solid #a9d46c66;box-shadow:0 0 16px #a9d46c15;color:var(--game-lime);font-family:Consolas,"SFMono-Regular",monospace;text-shadow:0 0 20px #c6f56b22;font-variant-numeric:tabular-nums}.player-score>strong>small{font:11px "PingFang SC",sans-serif;color:#b7c6d6}.coin-symbol{color:#ecffad;font-size:18px}.player-title{color:#9fbaeb!important}.style-settings-button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-color:#635789;color:#c8b5ff}.style-load-error{color:#ff9baa;text-align:right;font-size:12px}
 .frame-cyan .player-avatar,.frame-cyan .ladder-row.selected .avatar{border-color:#55dfff;box-shadow:0 0 0 3px #55dfff1c,0 0 18px #55dfff26}
 .frame-prism .player-avatar,.frame-prism .ladder-row.selected .avatar{border-color:#b799ff;box-shadow:0 0 0 3px #ac80ff26,0 0 20px #a887ff30}
 .frame-nova .player-avatar,.frame-nova .ladder-row.selected .avatar{border-color:#9bf5ed;box-shadow:0 0 0 4px #9bf5ed20,0 0 22px #9bf5ed38}
@@ -1844,5 +1861,18 @@ button {
 
 .player-console{grid-template-columns:38px minmax(95px,1fr) auto auto auto 34px;min-width:0}
 @media(max-width:600px){.player-console{grid-template-columns:36px minmax(0,1fr) minmax(0,1fr) 34px;gap:10px}.player-console .player-avatar{grid-row:1;grid-column:1}.player-console .player-identity{grid-row:1;grid-column:2/4}.player-console .player-score{grid-row:2;grid-column:1/-1;margin:0;gap:12px;flex-wrap:wrap}.player-console .style-settings-button{grid-row:3;grid-column:1/3;justify-content:center}.player-console .password-settings-button{grid-row:3;grid-column:3/5}.player-console .logout-button{grid-row:1;grid-column:4}.player-score>strong{margin-left:auto}.points-change{top:75%}}
+
+
+/* Honor identity: earned experience, public equipment, private backgrounds. */
+.player-console{grid-template-columns:42px minmax(170px,1fr) auto auto auto 34px;gap:10px}.player-avatar{width:42px;height:42px}.player-honors{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.honor-trigger,.title-trigger{padding:0;border:0;background:transparent;cursor:pointer;text-align:left}.title-trigger{border:1px solid #51476d;border-radius:4px;padding:3px 6px;font-size:9px;color:#c5b7ef!important;line-height:1.2;max-width:110px;overflow-wrap:anywhere}.honor-trigger .rank-emblem{font-size:10px}.honor-trigger :deep(.emblem-shield){transform:scale(.8);width:31px;height:35px;transform-origin:left center}.honor-trigger :deep(.emblem-core){left:10px}.player-identity strong{font-size:15px}.player-score>small{font-size:10px}
+.ladder-row{min-height:90px}.row-honors{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.equipped-title{color:#a9b9d3;border:1px solid #3c4c69;border-radius:4px;padding:3px 5px;font-size:9px;line-height:1.2}.student-copy{overflow:hidden}.student-name{overflow-wrap:anywhere;line-height:1.4}.rank-crown{display:block;margin:auto;fill:currentColor;stroke:#15233d;stroke-width:1.2}.ladder-rank{line-height:1}.ladder-rank>small{display:block;margin-top:3px;font:700 11px Consolas,monospace;text-align:center}.place-1 .ladder-rank{color:#ffda77}.place-2 .ladder-rank{color:#dce8fa}.place-3 .ladder-rank{color:#db9b76}.ladder-row.place-1{border:1px solid #cda952;border-left:4px solid #ffdc83;background:linear-gradient(100deg,#3c3624,#1b2a41 70%)}.place-1 .rank-crown{animation:crown-float 4s ease-in-out infinite}.ladder-row.place-1:after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;box-shadow:inset 0 0 16px #ffd87b22;animation:champion-glow 4s ease-in-out infinite}.ladder-row.place-2{border-left-color:#d9e7fb}.ladder-row.place-3{border-left-color:#dca07a}.place-1.selected{box-shadow:inset 0 -2px #50d6ee}
+.wear-frame-cyan .avatar{border:2px solid #55dfff;box-shadow:0 0 0 3px #55dfff1c}.wear-frame-prism .avatar{border:2px solid #b799ff;box-shadow:0 0 0 3px #ac80ff26}.wear-frame-nova .avatar{border:2px solid #9bf5ed;box-shadow:0 0 0 3px #9bf5ed20,0 0 12px #9bf5ed30}.wear-frame-regal .avatar,.frame-regal .player-avatar{border:2px solid #ffdb87;box-shadow:0 0 0 3px #ffdb8730,0 0 15px #ffbe6d30}.wear-title-sovereign .equipped-title{color:#ffdb87;border-color:#876f40;background:#ffdb870c}
+.level-1 .student-name{color:#e3ac85}.level-2 .student-name{color:#d4dfef}.level-3 .student-name{color:#ffdb83}.level-4 .student-name{color:#98e4e2}.level-5 .student-name,.honor-level-5 .player-identity>strong{--shine-start:#8ac6ff;--shine-end:#d5baff}.level-6 .student-name,.honor-level-6 .player-identity>strong{--shine-start:#c2a2ff;--shine-end:#ffb9df}.level-7 .student-name,.honor-level-7 .player-identity>strong{--shine-start:#ffe29c;--shine-end:#ffad92}
+.level-5 .student-name,.level-6 .student-name,.level-7 .student-name,.honor-level-5 .player-identity>strong,.honor-level-6 .player-identity>strong,.honor-level-7 .player-identity>strong{color:var(--shine-start);background:linear-gradient(110deg,var(--shine-start),var(--shine-end),#fff,var(--shine-start));background-size:250% 100%;background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:nickname-shine 8s linear infinite;text-shadow:none}.title-sovereign .player-title{color:#ffdb87!important;border-color:#876f40}.ranking-motivation{display:flex;align-items:center;gap:7px;margin:14px 0 0;padding:12px;border:1px solid #324a60;border-radius:8px;color:#a8dfcf;background:#142e382f;font-size:12px;line-height:1.7}.ranking-motivation svg{flex-shrink:0}
+.honor-promotion{display:flex;align-items:center;gap:14px;margin-top:16px;padding:16px 20px;border:1px solid #be9e55;border-radius:10px;background:linear-gradient(100deg,#343224,#182742);color:#ffdb87}.honor-promotion>div{flex:1}.honor-promotion strong{font-size:15px}.honor-promotion p{color:#a5b8d1;font-size:12px;margin:5px 0 0}.honor-promotion button{border:1px solid #816a3c;border-radius:6px;padding:7px 10px;color:#ffdb87;background:transparent;font:inherit;font-size:11px;cursor:pointer}
+@keyframes nickname-shine{to{background-position:250% 0}}@keyframes crown-float{50%{transform:translateY(-2px)}}@keyframes champion-glow{50%{opacity:.25}}
+@media(max-width:1100px) and (min-width:901px){.adventure-header{flex-wrap:wrap}.player-console{width:100%}}
+@media(max-width:600px){.player-console{grid-template-columns:42px minmax(0,1fr) minmax(0,1fr) 34px}.player-console .player-identity{grid-column:2/4}.player-honors{gap:5px}.ladder-row{grid-template-columns:25px 38px minmax(0,1fr) auto;gap:7px;padding:10px 8px}.row-honors{gap:5px}.equipped-title{font-size:8px}.row-honors :deep(.rank-emblem){gap:2px;font-size:10px}.row-honors :deep(.emblem-shield){width:32px;transform:scale(.85);transform-origin:left center}.ladder-points{font-size:17px}.honor-promotion{padding:12px;gap:8px;flex-wrap:wrap}.honor-promotion p{font-size:11px}.honor-promotion>div{min-width:180px}}
+@media(prefers-reduced-motion:reduce){.place-1 .rank-crown,.ladder-row.place-1:after,.level-5 .student-name,.level-6 .student-name,.level-7 .student-name,.player-identity>strong{animation:none!important}.level-5 .student-name,.level-6 .student-name,.level-7 .student-name{background-position:0 0}}
 
 </style>

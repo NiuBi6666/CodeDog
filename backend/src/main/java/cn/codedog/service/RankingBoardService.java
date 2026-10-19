@@ -82,7 +82,7 @@ public class RankingBoardService {
     for (RankedRow rankedRow : rankRows(rows)) {
       AggregateRow row = rankedRow.row();
       int rank = rankedRow.rank();
-      int level = level(row.availablePoints());
+      int level = level(row.totalPoints());
       Integer previousRank = previousRanks.get(row.studentId());
       int rankChange = previousRank == null ? 0 : previousRank - rank;
       entries.add(new RankingPayload.Entry(rank, row.studentId(), row.studentName(), row.classId(), row.className(),
@@ -108,7 +108,7 @@ public class RankingBoardService {
     List<RankingPayload.Entry> entries = new ArrayList<>();
     for (RankedRow rankedRow : rankRows(aggregateAllRows(owner))) {
       AggregateRow row = rankedRow.row();
-      int level = level(row.availablePoints());
+      int level = level(row.totalPoints());
       entries.add(new RankingPayload.Entry(rankedRow.rank(), row.studentId(), row.studentName(), row.classId(), row.className(),
           row.totalPoints(), row.completionPoints(), row.inclassPoints(), row.homeworkPoints(), row.lessonCount(),
           level, levelName(level), row.scoreReachedAt(), row.accuracyBasisPoints() / 100.0, null, 0, "NEW",
@@ -428,25 +428,9 @@ public class RankingBoardService {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, message);
   }
 
-  private int level(int points) {
-    if (points >= 5400) return 6;
-    if (points >= 4200) return 5;
-    if (points >= 2700) return 4;
-    if (points >= 1500) return 3;
-    if (points >= 600) return 2;
-    return 1;
-  }
+  private int level(int points) { return HonorLevels.of(points).level(); }
 
-  private String levelName(int level) {
-    return switch (level) {
-      case 6 -> "钻石";
-      case 5 -> "蓝宝石";
-      case 4 -> "黄金";
-      case 3 -> "白银";
-      case 2 -> "青铜";
-      default -> "石墨";
-    };
-  }
+  private String levelName(int level) { return HonorLevels.TIERS.get(Math.max(0,Math.min(6,level-1))).name(); }
 
   private String get(java.sql.ResultSet rs, int column) {
     try {

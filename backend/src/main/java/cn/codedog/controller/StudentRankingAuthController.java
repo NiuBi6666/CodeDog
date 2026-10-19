@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/public/rankings")
 public class StudentRankingAuthController {
   private final StudentRankingAuthService auth;
-  public StudentRankingAuthController(StudentRankingAuthService auth) { this.auth = auth; }
+  private final cn.codedog.service.StudentHonorService honors;
+  public StudentRankingAuthController(StudentRankingAuthService auth,cn.codedog.service.StudentHonorService honors) { this.auth = auth; this.honors=honors; }
 
   @PostMapping("/student-auth/login")
   public StudentRankingAuthService.StudentSession login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
@@ -36,7 +37,10 @@ public class StudentRankingAuthController {
   }
 
   @GetMapping("/student-board")
-  public RankingPayload.Board board(HttpServletRequest request) { return auth.board(request); }
+  public cn.codedog.service.StudentHonorService.BoardView board(HttpServletRequest request) { return honors.board(request); }
+
+  @PostMapping("/student-honor/celebration")
+  public cn.codedog.service.StudentHonorService.Celebration celebration(HttpServletRequest request) {return honors.claim(request);}
 
   @GetMapping("/student-opportunities")
   public RankingPayload.OpportunitySummary opportunities(HttpServletRequest request,
