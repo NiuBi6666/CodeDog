@@ -198,6 +198,18 @@ class ApiIntegrationTest {
             .andExpect(status().isForbidden());
     }
 
+    @Test
+    void studentStylesRequireStudentSessionAndCsrf() throws Exception {
+        mvc.perform(get("/api/public/rankings/student-style")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/public/rankings/student-style").session(session)).andExpect(status().isUnauthorized());
+        mvc.perform(put("/api/public/rankings/student-style").contentType(APPLICATION_JSON)
+            .content("{\"frame\":\"base\",\"title\":\"rookie\",\"background\":\"grid\"}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(put("/api/public/rankings/student-style").with(csrf()).contentType(APPLICATION_JSON)
+            .content("{\"frame\":\"base\",\"title\":\"rookie\",\"background\":\"grid\"}"))
+            .andExpect(status().isUnauthorized());
+    }
+
     private Student student(String id, String name) {
         Student student = new Student(); student.setUserId(id); student.setName(name);
         student.setGender("男"); student.setAge("13"); student.setGrade("七年级"); student.setClassName("一班");

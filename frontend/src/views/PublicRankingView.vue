@@ -1,7 +1,7 @@
 <script setup>
 import { showConfirm, showAlert } from "../uiDialogs.js";
 import { insufficientRewardPoints, rewardRedemptionError } from "../rewardRedemption.js";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   ArrowRight,
   CircleCheckBig,
@@ -17,6 +17,18 @@ import {
   X
 } from "@lucide/vue";
 import { api, jsonBody } from "../api";
+import RankEmblem from "../components/RankEmblem.vue";
+import StudentStyleDialog from "../components/StudentStyleDialog.vue";
+const styleButton=ref(null);
+const styleState=ref(null),styleOpen=ref(false),styleLoading=ref(false),styleError=ref("");
+const pointsDelta=ref(0),pointsPulse=ref(false);let pulseTimer;let balanceInitialized=false;
+const styleTitle=computed(()=>styleState.value?.options?.find(o=>o.type==='title'&&o.code===styleState.value.selection.title)?.name||'代码新星');
+async function loadStyle(){const id=studentSession.value?.studentId;const value=await api('/public/rankings/student-style');if(!value?.selection||!Array.isArray(value.options))throw new Error('装扮数据加载失败，请重试');if(id&&id===studentSession.value?.studentId)styleState.value=value;}
+async function openStyle(){styleLoading.value=true;styleError.value='';try{await loadStyle();styleOpen.value=true;}catch(e){styleError.value=e.message||'装扮加载失败，请重试';}finally{styleLoading.value=false;}}
+async function closeStyle(){styleOpen.value=false;await nextTick();styleButton.value?.focus();}
+function savedStyle(value){styleState.value=value;closeStyle();}
+function rewardTier(reward){return reward.requiredPoints>=100?{code:'epic',name:'珍藏'}:reward.requiredPoints>=30?{code:'rare',name:'进阶'}:{code:'standard',name:'精选'};}
+
 import {
   rankingAvatarText, rankingRedemptionStatus, rankingRedemptionTime, rankingTrendView
 } from "../rankingAdmin.js";
@@ -31,6 +43,7 @@ const announcement = ref("");
 const rewards = ref([]);
 const redemptions = ref([]);
 const balance = ref({ earnedPoints: 0, spentPoints: 0, availablePoints: 0 });
+watch(()=>balance.value.availablePoints,(value,previous)=>{if(!balanceInitialized){balanceInitialized=true;return;}if(!board.value||previous===value||previous==null)return;pointsDelta.value=value-previous;pointsPulse.value=true;window.clearTimeout(pulseTimer);pulseTimer=window.setTimeout(()=>{pointsPulse.value=false;pointsDelta.value=0;},1400);});
 const redeemRequestKey=ref("");
 const redeemOpen = ref(false);
 const selectedReward = ref(null);
@@ -114,8 +127,10 @@ async function loadBoard() {
     rewards.value = rewardValues || [];
     balance.value = balanceValue || { earnedPoints: 0, spentPoints: 0, availablePoints: 0 };
     redemptions.value = redemptionValues || [];
+    await nextTick();balanceInitialized=true;
     selectedStudentId.value = String(studentSession.value?.studentId || "");
     loadOpportunities(selectedStudentId.value);
+    loadStyle().catch(()=>{});
   } catch (failure) {
     error.value = failure.message || "排行榜加载失败";
     if (failure.status === 401) return handleSessionExpired();
@@ -161,6 +176,7 @@ function connectAnnouncementStream() {
 
 
 function handleSessionExpired() {
+  styleState.value=null;styleOpen.value=false;pointsPulse.value=false;balanceInitialized=false;
   studentSession.value = null;
   board.value = null;
   redemptions.value = [];
@@ -371,6 +387,7 @@ async function redeemReward() {
       balance.value = balanceValue;
       board.value = boardValue;
       redemptions.value = redemptionValues || [];
+    await nextTick();balanceInitialized=true;
     } catch (refreshFailure) {
       if (refreshFailure.status === 401) handleSessionExpired();
     }
@@ -422,6 +439,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearInterval(refreshTimer);
+  window.clearTimeout(pulseTimer);
   closeAnnouncementStream();
   document.removeEventListener("click", handleOutsideClick);
   document.removeEventListener("keydown", handleEscape);
@@ -430,7 +448,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ranking-public">
+  <div class="ranking-public" :class="[`skin-${styleState?.selection.background || 'grid'}`, `frame-${styleState?.selection.frame || 'base'}`,`title-${styleState?.selection.title || 'rookie'}`]">
     <div class="adventure-shell">
       <header class="adventure-header">
         <div class="adventure-brand">
@@ -442,17 +460,20 @@ onBeforeUnmount(() => {
           <span class="player-avatar">{{ rankingAvatarText(selectedStudent?.studentName) }}</span>
           <div class="player-identity">
             <span>当前学员</span>
-            <strong>{{ studentSession.studentName }}</strong><small>ID {{ studentSession.studentId }}</small>
+            <strong>{{ studentSession.studentName }}</strong><small class="player-title">{{ styleTitle }}</small>
           </div>
           <div class="player-score">
             <small>{{ selectedStudent ? `第 ${selectedStudent.rank} 名 · ${selectedStudent.levelName}` : "等待数据" }}</small>
-            <strong>{{ balance.availablePoints }} 可用积分</strong>
+            <strong :class="{'points-pulse':pointsPulse}"><span class="coin-symbol" aria-hidden="true">✦</span> {{ balance.availablePoints }} <small>可用积分</small></strong><Transition name="points-change"><span v-if="pointsPulse" class="points-change" :class="{'is-gain':pointsDelta>0}" role="status">{{ pointsDelta>0?'+':'' }}{{ pointsDelta }}</span></Transition>
           </div>
+          <button ref="styleButton" class="ghost-button style-settings-button" type="button" :disabled="styleLoading" @click="openStyle"><Sparkles :size="14"/>{{ styleLoading?'加载中…':'我的装扮' }}</button>
           <button class="ghost-button password-settings-button" type="button" @click="openPasswordSettings">修改密码</button>
           <button class="logout-button" type="button" title="退出学生登录" aria-label="退出学生登录" @click="logout"><LogOut aria-hidden="true" /></button>
         </div>
       </header>
 
+      <p v-if="styleError" class="style-load-error" role="alert">{{ styleError }}</p>
+      <StudentStyleDialog v-if="styleOpen&&styleState" :state="styleState" :name="studentSession?.studentName" @close="closeStyle" @saved="savedStyle"/>
       <div v-if="!authReady" class="auth-status" role="status">正在检查学生登录状态…</div>
       <form v-else-if="!studentSession" class="student-login-panel" @submit.prevent="login">
         <div class="login-mark"><Code2 aria-hidden="true" /></div>
@@ -540,7 +561,7 @@ onBeforeUnmount(() => {
             >
               <span class="ladder-rank">{{ row.rank }}</span>
               <span class="avatar">{{ rankingAvatarText(row.studentName) }}</span>
-              <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><span class="level-badge">{{ row.levelName }}</span></div>
+              <div class="student-copy"><div class="student-name">{{ row.studentName }}</div><RankEmblem :level="row.level" :name="row.levelName"/></div>
               <strong class="ladder-points">{{ row.availablePoints ?? row.totalPoints }}<small>积分</small></strong>
             </article>
               <div v-if="showsSelectedSeparately && index === 10" class="omitted-ranks" aria-label="后续名次已省略"><EllipsisVertical aria-hidden="true" /></div>
@@ -555,12 +576,12 @@ onBeforeUnmount(() => {
           </div>
           <p v-if="redeemNotice" class="redeem-notice" role="status">{{ redeemNotice }}</p>
             <div v-if="rewards.length" class="reward-grid">
-              <article v-for="reward in rewards" :key="reward.id" :class="['reward-card', { 'sold-out': reward.stock <= 0 }]" role="button" :aria-disabled="reward.stock <= 0" :tabindex="reward.stock > 0 ? 0 : -1" @click="openRewardRedeem(reward)" @keydown.enter.prevent="openRewardRedeem(reward)">
+              <article v-for="reward in rewards" :key="reward.id" :class="['reward-card', `tier-${rewardTier(reward).code}`, { 'sold-out': reward.stock <= 0 }]" role="button" :aria-disabled="reward.stock <= 0" :tabindex="reward.stock > 0 ? 0 : -1" @click="openRewardRedeem(reward)" @keydown.enter.prevent="openRewardRedeem(reward)" @keydown.space.prevent="openRewardRedeem(reward)">
                 <div class="reward-image">
                   <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name">
                   <Gift v-else aria-hidden="true" />
                 </div>
-                <div class="reward-copy"><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong><small class="reward-stock">{{ reward.stock > 0 ? `剩余 ${reward.stock} 件` : "已兑完 · 无法兑换" }}</small></div>
+                <div class="reward-copy"><span class="reward-tier" :title="'按所需积分区分的展示档位'">{{ rewardTier(reward).name }}</span><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong><small class="reward-stock">{{ reward.stock > 0 ? `剩余 ${reward.stock} 件` : "已兑完 · 无法兑换" }}</small></div>
               </article>
             </div>
             <div v-else class="reward-empty"><Gift aria-hidden="true" /><span><strong>奖品正在补货</strong><small>老师添加奖品后会显示在这里</small></span></div>
@@ -1800,5 +1821,28 @@ button {
   .reward-redeem-modal > footer { flex-direction: column-reverse; }
   .reward-redeem-modal > footer button { width: 100%; }
 }
+
+
+.title-architect .player-title{color:#ceb5ff!important;animation:title-glow 4s ease-in-out infinite}@keyframes title-glow{50%{text-shadow:0 0 10px #ad8aff99}}
+/* Student adventure terminal: isolated from teacher UI. */
+.ranking-public{--game-cyan:#50d6ee;--game-lime:#d6fc75;--game-violet:#b699ff}
+.skin-aurora{background:radial-gradient(ellipse at 85% 0%,#17495180,transparent 55%),radial-gradient(ellipse at 0% 70%,#35306b66,transparent 60%)}
+.skin-orbit{background:repeating-radial-gradient(ellipse at 100% 0%,transparent 0 130px,#4d63821c 131px 132px),radial-gradient(ellipse at top,#27294d80,transparent 70%)}
+.player-console{gap:12px}.player-score{position:relative}.player-score>strong{color:var(--game-lime);font-family:Consolas,"SFMono-Regular",monospace;text-shadow:0 0 20px #c6f56b22;font-variant-numeric:tabular-nums}.player-score>strong>small{font:11px "PingFang SC",sans-serif;color:#b7c6d6}.coin-symbol{color:#ecffad;font-size:18px}.player-title{color:#9fbaeb!important}.style-settings-button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-color:#635789;color:#c8b5ff}.style-load-error{color:#ff9baa;text-align:right;font-size:12px}
+.frame-cyan .player-avatar,.frame-cyan .ladder-row.selected .avatar{border-color:#55dfff;box-shadow:0 0 0 3px #55dfff1c,0 0 18px #55dfff26}
+.frame-prism .player-avatar,.frame-prism .ladder-row.selected .avatar{border-color:#b799ff;box-shadow:0 0 0 3px #ac80ff26,0 0 20px #a887ff30}
+.frame-nova .player-avatar,.frame-nova .ladder-row.selected .avatar{border-color:#9bf5ed;box-shadow:0 0 0 4px #9bf5ed20,0 0 22px #9bf5ed38}
+.points-change{position:absolute;right:0;top:100%;z-index:2;color:#ffafba;font:700 14px Consolas,monospace;pointer-events:none}.points-change.is-gain{color:var(--game-lime)}.points-change-enter-active,.points-change-leave-active{transition:opacity .25s,transform .25s}.points-change-enter-from{opacity:0;transform:translateY(8px)}.points-change-leave-to{opacity:0;transform:translateY(-12px)}.points-pulse{animation:score-pop .45s ease-out}@keyframes score-pop{40%{transform:scale(1.08);filter:brightness(1.35)}}
+.game-panel{box-shadow:0 12px 40px #020b1926;border-color:#304566}.game-panel-heading{position:relative}.game-panel-heading:after{content:"";position:absolute;left:20px;bottom:-1px;width:64px;height:2px;background:linear-gradient(90deg,#50d6ee,transparent)}.game-panel-heading .panel-icon{color:var(--game-cyan)}
+.ladder-row{transition:background .18s,border-color .18s,transform .12s}.ladder-row.selected{border-color:#50d6ee88;background:linear-gradient(90deg,#193d4d,#18263e);box-shadow:inset 3px 0 #50d6ee}.student-copy .student-name{margin-bottom:5px}.ladder-row .rank-emblem{vertical-align:middle}.ladder-row:active{transform:scale(.992)}
+.reward-card{position:relative;--rarity:#62cbbd;border-color:color-mix(in srgb,var(--rarity) 35%,#253650);background:linear-gradient(135deg,#1a2b43,#132139);padding:12px;border-radius:10px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;cursor:pointer}.reward-card.tier-rare{--rarity:#69b7ff}.reward-card.tier-epic{--rarity:#b699ff}.reward-tier{display:inline-block;margin-bottom:6px;padding:2px 6px;border:1px solid color-mix(in srgb,var(--rarity) 35%,transparent);border-radius:4px;color:var(--rarity);background:color-mix(in srgb,var(--rarity) 9%,transparent);font-size:9px;letter-spacing:.06em}.reward-card .reward-copy h4{margin-bottom:6px;font-size:13px}.reward-card .reward-image{border-radius:9px}.reward-card .reward-copy strong{color:#d6fc75;font-size:18px}.reward-card:not(.sold-out):focus-visible{outline:2px solid var(--rarity);outline-offset:3px;box-shadow:0 0 20px #50d6ee25}.reward-card:not(.sold-out):active{transform:scale(.98)}
+.ranking-public :is(button,.reward-card):focus-visible{outline:2px solid #50d6ee;outline-offset:3px}.ranking-public button{transition:transform .12s,background-color .15s,border-color .15s}.ranking-public button:active:not(:disabled){transform:scale(.96)}
+@media(hover:hover){.reward-card:not(.sold-out):hover{transform:translateY(-3px);border-color:var(--rarity);box-shadow:0 8px 24px #020b1944,0 0 16px color-mix(in srgb,var(--rarity) 14%,transparent)}}
+@media(max-width:760px){.player-console{flex-wrap:wrap;gap:10px}.player-identity{flex:1}.player-score{margin-left:auto}.style-settings-button{font-size:11px}.ladder-row .rank-emblem{font-size:10px}.ladder-row .student-copy{min-width:0}.reward-card{padding:10px}}
+@media(prefers-reduced-motion:reduce){.ranking-public *,.ranking-public *:before,.ranking-public *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.reward-card:not(.sold-out):hover,.reward-card:not(.sold-out):active,.ladder-row:active,.ranking-public button:active:not(:disabled){transform:none}.points-change{display:none}}
+
+
+.player-console{grid-template-columns:38px minmax(95px,1fr) auto auto auto 34px;min-width:0}
+@media(max-width:600px){.player-console{grid-template-columns:36px minmax(0,1fr) minmax(0,1fr) 34px;gap:10px}.player-console .player-avatar{grid-row:1;grid-column:1}.player-console .player-identity{grid-row:1;grid-column:2/4}.player-console .player-score{grid-row:2;grid-column:1/-1;margin:0;gap:12px;flex-wrap:wrap}.player-console .style-settings-button{grid-row:3;grid-column:1/3;justify-content:center}.player-console .password-settings-button{grid-row:3;grid-column:3/5}.player-console .logout-button{grid-row:1;grid-column:4}.player-score>strong{margin-left:auto}.points-change{top:75%}}
 
 </style>
