@@ -21,17 +21,22 @@ public class ExamExcelReader {
     public record Column(int index,String letter,String label) {}
     public record Template(String type,int nameColumn,int submissionColumn,List<Integer> scoreColumns,List<String> scoreLabels,boolean defaultLayout) {}
     public record Inspection(List<SheetChoice> sheets,int sheetIndex,int headerRow,List<Column> columns,List<List<String>> samples,Template template) {}
-    public record Mapping(String title,int sheetIndex,int headerRow,int nameColumn,List<Integer> scoreColumns,List<String> scoreLabels) {}
-    public record Parsed(String title,List<String> labels,Map<String,List<String>> students,String resultMode,Set<String> absentNames) {}
+    public record Mapping(String title,int sheetIndex,int headerRow,int nameColumn,List<Integer> scoreColumns,List<String> scoreLabels,List<Integer> queryColumns) {
+        public Mapping(String title,int sheetIndex,int headerRow,int nameColumn,List<Integer> scoreColumns,List<String> scoreLabels){this(title,sheetIndex,headerRow,nameColumn,scoreColumns,scoreLabels,null);}
+    }
+    public record Parsed(String title,List<String> labels,Map<String,List<String>> students,String resultMode,Set<String> absentNames,List<String> queryLabels) {
+        public Parsed(String title,List<String> labels,Map<String,List<String>> students,String resultMode,Set<String> absentNames){this(title,labels,students,resultMode,absentNames,null);}
+    }
 
-    public Inspection inspect(MultipartFile file,int sheetIndex,int headerRow) {
+    public Inspection inspect(MultipartFile file,int sheetIndex,int headerRow) {return inspect(file,sheetIndex,headerRow,false);}
+    public Inspection inspect(MultipartFile file,int sheetIndex,int headerRow,boolean manual) {
         try (Workbook book=open(file)) {
             Sheet sheet=sheet(book,sheetIndex,headerRow);
             DataFormatter format=formatter();
             List<SheetChoice> sheets=new ArrayList<>();
             for(int i=0;i<book.getNumberOfSheets();i++) sheets.add(new SheetChoice(i,book.getSheetName(i)));
             List<Column> columns=columns(sheet,headerRow,format);
-            Template template=template(columns,sheet,headerRow,format);
+            Template template=manual?null:template(columns,sheet,headerRow,format);
             List<List<String>> samples=new ArrayList<>();
             for(int r=headerRow;r<=sheet.getLastRowNum()&&samples.size()<5;r++){
                 Row row=sheet.getRow(r); if(row==null) continue;
@@ -46,6 +51,7 @@ public class ExamExcelReader {
 
     public Parsed parse(MultipartFile file,Mapping mapping) {
         if(mapping==null) throw invalid("请配置考试名称、姓名列和成绩列。");
+        if(mapping.queryColumns()!=null)return parseCustom(file,mapping);
         String title=clean(mapping.title(),120,"考试名称");
         try(Workbook book=open(file)){
             Sheet sheet=sheet(book,mapping.sheetIndex(),mapping.headerRow());
@@ -102,6 +108,60 @@ public class ExamExcelReader {
             return new Parsed(title,labels,students,template==null?"legacy":template.type(),absentNames);
         } catch(ResponseStatusException e){throw e;}
         catch(Exception e){throw invalid("无法读取 Excel，请检查文件格式及单元格内容。");}
+    }
+
+    private Parsed parseCustom(MultipartFile file,Mapping mapping) {
+        String title=clean(mapping.title(),120,"考试名称");
+        try(Workbook book=open(file)){
+            Sheet sheet=sheet(book,mapping.sheetIndex(),mapping.headerRow());
+            DataFormatter format=formatter();
+            var headers=columns(sheet,mapping.headerRow(),format);
+            var query=validateColumns(mapping.queryColumns(),headers.size(),"搜索项");
+            var display=validateColumns(mapping.scoreColumns(),headers.size(),"显示项");
+            var queryLabels=query.stream().map(i->columnLabel(headers,i)).toList();
+            var displayLabels=display.stream().map(i->columnLabel(headers,i)).toList();
+            Map<String,List<String>> students=new LinkedHashMap<>();
+            Map<String,Integer> seen=new HashMap<>();
+            var rowJson=new com.fasterxml.jackson.databind.ObjectMapper();
+            for(int n=mapping.headerRow();n<=sheet.getLastRowNum();n++){
+                Row row=sheet.getRow(n);if(row==null)continue;
+                boolean any=false;
+                for(int c=0;c<headers.size();c++)if(!text(row.getCell(c),format).isBlank()){any=true;break;}
+                if(!any)continue;
+                List<String> values=new ArrayList<>(),keys=new ArrayList<>();
+                for(int c:query){
+                    checkCell(row.getCell(c),n);String v=text(row.getCell(c),format);
+                    if(v.isBlank()||v.length()>2000)throw invalid("第 "+(n+1)+" 行搜索项【"+columnLabel(headers,c)+"】为空或超过 2000 字，请补全后上传。");
+                    keys.add(v);
+                }
+                String key=ExamSearchKey.of(keys);
+                if(seen.containsKey(key))throw invalid("第 "+seen.get(key)+" 行与第 "+(n+1)+" 行的搜索条件组合重复，请增加搜索列或处理重复数据。");
+                for(int c:display){
+                    checkCell(row.getCell(c),n);String v=text(row.getCell(c),format);
+                    if(v.length()>2000)throw invalid("第 "+(n+1)+" 行显示内容超过 2000 字，请缩短后上传。");
+                    values.add(v);
+                }
+                String encoded=rowJson.writeValueAsString(values);
+                if(encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>60000)throw invalid("第 "+(n+1)+" 行显示内容过多，请减少显示项。");
+                seen.put(key,n+1);students.put(key,List.copyOf(values));
+            }
+            if(students.isEmpty())throw invalid("未找到数据，请核对工作表和表头行。");
+            return new Parsed(title,displayLabels,students,"custom",Set.of(),queryLabels);
+        }catch(ResponseStatusException e){throw e;}
+        catch(Exception e){throw invalid("无法读取 Excel，请检查文件格式及单元格内容。");}
+    }
+    private List<Integer> validateColumns(List<Integer> values,int count,String label){
+        if(values==null||values.isEmpty()||values.size()>MAX_COLS)throw invalid("请至少勾选一个"+label+"，最多 256 列。");
+        Set<Integer> seen=new HashSet<>();
+        for(Integer value:values)if(value==null||value<0||value>=count||!seen.add(value))throw invalid(label+"包含不存在或重复的列，请重新选择。");
+        return List.copyOf(values);
+    }
+    private String columnLabel(List<Column> headers,int index){
+        Column col=headers.get(index);String label=col.label();
+        if(label.isBlank())return col.letter()+"列（无表头）";
+        if(label.length()>64)throw invalid(col.letter()+" 列表头超过 64 字，请缩短后上传。");
+        if(headers.stream().filter(c->c.label().equals(label)).count()>1)return label+"（"+col.letter()+"列）";
+        return label;
     }
 
     private List<Column> columns(Sheet sheet,int headerRow,DataFormatter format){

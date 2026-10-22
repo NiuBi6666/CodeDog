@@ -21,6 +21,7 @@ export function examUrl(path) {
 }
 
 export function displayResultScore(value, resultMode = "legacy") {
+  if (resultMode === "custom") return String(value ?? "").trim() || "暂无内容";
   if (resultMode === "legacy" || !resultMode) return displayExamScore(value);
   const text = value == null ? "" : String(value).trim();
   return text || "暂无成绩";
@@ -32,4 +33,11 @@ export function isAbsentSubmission(value) {
 export function visibleExamScores(scores, resultMode) {
   return (scores || []).map((score, index) => ({ score, index }))
     .filter(item => resultMode !== "full" || item.index === 0 || String(item.score ?? "").trim() !== "");
+}
+
+export function examColumnLabel(columns, index) {
+  const col=columns.find(c=>c.index===index);
+  if(!col)return "";
+  if(!col.label?.trim())return `${col.letter}列（无表头）`;
+  return columns.filter(c=>c.label===col.label).length>1?`${col.label}（${col.letter}列）`:col.label;
 }

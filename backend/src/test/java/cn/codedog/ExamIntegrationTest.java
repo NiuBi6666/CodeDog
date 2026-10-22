@@ -354,4 +354,76 @@ class ExamIntegrationTest {
         assertThat(inspection.template().type()).isEqualTo("simple");
         assertThat(inspection.template().scoreColumns()).containsExactly(16);
     }
+    String customMapping(List<Integer> query,List<Integer> display)throws Exception{
+        return json.writeValueAsString(new ExamExcelReader.Mapping("自选查询",0,1,0,display,null,query));
+    }
+    JsonNode customCreate()throws Exception{
+        var workbook=file(false,new Object[][]{{"ID","姓名","分数","手机号","备注"},{"001","同名",0,"secret-phone-a","<b>原始内容</b>"},{"002","同名",92,"secret-phone-b","NaT"}});
+        var response=mvc.perform(multipart("/api/admin/exams").file(workbook).param("mapping",customMapping(List.of(0,1),List.of(1,2,4))).with(user("Liam")).with(csrf())).andExpect(status().isCreated()).andReturn();
+        return json.readTree(response.getResponse().getContentAsString());
+    }
+    @Test void customMultipleSearchFieldsMatchTogetherAndOnlySelectedColumnsArePublished()throws Exception{
+        var exam=customCreate();String token=exam.get("publicId").asText();
+        mvc.perform(get("/api/public/exams/"+token)).andExpect(status().isOk()).andExpect(jsonPath("$.queryLabels[0]").value("ID")).andExpect(jsonPath("$.queryLabels[1]").value("姓名")).andExpect(jsonPath("$.scoreLabels.length()").value(3));
+        String result=mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content("{\"values\":[\" 001 \",\"同名\"]}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.scores[0]").value("同名")).andExpect(jsonPath("$.scores[1]").value("0")).andExpect(jsonPath("$.scores[2]").value("<b>原始内容</b>")).andReturn().getResponse().getContentAsString();
+        assertThat(result).doesNotContain("手机号","secret-phone","001","002");
+        for(String body:List.of("{\"values\":[\"001\",\"另一人\"]}","{\"values\":[\"01\",\"同名\"]}","{\"values\":[\"002\",\"另一人\"]}"))
+            mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content(body)).andExpect(status().isNotFound());
+        for(String body:List.of("{\"values\":[\"001\"]}","{\"values\":[\"001\",\"\"]}","{\"name\":\"同名\"}","{\"values\":[\"001\",\"同名\",\"extra\"]}"))
+            mvc.perform(post("/api/public/exams/"+token+"/query").with(csrf()).header("X-Real-IP",token).contentType(APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        var stored=jdbc.queryForList("SELECT student_name,score_values FROM exam_scores WHERE exam_id=?",exam.get("id").asLong());
+        assertThat(stored.toString()).doesNotContain("secret-phone");assertThat(stored).allSatisfy(row->assertThat(row.get("student_name").toString()).matches("[0-9a-f]{64}"));
+    }
+    @Test void customMappingOverridesTemplateAndAllowsSearchDisplayOverlap()throws Exception{
+        var workbook=file(true,new Object[][]{{"用户姓名","提交时间","总得分","班级"},{"学员","NaT",0,"A班"}});
+        var inspect=reader.inspect(workbook,0,1,true);assertThat(inspect.template()).isNull();assertThat(inspect.columns()).hasSize(4);
+        var parsed=reader.parse(workbook,new ExamExcelReader.Mapping("自选",0,1,0,List.of(0,2,3),null,List.of(3)));
+        assertThat(parsed.queryLabels()).containsExactly("班级");assertThat(parsed.labels()).containsExactly("用户姓名","总得分","班级");
+        assertThat(parsed.students().values().iterator().next()).containsExactly("学员","0","A班");assertThat(parsed.absentNames()).isEmpty();
+    }
+    @Test void customSelectionRejectsDuplicatesMissingKeysAndTamperedColumnsAtomically()throws Exception{
+        long before=jdbc.queryForObject("select count(*) from exam_sessions",Long.class);
+        var duplicated=file(false,new Object[][]{{"姓名","分数"},{"同名",1},{"同名",2}});
+        for(List<Integer> query:List.of(List.<Integer>of(),List.of(0),List.of(0,0),List.of(-1),List.of(2)))
+            mvc.perform(multipart("/api/admin/exams").file(duplicated).param("mapping",customMapping(query,List.of(1))).with(user("Liam")).with(csrf())).andExpect(status().isUnprocessableEntity());
+        var missing=file(false,new Object[][]{{"ID","分数"},{null,5}});
+        mvc.perform(multipart("/api/admin/exams").file(missing).param("mapping",customMapping(List.of(0),List.of(1))).with(user("Liam")).with(csrf())).andExpect(status().isUnprocessableEntity());
+        var valid=file(false,new Object[][]{{"ID","分数"},{"ABC",5}});
+        for(List<Integer> display:List.of(List.<Integer>of(),List.of(1,1),List.of(9)))
+            mvc.perform(multipart("/api/admin/exams").file(valid).param("mapping",customMapping(List.of(0),display)).with(user("Liam")).with(csrf())).andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("select count(*) from exam_sessions",Long.class)).isEqualTo(before);
+    }
+    @Test void customHeadersCanBeDuplicatedOrBlankAndSearchUsesExactCase()throws Exception{
+        var workbook=file(false,new Object[][]{{"编号","成绩","成绩",null},{"AbC",0,5,"说明"}});
+        var parsed=reader.parse(workbook,new ExamExcelReader.Mapping("表头",0,1,0,List.of(1,2,3),null,List.of(0)));
+        assertThat(parsed.labels()).containsExactly("成绩（B列）","成绩（C列）","D列（无表头）");
+        var exam=service.create(workbook,new ExamExcelReader.Mapping("表头",0,1,0,List.of(1,2,3),null,List.of(0)),"Liam");
+        assertThat(service.query(exam.publicId(),null,List.of("AbC")).scores()).containsExactly("0","5","说明");
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->service.query(exam.publicId(),null,List.of("abc"))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    }
+    @Test void customInspectAndCreateReuseIndependentPermissionsAndRevokeImmediately()throws Exception{
+        var teacher=new cn.codedog.model.User();teacher.setUsername("exam-"+UUID.randomUUID().toString().substring(0,8));teacher.setPasswordHash("unused");teacher.setAdmin(false);teacher.setPermissions(Set.of());
+        entityManager.persist(teacher);entityManager.flush();
+        var session=new org.springframework.mock.web.MockHttpSession();
+        var requestFile=file(false,new Object[][]{{"ID","分数"},{"1",5}});
+        for(int pass=0;pass<3;pass++){
+            if(pass==1){
+                teacher.setPermissions(Set.of("exams.inspect"));entityManager.flush();
+                mvc.perform(multipart("/api/admin/exams/inspect").file(requestFile).param("manual","true").session(session).with(user(teacher.getUsername())).with(csrf())).andExpect(status().isOk());
+                mvc.perform(multipart("/api/admin/exams").file(requestFile).param("mapping",customMapping(List.of(0),List.of(1))).session(session).with(user(teacher.getUsername())).with(csrf())).andExpect(status().isForbidden());
+                teacher.setPermissions(Set.of("exams.create"));entityManager.flush();
+                mvc.perform(multipart("/api/admin/exams/inspect").file(requestFile).param("manual","true").session(session).with(user(teacher.getUsername())).with(csrf())).andExpect(status().isForbidden());
+            }
+            teacher.setPermissions(pass==1?Set.of("exams.inspect","exams.create"):Set.of());entityManager.flush();
+            mvc.perform(multipart("/api/admin/exams/inspect").file(requestFile).param("manual","true").session(session).with(user(teacher.getUsername())).with(csrf())).andExpect(status().is(pass==1?200:403));
+            var response=mvc.perform(multipart("/api/admin/exams").file(requestFile).param("mapping",customMapping(List.of(0),List.of(1))).session(session).with(user(teacher.getUsername())).with(csrf())).andExpect(status().is(pass==1?201:403)).andReturn();
+            if(pass==1){
+                var id=json.readTree(response.getResponse().getContentAsString()).get("id").asLong();
+                var changes=jdbc.queryForList("SELECT changes_json FROM audit_log WHERE target_type='EXAM' AND target_id=?",String.valueOf(id));
+                assertThat(changes.toString()).contains("queryLabels","displayLabels","ID","分数").doesNotContain("unused");
+            }
+        }
+    }
+
 }

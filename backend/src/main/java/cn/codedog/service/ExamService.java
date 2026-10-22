@@ -32,9 +32,9 @@ public class ExamService {
         this.exams=exams;this.scores=scores;this.reader=reader;this.json=json;this.aliases=aliases;this.codes=codes;
         this.transactions=new TransactionTemplate(manager);
     }
-    public record AdminExam(long id,String title,String publicId,String queryPath,List<String> scoreLabels,int studentCount,boolean enabled,Instant createdAt,String createdBy,String resultMode){}
+    public record AdminExam(long id,String title,String publicId,String queryPath,List<String> scoreLabels,int studentCount,boolean enabled,Instant createdAt,String createdBy,String resultMode,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) List<String> queryLabels){}
     public record ExamList(List<AdminExam> exams,long total,int page,int pageCount){}
-    public record PublicExam(String title,List<String> scoreLabels,String resultMode){}
+    public record PublicExam(String title,List<String> scoreLabels,String resultMode,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) List<String> queryLabels){}
     public record QueryResult(List<String> scores,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT) boolean absent){}
 
     // Each allocation attempt is a separate transaction, so a rare unique-key
@@ -47,7 +47,7 @@ public class ExamService {
             try{
                 return transactions.execute(status->{
                     Exam exam=new Exam();
-                    exam.title=parsed.title();exam.scoreLabels=encode(parsed.labels());exam.studentCount=parsed.students().size();exam.createdBy=username;exam.resultMode=parsed.resultMode();
+                    exam.title=parsed.title();exam.scoreLabels=encode(parsed.labels());exam.studentCount=parsed.students().size();exam.createdBy=username;exam.resultMode=parsed.resultMode();exam.queryLabels=parsed.queryLabels()==null?null:encode(parsed.queryLabels());
                     exams.saveAndFlush(exam);
                     aliases.saveAndFlush(new ExamQueryAlias(code,exam.id));
                     exam.queryCode=code;
@@ -128,16 +128,29 @@ public class ExamService {
         return dto(exam);
     }
     @Transactional(readOnly=true)
-    public PublicExam info(String token){Exam exam=available(token);return new PublicExam(exam.title,decode(exam.scoreLabels),exam.resultMode);}
+    public PublicExam info(String token){Exam exam=available(token);return new PublicExam(exam.title,decode(exam.scoreLabels),exam.resultMode,exam.queryLabels==null?null:decode(exam.queryLabels));}
     @Transactional(readOnly=true)
     public QueryResult query(String token,String rawName){
         Exam exam=available(token);
+        if(exam.queryLabels!=null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请填写所有搜索项。");
         if(rawName==null||rawName.isBlank()||rawName.strip().length()>100)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请输入完整姓名。");
         String name=rawName.strip();
         ExamScore row=scores.findByExamIdAndStudentName(exam.id,name).orElseThrow(()->missing("未查到成绩，请核对姓名后重试。"));
         if(!row.studentName.equals(name))throw missing("未查到成绩，请核对姓名后重试。");
         return new QueryResult(row.absent?List.of():decode(row.scoreValues),row.absent);
+    }
+    @Transactional(readOnly=true)
+    public QueryResult query(String token,String name,List<String> values){
+        Exam exam=available(token);
+        if(exam.queryLabels==null)return query(token,name);
+        var labels=decode(exam.queryLabels);
+        if(values==null||values.size()!=labels.size()||values.stream().anyMatch(v->v==null||v.isBlank()||v.strip().length()>2000))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请完整填写所有搜索项。");
+        String key=ExamSearchKey.of(values);
+        ExamScore row=scores.findByExamIdAndStudentName(exam.id,key).orElseThrow(()->missing("未查到结果，请核对所有搜索条件后重试。"));
+        if(!row.studentName.equals(key))throw missing("未查到结果，请核对所有搜索条件后重试。");
+        return new QueryResult(decode(row.scoreValues),false);
     }
     private Exam available(String token){
         if(token==null||!token.matches("(?:[A-Za-z0-9]{8}|[0-9a-f]{32})"))throw missing("查询链接不存在。");
@@ -149,7 +162,7 @@ public class ExamService {
     }
     private AdminExam dto(Exam e){
         if(e.queryCode==null)throw new IllegalStateException("Exam query code has not been initialized");
-        return new AdminExam(e.id,e.title,e.queryCode,"/exam/"+e.queryCode,decode(e.scoreLabels),e.studentCount,e.enabled,e.createdAt,e.createdBy,e.resultMode);
+        return new AdminExam(e.id,e.title,e.queryCode,"/exam/"+e.queryCode,decode(e.scoreLabels),e.studentCount,e.enabled,e.createdAt,e.createdBy,e.resultMode,e.queryLabels==null?null:decode(e.queryLabels));
     }
     private String encode(List<String> value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException(e);}}
     private List<String> decode(String value){try{return json.readValue(value,new TypeReference<List<String>>(){});}catch(Exception e){throw new IllegalStateException(e);}}

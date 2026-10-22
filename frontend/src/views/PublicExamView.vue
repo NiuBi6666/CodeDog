@@ -8,6 +8,8 @@ const exam = ref(null);
 const loading = ref(true);
 const error = ref("");
 const name = ref("");
+const queryValues = ref([]);
+const queryLabels = computed(() => exam.value?.queryLabels || ["学员姓名"]);
 const scores = ref(null);
 const absent = ref(false);
 const scoreText = value => displayResultScore(value, exam.value?.resultMode);
@@ -18,7 +20,7 @@ let revision = 0;
 let controller;
 function clearQuery() { revision++; controller?.abort(); scores.value = null; absent.value = false; message.value = ""; busy.value = false; }
 async function load() {
-  clearQuery(); name.value = ""; exam.value = null; error.value = ""; loading.value = true;
+  clearQuery(); name.value = ""; queryValues.value = []; exam.value = null; error.value = ""; loading.value = true;
   const current = revision;
   try { const data = await api("/public/exams/" + encodeURIComponent(route.params.token)); if (current === revision) exam.value = data; }
   catch (failure) { if (current === revision) error.value = failure.message; }
@@ -26,7 +28,9 @@ async function load() {
 }
 async function query() {
   clearQuery();
-  if (!name.value.trim()) { message.value = "请输入完整姓名。"; return; }
+  if(exam.value?.queryLabels){
+    if(queryLabels.value.some((_,i)=>!queryValues.value[i]?.trim())){message.value="请完整填写所有搜索项。";return;}
+  } else if (!name.value.trim()) { message.value = "请输入完整姓名。"; return; }
   const current = revision;
   const activeController = new AbortController();
   controller = activeController;
@@ -34,7 +38,7 @@ async function query() {
   busy.value = true;
   try {
     const data = await api("/public/exams/" + encodeURIComponent(route.params.token) + "/query", {
-      method: "POST", body: jsonBody({ name: name.value.trim() }), signal: activeController.signal, cache: "no-store"
+      method: "POST", body: jsonBody(exam.value?.queryLabels ? { values: queryLabels.value.map((_,i)=>queryValues.value[i].trim()) } : { name: name.value.trim() }), signal: activeController.signal, cache: "no-store"
     });
     if (current === revision) { scores.value = data.scores; absent.value = Boolean(data.absent); }
   } catch (failure) {
@@ -50,10 +54,10 @@ onBeforeUnmount(() => { revision++; controller?.abort(); });
       <p v-if="loading" role="status">正在加载考试信息…</p>
       <template v-else-if="exam">
         <h1>{{ exam.title }}</h1>
-        <p class="exam-query-intro">输入学员姓名，查询本次考试成绩。</p>
+        <p class="exam-query-intro">{{ exam.queryLabels ? '完整填写以下搜索项，查询对应结果。' : '输入学员姓名，查询本次考试成绩。' }}</p>
         <form @submit.prevent="query" autocomplete="off">
-          <label for="exam-name">学员姓名</label>
-          <div class="exam-query-row"><input id="exam-name" v-model="name" maxlength="100" required placeholder="请输入完整姓名" autocomplete="off" spellcheck="false" aria-describedby="exam-query-message" @input="clearQuery"><button type="submit" :disabled="busy">{{ busy ? '查询中…' : '查询成绩 →' }}</button></div>
+          <template v-if="exam.queryLabels"><div class="exam-query-fields"><label v-for="(label, i) in queryLabels" :key="i" :for="'exam-field-' + i"><span>{{ label }}</span><input :id="'exam-field-' + i" v-model="queryValues[i]" maxlength="2000" required :placeholder="'请输入' + label" autocomplete="off" spellcheck="false" aria-describedby="exam-query-message" @input="clearQuery"></label></div><button class="exam-custom-submit" type="submit" :disabled="busy">{{ busy ? '查询中…' : '查询结果 →' }}</button><small class="exam-match-note">所有搜索项须同时精确匹配。</small></template>
+          <template v-else><label for="exam-name">学员姓名</label><div class="exam-query-row"><input id="exam-name" v-model="name" maxlength="100" required placeholder="请输入完整姓名" autocomplete="off" spellcheck="false" aria-describedby="exam-query-message" @input="clearQuery"><button type="submit" :disabled="busy">{{ busy ? '查询中…' : '查询成绩 →' }}</button></div></template>
         </form>
         <p id="exam-query-message" class="exam-query-message" role="status" aria-live="polite">{{ message }}</p>
         <p v-if="absent" class="exam-absent" role="status">未参赛</p>
@@ -72,6 +76,7 @@ h1{font-family:"Songti SC","STSong","SimSun",serif;font-size:30px;line-height:1.
 .exam-query-intro{color:#63758a;font-size:14px;margin:0;line-height:1.8}form{margin-top:30px}label{display:block;font-size:14px;font-weight:600;margin-bottom:10px}
 .exam-query-row{display:flex;gap:12px}input,button{font:inherit;border-radius:9px;min-height:52px}input{width:100%;min-width:0;border:1px solid #dbe5ef;padding:12px 16px;background:#fff;color:#16324f;font-size:16px}
 button{border:0;padding:12px 22px;background:#245cc5;color:#fff;white-space:nowrap;font-size:15px;font-weight:600;cursor:pointer}button:disabled{opacity:.65;cursor:wait}input:focus-visible,button:focus-visible{outline:3px solid #245cc540;outline-offset:3px}
+.exam-query-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.exam-query-fields label{min-width:0;margin:0}.exam-query-fields label span{display:block;overflow-wrap:anywhere;margin-bottom:8px}.exam-custom-submit{margin-top:20px}.exam-match-note{display:block;margin-top:12px;color:#63758a;line-height:1.7}.exam-query-fields input{box-sizing:border-box}@media(max-width:540px){.exam-query-fields{grid-template-columns:1fr}.exam-custom-submit{width:100%}}
 .exam-query-message{font-size:14px;color:#b33242;margin:12px 0 0;line-height:1.6}.exam-query-message:empty{margin:0}
 .exam-result{margin:30px 0 0;border-top:1px solid #dbe5ef;display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
 .exam-result>div{padding:22px 16px 8px 0}dt{color:#63758a;font-size:14px;margin-bottom:12px;overflow-wrap:anywhere}

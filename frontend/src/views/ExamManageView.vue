@@ -5,7 +5,7 @@ import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
 import { hasPermission } from "../auth";
 import { formatDateTime } from "../utils";
-import { displayResultScore, isAbsentSubmission, suggestExamColumns, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
+import { displayResultScore, examColumnLabel, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
 
 const title = ref("");
 const file = ref(null);
@@ -13,9 +13,9 @@ const fileInput = ref(null);
 const sheetIndex = ref(0);
 const headerRow = ref(1);
 const inspection = ref(null);
-const nameColumn = ref(0);
+const querySelected = ref([]);
 const selected = ref([]);
-const labels = ref({});
+
 const busy = ref(false);
 const error = ref("");
 const listError = ref("");
@@ -27,19 +27,13 @@ const linkDrafts = ref({});
 const linkErrors = ref({});
 const savingLink = ref(null);
 const mappingCurrent = computed(() => inspection.value && inspection.value.sheetIndex === Number(sheetIndex.value) && inspection.value.headerRow === Number(headerRow.value));
-const chosen = computed(() => {
-  if (inspection.value?.template) return inspection.value.template.scoreColumns.map(index => inspection.value.columns.find(c => c.index === index));
-  return inspection.value?.columns.filter(c => selected.value.includes(c.index)) || [];
-});
-const canCreate = computed(() => hasPermission("exams.create") && mappingCurrent.value && chosen.value.length > 0 && chosen.value.length <= (inspection.value?.template ? 256 : 20) && !chosen.value.some(c => c.index === nameColumn.value || !labels.value[c.index]?.trim()) && title.value.trim());
-const selectableColumns = computed(() => (inspection.value?.columns || []).filter(c => c.index !== nameColumn.value).slice().sort((a, b) => Number(selected.value.includes(b.index)) - Number(selected.value.includes(a.index)) || a.index - b.index));
-const sampleRows = computed(() => inspection.value?.samples.filter(row => row[nameColumn.value]?.trim()).slice(0, 5) || []);
-const absentSample = row => inspection.value?.template && isAbsentSubmission(row[inspection.value.template.submissionColumn]);
-const sampleScore = (value, column) => {
-  const template = inspection.value?.template;
-  if (template?.type === "full" && column !== template.scoreColumns[0] && !String(value ?? "").trim()) return "";
-  return displayResultScore(value, template?.type || "legacy");
-};
+const chosen = computed(() => inspection.value?.columns.filter(c => selected.value.includes(c.index)) || []);
+const searchChosen = computed(() => inspection.value?.columns.filter(c => querySelected.value.includes(c.index)) || []);
+const canCreate = computed(() => hasPermission("exams.create") && mappingCurrent.value && chosen.value.length > 0 && searchChosen.value.length > 0 && title.value.trim());
+const sampleRows = computed(() => inspection.value?.samples || []);
+const columnLabel = col => examColumnLabel(inspection.value?.columns || [], col.index);
+const sampleScore = value => displayResultScore(value, "custom");
+function toggleAllDisplay(){selected.value=chosen.value.length===inspection.value?.columns.length?[]:inspection.value.columns.map(c=>c.index);}
 const link = exam => examUrl(exam.queryPath);
 
 async function load(page = 0) {
@@ -83,7 +77,7 @@ async function chooseFile(event) {
   if (!hasPermission("exams.inspect")) return;
   file.value = event.target.files?.[0] || null;
   inspection.value = null; created.value = null; error.value = "";
-  sheetIndex.value = 0; headerRow.value = 1; selected.value = [];
+  sheetIndex.value = 0; headerRow.value = 1; selected.value = []; querySelected.value = [];
   if (!file.value) return;
   if (file.value.size > 10 * 1024 * 1024) { error.value = "请上传不超过 10 MB 的 Excel 文件。"; return; }
   if (!title.value.trim()) title.value = file.value.name.replace(/\.(xlsx|xls)$/i, "").slice(0, 120);
@@ -96,15 +90,11 @@ async function inspectFile() {
   body.append("file", file.value);
   body.append("sheetIndex", String(sheetIndex.value));
   body.append("headerRow", String(headerRow.value));
+  body.append("manual", "true");
   try {
     inspection.value = await api("/admin/exams/inspect", { method: "POST", body });
-    const template = inspection.value.template;
-    const suggested = template || suggestExamColumns(inspection.value.columns);
-    nameColumn.value = suggested.nameColumn;
-    selected.value = suggested.scoreColumns;
-    labels.value = template
-      ? Object.fromEntries(template.scoreColumns.map((index, i) => [index, template.scoreLabels[i]]))
-      : Object.fromEntries(inspection.value.columns.map(c => [c.index, c.label || c.letter + "列成绩"]));
+    querySelected.value = [];
+    selected.value = [];
   } catch (failure) { inspection.value = null; error.value = failure.status ? failure.message : "连接未成功，请检查网络后重试。"; }
   finally { busy.value = false; }
 }
@@ -115,8 +105,7 @@ async function createExam() {
   body.append("file", file.value);
   body.append("mapping", JSON.stringify({
     title: title.value.trim(), sheetIndex: Number(sheetIndex.value), headerRow: Number(headerRow.value),
-    nameColumn: Number(nameColumn.value), scoreColumns: chosen.value.map(c => c.index),
-    scoreLabels: chosen.value.map(c => labels.value[c.index].trim())
+    queryColumns: searchChosen.value.map(c => c.index), scoreColumns: chosen.value.map(c => c.index)
   }));
   try {
     created.value = await api("/admin/exams", { method: "POST", body });
@@ -126,7 +115,7 @@ async function createExam() {
   finally { busy.value = false; }
 }
 function reset() {
-  title.value = ""; file.value = null; inspection.value = null; created.value = null; selected.value = [];
+  title.value = ""; file.value = null; inspection.value = null; created.value = null; selected.value = []; querySelected.value = [];
   error.value = ""; if (fileInput.value) fileInput.value.value = "";
 }
 async function copy(exam) {
@@ -148,7 +137,7 @@ onMounted(() => { if (hasPermission("exams.read")) load(); });
 
 <template>
   <AdminLayout page-title="成绩管理" active-page="exams">
-    <div class="admin-page-heading"><div><h1>成绩管理</h1><p>上传赛考成绩表，自动识别成绩并生成查询链接。</p></div></div>
+    <div class="admin-page-heading"><div><h1>成绩管理</h1><p>上传 Excel 扫描表头，自行设置搜索条件和查询结果。</p></div></div>
     <form v-if="hasPermission('exams.inspect') || hasPermission('exams.create')" class="exam-panel" @submit.prevent="createExam">
       <h2><FileSpreadsheet :size="21"/>上传成绩</h2>
       <fieldset :disabled="busy || Boolean(created)">
@@ -164,35 +153,30 @@ onMounted(() => { if (hasPermission("exams.read")) load(); });
           </div>
           <p v-if="!mappingCurrent" class="notice">工作表或表头行已改变，请点击“读取列信息”。</p>
           <template v-else>
-            <div v-if="inspection.template" class="exam-template-summary" role="status">
-              <strong>已识别：{{ inspection.template.defaultLayout ? '赛考明细模板' : inspection.template.type === 'full' ? '全量数据模板' : '简单数据模板' }}</strong>
-              <p>{{ inspection.template.defaultLayout ? '读取 B 列姓名、O 列提交时间、Q 列总得分，以及 Q 列后有数据的明细。' : inspection.template.type === 'full' ? '展示总成绩和每道题得分，按题号排列。' : '仅展示总成绩。' }}提交时间为 NaT 的学员显示“未参赛”，已提交的 0 分正常显示。</p>
-            </div>
-            <template v-else>
-            <label class="exam-name-column">姓名列<select v-model.number="nameColumn" @change="selected = selected.filter(c => c !== nameColumn)"><option v-for="col in inspection.columns" :key="col.index" :value="col.index">{{ col.letter }} 列 · {{ col.label || '无表头' }}</option></select></label>
-            <h3>选择要展示的成绩列</h3>
-            <p class="exam-hint">可选择多列；右侧名称会显示在家长查询页。只勾选需要公开的成绩。</p>
-            <div class="exam-columns">
-              <label v-for="col in selectableColumns" :key="col.index" class="exam-column">
-                <span><input v-model="selected" type="checkbox" :value="col.index"><span>{{ col.letter }} 列 · {{ col.label || '无表头' }}</span></span>
-                <input v-if="selected.includes(col.index)" v-model="labels[col.index]" :aria-label="col.letter + '列成绩名称'" maxlength="64" required>
-              </label>
-            </div>
-            </template>
-            <p v-if="!inspection.template && chosen.length > 20" class="notice notice-error">最多选择 20 列成绩。</p>
+            <div class="exam-field-heading"><div><h3>设置查询内容</h3><p class="exam-hint">已识别 {{ inspection.columns.length }} 列。先勾选搜索项，再勾选显示项；同一列可以同时勾选。</p></div><button type="button" class="button button-quiet button-small" @click="toggleAllDisplay">{{ chosen.length === inspection.columns.length ? '取消全部显示项' : '选择全部显示项' }}</button></div>
+            <div class="exam-table-wrap exam-field-picker"><table class="document-table">
+              <thead><tr><th>Excel 表头</th><th>首行示例</th><th>搜索项</th><th>显示项</th></tr></thead>
+              <tbody><tr v-for="col in inspection.columns" :key="col.index" :class="{ 'field-selected': querySelected.includes(col.index) || selected.includes(col.index) }">
+                <td><span class="column-letter">{{ col.letter }}</span><strong>{{ columnLabel(col) }}</strong></td>
+                <td class="field-example" :title="String(inspection.samples[0]?.[col.index] ?? '')">{{ inspection.samples[0]?.[col.index] || '—' }}</td>
+                <td><input v-model="querySelected" type="checkbox" :value="col.index" :aria-label="columnLabel(col) + '作为搜索项'"></td>
+                <td><input v-model="selected" type="checkbox" :value="col.index" :aria-label="columnLabel(col) + '作为显示项'"></td>
+              </tr></tbody>
+            </table></div>
+            <div class="exam-selection-summary"><section><strong>搜索项 · {{ searchChosen.length }}</strong><p>{{ searchChosen.map(columnLabel).join(' ＋ ') || '请至少勾选一个搜索项' }}</p><small>查询时须完整填写，所有条件同时精确匹配。请选能区分学员的组合，如姓名＋学员 ID。</small></section><section><strong>显示项 · {{ chosen.length }}</strong><p>{{ chosen.map(columnLabel).join('、') || '请至少勾选一个显示项' }}</p><small>查询结果仅显示这些列。请确认其中不含不适合公开的个人信息。</small></section></div>
             <template v-if="chosen.length">
-              <h3>成绩预览 <small>前 {{ sampleRows.length }} 行</small></h3>
-              <div class="exam-table-wrap"><table class="document-table"><thead><tr><th>学员姓名</th><th v-for="col in chosen" :key="col.index">{{ labels[col.index] }}</th></tr></thead><tbody>
-                <tr v-for="(row, i) in sampleRows" :key="i"><td>{{ row[nameColumn] }}</td><td v-if="absentSample(row)" :colspan="chosen.length">未参赛</td><template v-else><td v-for="col in chosen" :key="col.index">{{ sampleScore(row[col.index], col.index) }}</td></template></tr>
+              <h3>查询结果预览 <small>前 {{ sampleRows.length }} 行</small></h3>
+              <div class="exam-table-wrap"><table class="document-table"><thead><tr><th v-for="col in chosen" :key="col.index">{{ columnLabel(col) }}</th></tr></thead><tbody>
+                <tr v-for="(row, i) in sampleRows" :key="i"><td v-for="col in chosen" :key="col.index">{{ sampleScore(row[col.index]) }}</td></tr>
               </tbody></table></div>
-              <p class="exam-hint">家长按完整姓名查询，仅看到对应成绩。<template v-if="!inspection.template">0 分显示“未参考”，空白显示“暂无成绩”。</template></p>
+              <p class="exam-hint">0 分按原值显示，空白显示“暂无内容”；搜索条件组合重复或缺失时无法导入。</p>
             </template>
           </template>
         </div>
       </fieldset>
       <p v-if="error" class="notice notice-error" role="alert">{{ error }}</p>
       <div v-if="!created && hasPermission('exams.create')" class="exam-form-actions"><button class="button button-primary" type="submit" :disabled="busy || !canCreate">{{ busy ? '正在处理…' : '生成查询链接' }}</button></div>
-      <div v-else class="exam-created" role="status">
+      <div v-else-if="created" class="exam-created" role="status">
         <strong>“{{ created.title }}”已导入 {{ created.studentCount }} 名学员</strong>
         <label>家长查询链接<input :value="link(created)" readonly @focus="$event.target.select()"></label>
         <div class="row-actions"><button class="button button-primary" type="button" @click="copy(created)"><Copy :size="15"/>复制链接</button><a class="button button-quiet" :href="link(created)" target="_blank" rel="noopener">打开查询页<ExternalLink :size="15"/></a><button class="button button-quiet" type="button" @click="reset">再上传一场考试</button></div>
@@ -204,10 +188,10 @@ onMounted(() => { if (hasPermission("exams.read")) load(); });
       <p class="exam-hint">查询后缀为 8 位，须包含大写字母、小写字母和数字，区分大小写。修改后点击“保存”，再复制新链接。</p>
       <p v-if="listError" class="notice notice-error" role="alert">{{ listError }}</p>
       <div class="exam-table-wrap"><table class="document-table">
-        <thead><tr><th>考试名称</th><th>成绩项目</th><th>学员数</th><th>状态</th><th>上传时间</th><th>查询链接</th><th>操作</th></tr></thead>
+        <thead><tr><th>考试名称</th><th>搜索项 / 显示项</th><th>学员数</th><th>状态</th><th>上传时间</th><th>查询链接</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="exam in exams.exams" :key="exam.id">
-            <td><strong>{{ exam.title }}</strong></td><td>{{ exam.resultMode === 'full' ? '总成绩及 ' + (exam.scoreLabels.length - 1) + ' 项明细' : exam.scoreLabels.join('、') }}</td><td>{{ exam.studentCount }}</td>
+            <td><strong>{{ exam.title }}</strong></td><td><small>搜索：{{ (exam.queryLabels || ['学员姓名']).join(' ＋ ') }}</small><br>显示：{{ exam.scoreLabels.join('、') }}</td><td>{{ exam.studentCount }}</td>
             <td><span class="status-badge" :class="exam.enabled ? 'status-normal' : 'status-offline'">{{ exam.enabled ? '可查询' : '已暂停' }}</span></td>
             <td>{{ formatDateTime(exam.createdAt) }}</td>
             <td class="exam-link-cell">
@@ -246,7 +230,9 @@ fieldset{border:0;padding:0;margin:0;min-width:0}
 .exam-template-summary{padding:14px 16px;border:1px solid #c5ded9;background:#f1f8f6;border-radius:6px;font-size:14px}.exam-template-summary p{margin:8px 0 0;color:#526d70;line-height:1.7}
 .exam-mapping{margin-top:24px;padding-top:22px;border-top:1px solid #e3ebef}
 .exam-source{grid-template-columns:minmax(160px,1fr) minmax(100px,160px) auto;align-items:end;margin-bottom:20px}
-.exam-name-column{max-width:440px}
+.exam-field-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}.exam-field-heading h3{margin:0}.exam-field-heading .exam-hint{margin-bottom:12px}.exam-field-heading button{flex-shrink:0}
+.exam-field-picker{max-height:390px;border:1px solid #dce5e9;border-radius:8px}.exam-field-picker table{width:100%;min-width:500px}.exam-field-picker thead{position:sticky;top:0;z-index:1}.exam-field-picker th{background:#f1f7f6}.exam-field-picker td:nth-last-child(-n+2),.exam-field-picker th:nth-last-child(-n+2){width:85px;text-align:center}.exam-field-picker input{width:18px;height:18px;accent-color:#177d77;cursor:pointer}.exam-field-picker .field-selected{background:#f5faf9}.column-letter{display:inline-block;min-width:25px;margin-right:10px;color:#527675;font:12px ui-monospace,monospace}.field-example{max-width:250px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.exam-selection-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.exam-selection-summary section{padding:16px;background:#f5f9f9;border:1px solid #dce8e6;border-radius:8px;min-width:0}.exam-selection-summary strong{font-size:13px;color:#226b67}.exam-selection-summary p{font-size:14px;overflow-wrap:anywhere;line-height:1.7;margin:8px 0}.exam-selection-summary small{font-size:12px}
+@media(max-width:600px){.exam-selection-summary{grid-template-columns:1fr}.exam-field-heading{align-items:flex-start;flex-direction:column;margin-bottom:12px}}
 .exam-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;max-height:340px;overflow:auto;padding:2px}
 .exam-panel .exam-column{display:grid;grid-template-columns:1fr 1fr;align-items:center;border:1px solid #e3ebef;border-radius:5px;padding:8px 10px;font-weight:400;min-height:50px}
 .exam-column>span{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}

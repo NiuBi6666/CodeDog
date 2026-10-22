@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { displayExamScore, suggestExamColumns, examUrl, displayResultScore, isAbsentSubmission, visibleExamScores, validExamSuffix, EXAM_URL_PREFIX } from "./examImport";
+import { examColumnLabel, displayExamScore, suggestExamColumns, examUrl, displayResultScore, isAbsentSubmission, visibleExamScores, validExamSuffix, EXAM_URL_PREFIX } from "./examImport";
 describe("exam upload mapping and score display", () => {
   it("finds B/W/X/Y in a mixed student export", () => {
     const columns = Array.from({length:25}, (_,index) => ({index,label:"其他信息"}));
@@ -49,4 +49,15 @@ describe("exam upload mapping and score display", () => {
     expect(visibleExamScores(["", ""], "legacy")).toHaveLength(2);
     expect(visibleExamScores([""], "simple")).toEqual([{score:"", index:0}]);
   });
+});
+
+describe("custom exam columns",()=>{
+ it("disambiguates repeated and empty labels using column letters",()=>{
+  const columns=[{index:0,letter:'A',label:'成绩'},{index:1,letter:'B',label:'成绩'},{index:2,letter:'C',label:''}];
+  expect(columns.map(c=>examColumnLabel(columns,c.index))).toEqual(['成绩（A列）','成绩（B列）','C列（无表头）']);
+ });
+ it("preserves zero, arbitrary text and empty selected cells",()=>{
+  expect(displayResultScore(0,'custom')).toBe('0');expect(displayResultScore('NaT','custom')).toBe('NaT');expect(displayResultScore('','custom')).toBe('暂无内容');
+  expect(visibleExamScores(['',0,'姓名'],'custom')).toHaveLength(3);
+ });
 });

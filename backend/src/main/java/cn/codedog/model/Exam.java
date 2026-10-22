@@ -11,6 +11,7 @@ public class Exam {
     @Column(name="query_code",unique=true,length=8) public String queryCode;
     @Column(nullable=false,length=120) public String title;
     @Column(name="score_labels",nullable=false,columnDefinition="TEXT") public String scoreLabels;
+    @Column(name="query_labels",columnDefinition="TEXT") public String queryLabels;
     @Column(name="student_count",nullable=false) public int studentCount;
     @Column(name="result_mode",nullable=false,length=12) public String resultMode="legacy";
     @Column(nullable=false) public boolean enabled=true;

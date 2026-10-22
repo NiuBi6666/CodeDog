@@ -13,11 +13,11 @@ public class ExamPublicController {
     public ExamPublicController(ExamService service){this.service=service;}
     @GetMapping("/{token}")
     public ResponseEntity<ExamService.PublicExam> info(@PathVariable String token){return noStore(service.info(token));}
-    public record Query(String name){}
+    public record Query(String name,List<String> values){}
     @PostMapping("/{token}/query")
     public ResponseEntity<ExamService.QueryResult> query(@PathVariable String token,@RequestBody Query body,HttpServletRequest request){
         limit(request);
-        return noStore(service.query(token,body.name()));
+        return noStore(service.query(token,body.name(),body.values()));
     }
     private <T> ResponseEntity<T> noStore(T value){return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("X-Robots-Tag","noindex, nofollow").body(value);}
     private synchronized void limit(HttpServletRequest request){
