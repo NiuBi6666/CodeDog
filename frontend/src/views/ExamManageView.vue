@@ -5,7 +5,7 @@ import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify, writeClipboard } from "../api";
 import { hasPermission } from "../auth";
 import { formatDateTime } from "../utils";
-import { displayResultScore, examColumnLabel, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
+import { examColumnLabel, examUrl, EXAM_URL_PREFIX, validExamSuffix } from "../examImport";
 
 const title = ref("");
 const file = ref(null);
@@ -30,9 +30,7 @@ const mappingCurrent = computed(() => inspection.value && inspection.value.sheet
 const chosen = computed(() => inspection.value?.columns.filter(c => selected.value.includes(c.index)) || []);
 const searchChosen = computed(() => inspection.value?.columns.filter(c => querySelected.value.includes(c.index)) || []);
 const canCreate = computed(() => hasPermission("exams.create") && mappingCurrent.value && chosen.value.length > 0 && searchChosen.value.length > 0 && title.value.trim());
-const sampleRows = computed(() => inspection.value?.samples || []);
 const columnLabel = col => examColumnLabel(inspection.value?.columns || [], col.index);
-const sampleScore = value => displayResultScore(value, "custom");
 function toggleAllDisplay(){selected.value=chosen.value.length===inspection.value?.columns.length?[]:inspection.value.columns.map(c=>c.index);}
 const link = exam => examUrl(exam.queryPath);
 
@@ -164,13 +162,7 @@ onMounted(() => { if (hasPermission("exams.read")) load(); });
               </tr></tbody>
             </table></div>
             <div class="exam-selection-summary"><section><strong>搜索项 · {{ searchChosen.length }}</strong><p>{{ searchChosen.map(columnLabel).join(' ＋ ') || '请至少勾选一个搜索项' }}</p><small>查询时须完整填写，所有条件同时精确匹配。请选能区分学员的组合，如姓名＋学员 ID。</small></section><section><strong>显示项 · {{ chosen.length }}</strong><p>{{ chosen.map(columnLabel).join('、') || '请至少勾选一个显示项' }}</p><small>查询结果仅显示这些列。请确认其中不含不适合公开的个人信息。</small></section></div>
-            <template v-if="chosen.length">
-              <h3>查询结果预览 <small>前 {{ sampleRows.length }} 行</small></h3>
-              <div class="exam-table-wrap"><table class="document-table"><thead><tr><th v-for="col in chosen" :key="col.index">{{ columnLabel(col) }}</th></tr></thead><tbody>
-                <tr v-for="(row, i) in sampleRows" :key="i"><td v-for="col in chosen" :key="col.index">{{ sampleScore(row[col.index]) }}</td></tr>
-              </tbody></table></div>
-              <p class="exam-hint">0 分按原值显示，空白显示“暂无内容”；搜索条件组合重复或缺失时无法导入。</p>
-            </template>
+
           </template>
         </div>
       </fieldset>
