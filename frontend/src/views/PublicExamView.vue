@@ -54,7 +54,7 @@ onBeforeUnmount(() => { revision++; controller?.abort(); });
       <p v-if="loading" role="status">正在加载考试信息…</p>
       <template v-else-if="exam">
         <h1>{{ exam.title }}</h1>
-        <p class="exam-query-intro">{{ exam.queryLabels ? '完整填写以下搜索项，查询对应结果。' : '输入学员姓名，查询本次考试成绩。' }}</p>
+        <p v-if="!exam.queryLabels" class="exam-query-intro">输入学员姓名，查询本次考试成绩。</p>
         <form @submit.prevent="query" autocomplete="off">
           <template v-if="exam.queryLabels"><div class="exam-query-fields"><label v-for="(label, i) in queryLabels" :key="i" :for="'exam-field-' + i"><span>{{ label }}</span><input :id="'exam-field-' + i" v-model="queryValues[i]" maxlength="2000" required :placeholder="'请输入' + label" autocomplete="off" spellcheck="false" aria-describedby="exam-query-message" @input="clearQuery"></label></div><button class="exam-custom-submit" type="submit" :disabled="busy">{{ busy ? '查询中…' : '查询结果 →' }}</button><small class="exam-match-note">所有搜索项须同时精确匹配。</small></template>
           <template v-else><label for="exam-name">学员姓名</label><div class="exam-query-row"><input id="exam-name" v-model="name" maxlength="100" required placeholder="请输入完整姓名" autocomplete="off" spellcheck="false" aria-describedby="exam-query-message" @input="clearQuery"><button type="submit" :disabled="busy">{{ busy ? '查询中…' : '查询成绩 →' }}</button></div></template>
