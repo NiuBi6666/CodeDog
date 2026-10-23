@@ -15,8 +15,10 @@ const route = useRoute(); const router = useRouter(); const editor = ref(null); 
 const title = ref(""); const version = ref(0); const loading = ref(true);
 const saveMessage = ref("未创建"); const saveState = ref(""); const conflict = ref(false); const dirty = ref(false); const saving = ref(false);
 const saveSuccessVisible = ref(false);
+const saveSuccessMessage = ref("");
 let successTimer;
-function showSaveSuccess() {
+function showSaveSuccess(message) {
+  saveSuccessMessage.value = message;
   saveSuccessVisible.value = true;
   window.clearTimeout(successTimer);
   successTimer = window.setTimeout(() => { saveSuccessVisible.value = false; }, 3000);
@@ -46,7 +48,7 @@ async function save(showSuccess = false) {
     } else {
       version.value = document.version; setStatus("已保存", "saved");
     }
-    if (showSuccess) showSaveSuccess();
+    showSaveSuccess(showSuccess ? "保存成功" : "已自动保存");
   } catch (failure) {
     dirty.value = true; setStatus(failure.message, "error"); if (failure.status === 409) conflict.value = true;
   } finally { saving.value = false; }
@@ -162,7 +164,7 @@ onBeforeUnmount(() => { window.clearTimeout(successTimer); window.clearTimeout(t
 
 <template>
   <AdminLayout :page-title="isNew ? '新建文档' : '编辑文档'" active-page="documents">
-    <div class="editor-titlebar"><input v-model="title" class="title-input" maxlength="200" aria-label="文档标题" placeholder="输入文档标题" @input="markDirty"><div v-if="saveState !== 'saved'" class="save-status" :data-state="saveState" role="status">{{ saveMessage }}</div><nav class="editor-actions" aria-label="文档操作"><RouterLink class="button button-quiet" to="/doc/list">文档列表</RouterLink><a v-if="!isNew" class="button button-quiet" :href="`/doc/show/${route.params.id}`">查看</a></nav></div>
+    <div class="editor-titlebar"><input v-model="title" class="title-input" maxlength="200" aria-label="文档标题" placeholder="输入文档标题" @input="markDirty"><nav class="editor-actions" aria-label="文档操作"><RouterLink class="button button-quiet" to="/doc/list">文档列表</RouterLink><a v-if="!isNew" class="button button-quiet" :href="`/doc/show/${route.params.id}`">查看</a></nav></div>
     <div class="editor-toolbar" role="toolbar" aria-label="文档编辑工具">
       <div class="toolbar-tools">
         <select aria-label="段落格式" title="段落格式" @mousedown="captureSelection" @change="format"><option value="p">正文</option><option value="h1">一级标题</option><option value="h2">二级标题</option><option value="h3">三级标题</option></select>
@@ -196,16 +198,18 @@ onBeforeUnmount(() => { window.clearTimeout(successTimer); window.clearTimeout(t
       <input ref="imageInput" class="editor-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" @change="handleImageInput">
     </div>
     <div class="editor-shell admin-editor-shell"><div ref="editor" class="document editor-document" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" @input="editorInput" @mouseup="captureSelection" @keyup="captureSelection" @focus="captureSelection" @paste="handlePaste" @dblclick="editFormula"></div></div>
+    <p v-if="saveState === 'error'" class="document-save-error" role="alert">{{ saveMessage }}</p>
     <div v-if="conflict" class="conflict-banner"><span>文档已在其他页面更新</span><button class="button button-primary" type="button" @click="reloadPage">载入最新版本</button></div>
   </AdminLayout>
   <Teleport to="body">
     <Transition name="document-save-feedback">
-      <div v-if="saveSuccessVisible" class="document-save-toast" role="status" aria-live="polite"><CircleCheck :size="18" aria-hidden="true"/><span>保存成功</span></div>
+      <div v-if="saveSuccessVisible" class="document-save-toast" role="status" aria-live="polite"><CircleCheck :size="18" aria-hidden="true"/><span>{{ saveSuccessMessage }}</span></div>
     </Transition>
   </Teleport>
 </template>
 
 <style scoped>
+.document-save-error { color: #b42318; margin: 12px 0; font-size: 14px; }
 .document-save-toast { position: fixed; top: 28px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; align-items: center; gap: 8px; padding: 14px 22px; max-width: calc(100vw - 32px); border: 1px solid #edf0ef; border-radius: 8px; background: #fff; color: #283b40; box-shadow: 0 8px 28px rgba(0, 0, 0, .15); font-size: 14px; line-height: 22px; pointer-events: none; }
 .document-save-toast svg { color: #fff; fill: #52c41a; stroke-width: 2.5; flex-shrink: 0; }
 .document-save-feedback-enter-active, .document-save-feedback-leave-active { transition: opacity .15s ease, margin-top .15s ease; }
