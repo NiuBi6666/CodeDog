@@ -550,7 +550,7 @@ onBeforeUnmount(() => {
       <main v-if="studentSession" class="ranking-layout" @click.stop>
         <section class="game-panel ladder-panel" :class="{ 'ladder-panel--compact': !showsSelectedSeparately }" aria-labelledby="ladderTitle">
           <div class="game-panel-heading">
-            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p>展示前 10 名与我的排名</p></div></div>
+            <div><Trophy class="panel-icon" aria-hidden="true" /><div><h1 id="ladderTitle">学员积分天梯榜</h1><p class="ladder-hints"><span>{{ updatedText }}</span><span>前 10 名与我的排名 · 每 60 秒自动刷新</span></p></div></div>
             <button class="ghost-button" type="button" :disabled="loading" @click="loadBoard"><RefreshCw :class="{ spin: loading }" aria-hidden="true" />刷新</button>
           </div>
 
@@ -634,7 +634,6 @@ onBeforeUnmount(() => {
         </section>
       </main>
 
-      <footer v-if="studentSession"><span>{{ updatedText }}</span><span>前 10 名与我的排名 · 每 60 秒自动刷新</span></footer>
     </div>
 
     <aside v-if="detailRow" ref="popover" class="score-popover" :style="popoverStyle" role="tooltip" @click.stop>
@@ -997,6 +996,23 @@ button {
   margin: 3px 0 0;
   color: #7483a9;
   font-size: 11px;
+}
+
+.ladder-panel .game-panel-heading > div,
+.ladder-panel .game-panel-heading > div > div {
+  min-width: 0;
+}
+
+.ladder-panel .game-panel-heading > .ghost-button,
+.ladder-panel .panel-icon {
+  flex-shrink: 0;
+}
+
+.ladder-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  line-height: 1.6;
 }
 
 .panel-icon {
