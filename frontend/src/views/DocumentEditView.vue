@@ -8,6 +8,7 @@ import {
 } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
+import { showAlert } from "../uiDialogs.js";
 import { createMathElement, enhanceDocumentMath, renderMathElement, serializeDocumentContent } from "../documentMath";
 import { validateDocumentImage } from "../utils";
 
@@ -25,16 +26,21 @@ async function load() {
   }
   loading.value = false;
 }
-function markDirty() { if (loading.value) return; dirty.value = true; setStatus(isNew.value ? "未创建" : "未保存", "dirty"); window.clearTimeout(timer); if (!isNew.value) timer = window.setTimeout(save, 900); }
-async function save() {
+function markDirty() { if (loading.value) return; dirty.value = true; setStatus(isNew.value ? "未创建" : "未保存", "dirty"); window.clearTimeout(timer); if (!isNew.value) timer = window.setTimeout(() => save(), 900); }
+async function save(showSuccess = false) {
   window.clearTimeout(timer); if (saving.value || !dirty.value) return;
   if (!title.value.trim()) { setStatus("标题不能为空", "error"); return; }
   saving.value = true; dirty.value = false; setStatus("正在保存...", "saving");
   try {
     const payload = { title: title.value.trim(), content: serializeDocumentContent(editor.value), version: version.value };
     const document = await api(isNew.value ? "/documents" : `/documents/${route.params.id}`, { method: isNew.value ? "POST" : "PUT", body: jsonBody(payload) });
-    if (isNew.value) { setStatus("已创建", "saved"); window.location.replace(`/doc/edit/${document.id}`); return; }
-    version.value = document.version; setStatus("已保存", "saved");
+    if (isNew.value) {
+      setStatus("已创建", "saved");
+      await router.replace(`/doc/edit/${document.id}`);
+    } else {
+      version.value = document.version; setStatus("已保存", "saved");
+    }
+    if (showSuccess) void showAlert("文档已保存", { title: "保存成功" });
   } catch (failure) {
     dirty.value = true; setStatus(failure.message, "error"); if (failure.status === 409) conflict.value = true;
   } finally { saving.value = false; }
@@ -139,7 +145,7 @@ function align(value) {
   block.setAttribute("align", value); captureSelection(); markDirty();
 }
 function editorInput() { captureSelection(); markDirty(); }
-function saveNow() { dirty.value = true; save(); }
+function saveNow() { dirty.value = true; save(true); }
 function keyboard(event) { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); saveNow(); } }
 function beforeUnload(event) { if (!dirty.value) return; event.preventDefault(); event.returnValue = ""; }
 function reloadPage() { window.location.reload(); }
@@ -150,7 +156,7 @@ onBeforeUnmount(() => { window.clearTimeout(timer); document.removeEventListener
 
 <template>
   <AdminLayout :page-title="isNew ? '新建文档' : '编辑文档'" active-page="documents">
-    <div class="editor-titlebar"><input v-model="title" class="title-input" maxlength="200" aria-label="文档标题" placeholder="输入文档标题" @input="markDirty"><div class="save-status" :data-state="saveState" role="status">{{ saveMessage }}</div><nav class="editor-actions" aria-label="文档操作"><RouterLink class="button button-quiet" to="/doc/list">文档列表</RouterLink><a v-if="!isNew" class="button button-quiet" :href="`/doc/show/${route.params.id}`">查看</a></nav></div>
+    <div class="editor-titlebar"><input v-model="title" class="title-input" maxlength="200" aria-label="文档标题" placeholder="输入文档标题" @input="markDirty"><div v-if="saveState !== 'saved'" class="save-status" :data-state="saveState" role="status">{{ saveMessage }}</div><nav class="editor-actions" aria-label="文档操作"><RouterLink class="button button-quiet" to="/doc/list">文档列表</RouterLink><a v-if="!isNew" class="button button-quiet" :href="`/doc/show/${route.params.id}`">查看</a></nav></div>
     <div class="editor-toolbar" role="toolbar" aria-label="文档编辑工具">
       <div class="toolbar-tools">
         <select aria-label="段落格式" title="段落格式" @mousedown="captureSelection" @change="format"><option value="p">正文</option><option value="h1">一级标题</option><option value="h2">二级标题</option><option value="h3">三级标题</option></select>
