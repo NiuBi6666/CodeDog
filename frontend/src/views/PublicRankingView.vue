@@ -1875,4 +1875,41 @@ button {
 @media(max-width:600px){.player-console{grid-template-columns:42px minmax(0,1fr) minmax(0,1fr) 34px}.player-console .player-identity{grid-column:2/4}.player-honors{gap:5px}.ladder-row{grid-template-columns:25px 38px minmax(0,1fr) auto;gap:7px;padding:10px 8px}.row-honors{gap:5px}.equipped-title{font-size:8px}.row-honors :deep(.rank-emblem){gap:2px;font-size:10px}.row-honors :deep(.emblem-shield){width:32px;transform:scale(.85);transform-origin:left center}.ladder-points{font-size:17px}.honor-promotion{padding:12px;gap:8px;flex-wrap:wrap}.honor-promotion p{font-size:11px}.honor-promotion>div{min-width:180px}}
 @media(prefers-reduced-motion:reduce){.place-1 .rank-crown,.ladder-row.place-1:after,.level-5 .student-name,.level-6 .student-name,.level-7 .student-name,.player-identity>strong{animation:none!important}.level-5 .student-name,.level-6 .student-name,.level-7 .student-name{background-position:0 0}}
 
+
+/* Personal toolbar: one baseline for honors, balance and actions. */
+.player-console{grid-template-columns:44px minmax(170px,1fr) auto auto auto 36px;align-items:end;column-gap:12px;row-gap:8px;padding:12px 16px;min-height:96px}
+.player-console .player-avatar{width:44px;height:44px;align-self:center;box-sizing:border-box}
+.player-console .player-identity{display:grid;grid-template-rows:14px 22px 36px;gap:2px;min-width:0}
+.player-console .player-identity>span{font-size:10px;line-height:14px}
+.player-console .player-identity>strong{font-size:15px;line-height:22px}
+.player-console .player-honors{height:36px;min-width:0;align-items:center;flex-wrap:nowrap;gap:8px}
+.player-console .honor-trigger{height:36px;display:flex;align-items:center;flex-shrink:0}
+.player-console .honor-trigger :deep(.rank-emblem){gap:5px;font-size:10px}
+.player-console .honor-trigger :deep(.emblem-shield){width:30px;height:34px;transform:none}
+.player-console .honor-trigger :deep(.emblem-shield>svg:first-child){width:30px;height:34px}
+.player-console .honor-trigger :deep(.emblem-core){width:14px;height:14px;top:10px;left:8px}
+.player-console .honor-trigger :deep(.emblem-label small){margin-top:4px;font-size:7px}
+.player-console .title-trigger{max-width:110px;padding:4px 6px;line-height:14px;white-space:nowrap}
+.player-console .player-score{display:grid;grid-template-rows:16px 36px;align-items:center;gap:6px;margin:0;text-align:right;align-self:end}
+.player-console .player-score>small{line-height:16px;white-space:nowrap}
+.player-console .player-score>strong{display:flex;align-items:center;justify-content:center;gap:7px;height:36px;box-sizing:border-box;margin:0;padding:0 12px;font-size:16px;line-height:1;border-radius:18px}
+.player-console .player-score>strong>small{line-height:1}
+.player-console :is(.style-settings-button,.password-settings-button,.logout-button){display:inline-flex;align-items:center;justify-content:center;align-self:end;height:36px;min-height:36px;box-sizing:border-box;margin:0;line-height:1;padding:0 12px;white-space:nowrap;border-radius:6px;font-size:12px}
+.player-console .logout-button{width:36px;padding:0}
+@media(max-width:700px){
+ .player-console{grid-template-columns:44px minmax(0,1fr) 36px;padding:14px;gap:10px 12px}
+ .player-console .player-avatar{grid-row:1;grid-column:1;align-self:center}
+ .player-console .player-identity{grid-row:1;grid-column:2;grid-template-rows:14px 22px auto}
+ .player-console .player-honors{height:auto;min-height:36px;flex-wrap:wrap;gap:5px}
+ .player-console .logout-button{grid-row:1;grid-column:3;align-self:center}
+ .player-console .player-score{grid-row:2;grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:10px;border-top:1px solid #45568066;text-align:left}
+ .player-console .player-score>strong{margin:0;flex-shrink:0}
+ .player-console .style-settings-button{grid-row:3;grid-column:1/3;width:100%}
+ .player-console .password-settings-button{grid-row:3;grid-column:3;grid-column-end:4;width:auto;min-width:100px;justify-self:end}
+ .player-console{grid-template-columns:44px minmax(0,1fr) 100px}
+ .player-console .player-identity{grid-column:2/4;padding-right:40px}
+ .player-console .logout-button{justify-self:end}
+ .player-console .style-settings-button{margin-right:0}
+}
+
 </style>
