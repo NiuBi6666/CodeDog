@@ -2,19 +2,25 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  AlignCenter, AlignLeft, AlignRight, Bold, Code2, ImagePlus, Italic, Link2, List,
+  AlignCenter, AlignLeft, AlignRight, Bold, CircleCheck, Code2, ImagePlus, Italic, Link2, List,
   ListOrdered, Minus, Quote, Redo2, RemoveFormatting, Save, Strikethrough,
   Sigma, Table2, Underline, Undo2, Unlink,
 } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
-import { showAlert } from "../uiDialogs.js";
 import { createMathElement, enhanceDocumentMath, renderMathElement, serializeDocumentContent } from "../documentMath";
 import { validateDocumentImage } from "../utils";
 
 const route = useRoute(); const router = useRouter(); const editor = ref(null); const imageInput = ref(null);
 const title = ref(""); const version = ref(0); const loading = ref(true);
 const saveMessage = ref("未创建"); const saveState = ref(""); const conflict = ref(false); const dirty = ref(false); const saving = ref(false);
+const saveSuccessVisible = ref(false);
+let successTimer;
+function showSaveSuccess() {
+  saveSuccessVisible.value = true;
+  window.clearTimeout(successTimer);
+  successTimer = window.setTimeout(() => { saveSuccessVisible.value = false; }, 3000);
+}
 const isNew = computed(() => route.path === "/doc/create"); let timer; let savedRange = null;
 function setStatus(message, state = "") { saveMessage.value = message; saveState.value = state; }
 async function load() {
@@ -40,7 +46,7 @@ async function save(showSuccess = false) {
     } else {
       version.value = document.version; setStatus("已保存", "saved");
     }
-    if (showSuccess) void showAlert("文档已保存", { title: "保存成功" });
+    if (showSuccess) showSaveSuccess();
   } catch (failure) {
     dirty.value = true; setStatus(failure.message, "error"); if (failure.status === 409) conflict.value = true;
   } finally { saving.value = false; }
@@ -151,7 +157,7 @@ function beforeUnload(event) { if (!dirty.value) return; event.preventDefault();
 function reloadPage() { window.location.reload(); }
 watch(() => route.fullPath, load);
 onMounted(() => { load(); document.addEventListener("keydown", keyboard); window.addEventListener("beforeunload", beforeUnload); });
-onBeforeUnmount(() => { window.clearTimeout(timer); document.removeEventListener("keydown", keyboard); window.removeEventListener("beforeunload", beforeUnload); });
+onBeforeUnmount(() => { window.clearTimeout(successTimer); window.clearTimeout(timer); document.removeEventListener("keydown", keyboard); window.removeEventListener("beforeunload", beforeUnload); });
 </script>
 
 <template>
@@ -192,4 +198,17 @@ onBeforeUnmount(() => { window.clearTimeout(timer); document.removeEventListener
     <div class="editor-shell admin-editor-shell"><div ref="editor" class="document editor-document" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" @input="editorInput" @mouseup="captureSelection" @keyup="captureSelection" @focus="captureSelection" @paste="handlePaste" @dblclick="editFormula"></div></div>
     <div v-if="conflict" class="conflict-banner"><span>文档已在其他页面更新</span><button class="button button-primary" type="button" @click="reloadPage">载入最新版本</button></div>
   </AdminLayout>
+  <Teleport to="body">
+    <Transition name="document-save-feedback">
+      <div v-if="saveSuccessVisible" class="document-save-toast" role="status" aria-live="polite"><CircleCheck :size="18" aria-hidden="true"/><span>保存成功</span></div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.document-save-toast { position: fixed; top: 28px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; align-items: center; gap: 8px; padding: 14px 22px; max-width: calc(100vw - 32px); border: 1px solid #edf0ef; border-radius: 8px; background: #fff; color: #283b40; box-shadow: 0 8px 28px rgba(0, 0, 0, .15); font-size: 14px; line-height: 22px; pointer-events: none; }
+.document-save-toast svg { color: #fff; fill: #52c41a; stroke-width: 2.5; flex-shrink: 0; }
+.document-save-feedback-enter-active, .document-save-feedback-leave-active { transition: opacity .15s ease, margin-top .15s ease; }
+.document-save-feedback-enter-from, .document-save-feedback-leave-to { opacity: 0; margin-top: -6px; }
+@media (prefers-reduced-motion: reduce) { .document-save-feedback-enter-active, .document-save-feedback-leave-active { transition: none; } }
+</style>
