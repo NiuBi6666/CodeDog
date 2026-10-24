@@ -22,6 +22,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest @AutoConfigureMockMvc @Transactional
 class ExamIntegrationTest {
+    @Autowired cn.codedog.dao.UserRepository users;
+    @org.junit.jupiter.api.BeforeEach void ensureOrdinaryAccount(){
+        if(users.findByUsername("ordinary").isEmpty()){
+            var user=new cn.codedog.model.User();user.setUsername("ordinary");user.setPasswordHash("test-fixture-unused");
+            users.saveAndFlush(user);
+        }
+    }
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;

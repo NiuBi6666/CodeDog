@@ -31,7 +31,7 @@ public class AuditService {
     private static final Set<String> RESULTS = Set.of("success", "failed");
     private static final Map<String, List<String>> MODULE_PATTERNS = Map.of(
         "auth", List.of("login_%", "student_login_%", "registration_%"),
-        "account", List.of("password_%", "permissions_%", "crm_teacher_mapping_%"),
+        "account", List.of("password_%", "permissions_%", "crm_teacher_mapping_%", "user_%"),
         "documents", List.of("document_%"),
         "students", List.of("student_%"),
         "classes", List.of("class_progress_%")

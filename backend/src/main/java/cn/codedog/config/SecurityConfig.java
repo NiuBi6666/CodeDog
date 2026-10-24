@@ -32,7 +32,7 @@ import java.util.Map;
 public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper,
-                                            PermissionService permissions) throws Exception {
+                                            PermissionService permissions, UserRepository users) throws Exception {
         CookieCsrfTokenRepository csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrf.setCookiePath("/");
         http
@@ -52,6 +52,10 @@ public class SecurityConfig {
                     .access(permission(permissions, PermissionCatalog.USERS_VIEW))
                 .requestMatchers(HttpMethod.POST, "/api/admin/users")
                     .access(permission(permissions, PermissionCatalog.USERS_CREATE))
+                .requestMatchers(HttpMethod.PUT, "/api/admin/users/*/login-status")
+                    .access(permission(permissions, PermissionCatalog.USERS_LOGIN_MANAGE))
+                .requestMatchers(HttpMethod.DELETE, "/api/admin/users/*")
+                    .access(permission(permissions, PermissionCatalog.USERS_DELETE))
                 .requestMatchers(HttpMethod.PUT, "/api/admin/users/*/permissions")
                     .access(permission(permissions, PermissionCatalog.USERS_PERMISSIONS_MANAGE))
                 .requestMatchers(HttpMethod.PUT, "/api/admin/users/*/crm-teacher")
@@ -159,6 +163,8 @@ public class SecurityConfig {
                 .deleteCookies("JSESSIONID"))
             .securityContext(context -> context
                 .securityContextRepository(new HttpSessionSecurityContextRepository()));
+        http.addFilterBefore(new TeacherAccountFilter(users, objectMapper),
+            org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

@@ -24,8 +24,14 @@ public class User {
     private String passwordCiphertext;
     @Column(name = "is_admin", nullable = false)
     private boolean admin;
+    @Column(name="deleted_at") private Instant deletedAt;
+    @Column(name="access_version", nullable=false) private long accessVersion;
+    public Instant getDeletedAt(){return deletedAt;}
+    public void setDeletedAt(Instant value){deletedAt=value;}
+    public long getAccessVersion(){return accessVersion;}
+    public void setAccessVersion(long value){accessVersion=value;}
     @Column(nullable=false) private boolean enabled=true;
-    public boolean isEnabled(){return enabled;}
+    public boolean isEnabled(){return enabled && deletedAt == null;}
     public void setEnabled(boolean enabled){this.enabled=enabled;}
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

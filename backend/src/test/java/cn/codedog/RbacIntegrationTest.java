@@ -720,4 +720,79 @@ class RbacIntegrationTest {
   mvc.perform(get("/api/rankings/admin/recovery-drill").session(login("Liam","test-only-password"))).andExpect(status().isOk()).andExpect(jsonPath("$.schedulingEnabled").value(false));
  }
 
+    @Test void loginRestrictionInvalidatesSessionsAndRecoveryRequiresFreshLogin() throws Exception {
+        User target=users.saveAndFlush(user(uniqueUsername("restrict"),"member-password-123"));
+        var old=login(target.getUsername(),"member-password-123");
+        var admin=login("Liam","test-only-password");
+        mvc.perform(put("/api/admin/users/"+target.getId()+"/login-status").session(admin).with(csrf())
+            .contentType(APPLICATION_JSON).content("{\"enabled\":false}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
+        mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
+            .content(json.writeValueAsString(java.util.Map.of("username",target.getUsername(),"password","member-password-123"))))
+            .andExpect(status().isUnauthorized());
+        mvc.perform(put("/api/admin/users/"+target.getId()+"/login-status").session(admin).with(csrf())
+            .contentType(APPLICATION_JSON).content("{\"enabled\":true}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(true));
+        // Even a session unused throughout disable/enable cannot become valid again.
+        mvc.perform(get("/api/auth/me").session(old)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").session(login(target.getUsername(),"member-password-123"))).andExpect(status().isOk());
+        var row=jdbc.queryForMap("SELECT event_code,changes_json,module,owner_username FROM audit_log WHERE action=? ORDER BY id DESC LIMIT 1",
+            "user_login_status_updated:"+target.getUsername()+":false");
+        assertThat(row.get("event_code")).isEqualTo("user_login_status_updated");
+        assertThat(row.get("module")).isEqualTo("account");
+        assertThat(row.get("owner_username")).isEqualTo(target.getUsername());
+        assertThat(row.get("changes_json").toString()).contains("enabled","true","false");
+    }
+
+    @Test void lifecyclePermissionsAreIndependentAndImmediatelyRevocable() throws Exception {
+        User manager=users.saveAndFlush(user(uniqueUsername("lifemgr"),"member-password-123"));
+        User target=users.saveAndFlush(user(uniqueUsername("lifetarget"),"member-password-123"));
+        var session=login(manager.getUsername(),"member-password-123");
+        String path="/api/admin/users/"+target.getId();
+        mvc.perform(put(path+"/login-status").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isForbidden());
+        mvc.perform(delete(path).session(session).with(csrf())).andExpect(status().isForbidden());
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of("users.view","users.login.manage")));users.saveAndFlush(manager);
+        mvc.perform(put(path+"/login-status").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
+        mvc.perform(delete(path).session(session).with(csrf())).andExpect(status().isForbidden());
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of("users.view","users.delete")));users.saveAndFlush(manager);
+        mvc.perform(put(path+"/login-status").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":true}")).andExpect(status().isForbidden());
+        mvc.perform(delete(path).session(session).with(csrf())).andExpect(status().isOk());
+        manager.setPermissions(new LinkedHashSet<>(java.util.Set.of("users.view")));users.saveAndFlush(manager);
+        User other=users.saveAndFlush(user(uniqueUsername("lifedeny"),"member-password-123"));
+        mvc.perform(delete("/api/admin/users/"+other.getId()).session(session).with(csrf())).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/admin/users/"+other.getId()).with(csrf())).andExpect(status().isUnauthorized());
+    }
+
+    @Test void deletionRetainsBusinessDataBlocksLoginAndUsernameReuse() throws Exception {
+        User target=users.saveAndFlush(user(uniqueUsername("deleted"),"member-password-123"));
+        var old=login(target.getUsername(),"member-password-123");
+        jdbc.update("INSERT INTO ranking_students(owner_username,student_id) VALUES(?,?)",target.getUsername(),"kept-student");
+        var admin=login("Liam","test-only-password");String path="/api/admin/users/"+target.getId();
+        mvc.perform(delete(path).session(admin).with(csrf())).andExpect(status().isOk());
+        mvc.perform(get("/api/auth/me").session(old)).andExpect(status().isUnauthorized());
+        assertThat(users.findById(target.getId()).orElseThrow().getDeletedAt()).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_students WHERE owner_username=?",Integer.class,target.getUsername())).isEqualTo(1);
+        String list=mvc.perform(get("/api/admin/users").session(admin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(list).doesNotContain(target.getUsername());
+        mvc.perform(put(path+"/login-status").session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":true}")).andExpect(status().isNotFound());
+        mvc.perform(delete(path).session(admin).with(csrf())).andExpect(status().isNotFound());
+        mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(java.util.Map.of("username",target.getUsername(),"password","member-password-123")))).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/admin/users").session(admin).with(csrf()).contentType(APPLICATION_JSON).content(creationBody(target.getUsername()))).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action=?",Integer.class,"user_deleted:"+target.getUsername())).isEqualTo(1);
+    }
+
+    @Test void lifecycleProtectsAdministratorSelfAndCsrf() throws Exception {
+        var admin=login("Liam","test-only-password");long adminId=users.findByUsername("Liam").orElseThrow().getId();
+        mvc.perform(delete("/api/admin/users/"+adminId).session(admin).with(csrf())).andExpect(status().isForbidden());
+        mvc.perform(put("/api/admin/users/"+adminId+"/login-status").session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isForbidden());
+        User member=user(uniqueUsername("selfdeny"),"member-password-123");member.setPermissions(new LinkedHashSet<>(java.util.Set.of("users.view","users.delete","users.login.manage")));users.saveAndFlush(member);
+        var session=login(member.getUsername(),"member-password-123");String path="/api/admin/users/"+member.getId();
+        mvc.perform(delete(path).session(session).with(csrf())).andExpect(status().isForbidden());
+        mvc.perform(put(path+"/login-status").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isForbidden());
+        mvc.perform(delete(path).session(admin)).andExpect(status().isForbidden());
+        mvc.perform(put(path+"/login-status").session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{}" )).andExpect(status().isBadRequest());
+        mvc.perform(put(path+"/login-status").session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"enabled\":false}")).andExpect(status().isOk());
+        mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isUnauthorized());
+    }
+
 }

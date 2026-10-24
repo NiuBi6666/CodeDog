@@ -329,7 +329,7 @@ public class StructuredAuditService {
         String code=parts.length==0?"api_request":normalize(parts[0]);
         state.eventCode=code; state.module=moduleForCode(code);
         if(code.startsWith("document_")&&parts.length>1) state.target("DOCUMENT",parts[1]);
-        else if((code.startsWith("permissions_")||code.startsWith("crm_teacher_mapping_"))&&parts.length>1) {
+        else if((code.startsWith("permissions_")||code.startsWith("crm_teacher_mapping_")||code.startsWith("user_"))&&parts.length>1) {
             state.target("TEACHER",parts[1]); state.owner(parts[1]);
         } else if(code.startsWith("registration_")&&parts.length>1) {
             state.target("TEACHER",parts[1]); state.owner(parts[1]);
@@ -382,7 +382,7 @@ public class StructuredAuditService {
     }
     private String moduleForCode(String code) {
         if(code.startsWith("login")||code.startsWith("registration")) return "auth";
-        if(code.startsWith("password")||code.startsWith("permissions")||code.startsWith("crm_teacher")||code.startsWith("user_create")) return "account";
+        if(code.startsWith("password")||code.startsWith("permissions")||code.startsWith("crm_teacher")||code.startsWith("user_")) return "account";
         if(code.startsWith("document")) return "documents";
         if(code.startsWith("class_progress")) return "classes";
         if(code.startsWith("student")) return "students";

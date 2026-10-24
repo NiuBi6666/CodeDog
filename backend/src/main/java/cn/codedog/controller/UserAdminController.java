@@ -60,7 +60,7 @@ public class UserAdminController {
             "SELECT owner_username,crm_teacher_id FROM ranking_teacher_mappings",
             (rs, row) -> Map.entry(rs.getString(1), rs.getString(2)))
             .stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        return users.findAllByOrderByCreatedAtAscIdAsc().stream()
+        return users.findAllByOrderByCreatedAtAscIdAsc().stream().filter(user -> user.getDeletedAt() == null)
             .map(user -> UserResponse.from(user, mappings.get(user.getUsername()))).toList();
     }
 
@@ -138,6 +138,47 @@ public class UserAdminController {
         return UserResponse.from(saved, crmTeacherId);
     }
 
+    @PutMapping("/users/{id}/login-status")
+    @Transactional
+    public UserResponse updateLoginStatus(@PathVariable long id, @Valid @RequestBody LoginStatusRequest body,
+                                          Authentication authentication, HttpServletRequest request) {
+        User user=lifecycleTarget(id, authentication);
+        boolean previous=user.isEnabled();
+        if(previous!=body.enabled()){
+            user.setEnabled(body.enabled());
+            user.setAccessVersion(user.getAccessVersion()+1);
+            user.setUpdatedAt(Instant.now());
+            users.saveAndFlush(user);
+        }
+        audit.change("TEACHER", user.getUsername(), Map.of("enabled",previous),Map.of("enabled",body.enabled()));
+        audit.record("user_login_status_updated:"+user.getUsername()+":"+body.enabled(),request);
+        return UserResponse.from(user,mappingFor(user.getUsername()));
+    }
+
+    @DeleteMapping("/users/{id}")
+    @Transactional
+    public Map<String,Boolean> deleteUser(@PathVariable long id, Authentication authentication, HttpServletRequest request){
+        User user=lifecycleTarget(id,authentication);
+        audit.change("TEACHER",user.getUsername(),Map.of("enabled",user.isEnabled(),"deleted",false),
+            Map.of("enabled",false,"deleted",true));
+        user.setEnabled(false);user.setDeletedAt(Instant.now());user.setUpdatedAt(Instant.now());
+        user.setAccessVersion(user.getAccessVersion()+1);
+        users.saveAndFlush(user);
+        audit.record("user_deleted:"+user.getUsername(),request);
+        return Map.of("ok",true);
+    }
+
+    private User lifecycleTarget(long id, Authentication authentication){
+        User user=users.findLockedById(id).filter(u->u.getDeletedAt()==null)
+            .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"用户不存在"));
+        if(user.isAdmin())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"不能限制登录或删除系统管理员");
+        if(authentication==null || user.getUsername().equals(authentication.getName()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"不能限制登录或删除自己的账号");
+        return user;
+    }
+
+    public record LoginStatusRequest(@NotNull Boolean enabled) {}
+
     private void enforcePermissionDelegation(Authentication authentication, User target, Set<String> requested) {
         if (permissions.isAdmin(authentication)) return;
         if (authentication == null || authentication.getName().equals(target.getUsername()))
@@ -152,7 +193,7 @@ public class UserAdminController {
     }
 
     private User findUser(long id) {
-        return users.findById(id)
+        return users.findById(id).filter(user -> user.getDeletedAt() == null)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
     }
 
@@ -173,12 +214,12 @@ public class UserAdminController {
     public record PermissionRequest(@NotNull Set<String> permissions) {}
     public record CrmTeacherRequest(String crmTeacherId) {}
     public record UserResponse(long id, String username, String displayName, String teacherId, String crmTeacherId,
-                               boolean admin, Set<String> permissions, Instant createdAt, Instant updatedAt) {
+                               boolean admin, boolean enabled, Set<String> permissions, Instant createdAt, Instant updatedAt) {
         static UserResponse from(User user, String crmTeacherId) {
             String displayName = user.getDisplayName() == null || user.getDisplayName().isBlank()
                 ? user.getUsername() : user.getDisplayName();
             return new UserResponse(user.getId(), user.getUsername(), displayName, user.getTeacherPublicId(), crmTeacherId,
-                user.isAdmin(), user.isAdmin() ? PermissionCatalog.allCodes() : Set.copyOf(user.getPermissions()),
+                user.isAdmin(), user.isEnabled(), user.isAdmin() ? PermissionCatalog.allCodes() : Set.copyOf(user.getPermissions()),
                 user.getCreatedAt(), user.getUpdatedAt());
         }
     }

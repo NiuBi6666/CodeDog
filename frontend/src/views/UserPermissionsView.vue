@@ -4,6 +4,7 @@ import { Link2, Save, Search, ShieldCheck, Unlink, UserPlus, X } from "@lucide/v
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
 import { auth, hasPermission } from "../auth";
+import { showConfirm } from "../uiDialogs.js";
 import { formatDateTime } from "../utils";
 
 const userSearchInput = ref(null);
@@ -51,6 +52,32 @@ const mappingSelected = ref(null);
 const mappingDraft = ref("");
 const mappingSaving = ref(false);
 const canManagePermissions = computed(() => hasPermission("users.permissions.manage"));
+const lifecycleBusy = ref(null);
+function canOperateUser(user, permission) {
+  return hasPermission(permission) && !user.admin && user.username !== auth.user?.username;
+}
+async function changeLoginStatus(user) {
+  if (lifecycleBusy.value !== null || !canOperateUser(user, "users.login.manage")) return;
+  const enable = user.enabled === false;
+  if (!await showConfirm(enable ? `恢复 ${user.username} 的登录权限？恢复后需重新登录。` : `限制 ${user.username} 登录？该用户已登录的会话也将立即失效。`, { title: enable ? "恢复登录" : "限制登录", danger: !enable })) return;
+  lifecycleBusy.value = user.id;
+  try {
+    replaceUser(await api(`/admin/users/${user.id}/login-status`, { method: "PUT", body: jsonBody({ enabled: enable }) }));
+    notify(enable ? "已恢复登录" : "已限制登录");
+  } catch (failure) { error.value = failure.message; }
+  finally { lifecycleBusy.value = null; }
+}
+async function deleteUser(user) {
+  if (lifecycleBusy.value !== null || !canOperateUser(user, "users.delete")) return;
+  if (!await showConfirm(`确定删除用户 ${user.username}？删除后该账号将无法登录，学生、积分、订单及审计记录保留，用户名不可重新注册。`, { title: "删除用户", danger: true, confirmText: "确认删除" })) return;
+  lifecycleBusy.value = user.id;
+  try {
+    await api(`/admin/users/${user.id}`, { method: "DELETE" });
+    users.value = users.value.filter(item => item.id !== user.id);
+    notify("用户已删除");
+  } catch (failure) { error.value = failure.message; }
+  finally { lifecycleBusy.value = null; }
+}
 const canManageCrm = computed(() => hasPermission("users.crm.manage"));
 
 const filteredUsers = computed(() => {
@@ -250,7 +277,7 @@ onMounted(load);
         <thead><tr><th>用户</th><th>账号类型</th><th>CRM 教师 ID</th><th>已授权</th><th>最近修改</th><th class="actions-column">操作</th></tr></thead>
         <tbody>
           <tr v-for="user in filteredUsers" :key="user.id">
-            <td><strong>{{ user.displayName || user.username }}</strong><span class="teacher-public-id">{{ user.teacherId }}</span></td>
+            <td><strong>{{ user.displayName || user.username }}</strong><span class="teacher-public-id">{{ user.teacherId }}</span><span v-if="user.enabled === false" class="status-badge status-warning">已限制登录</span></td>
             <td><span class="status-badge" :class="user.admin ? 'status-normal' : 'status-warning'">{{ user.admin ? "系统管理员" : "普通用户" }}</span></td>
             <td><span v-if="user.crmTeacherId" class="mapping-value">{{ user.crmTeacherId }}</span><span v-else class="permission-locked">未绑定</span></td>
             <td>{{ user.admin ? "全部权限" : `${user.permissions.length} 项` }}</td>
@@ -259,6 +286,8 @@ onMounted(load);
               <div class="button-row permission-actions">
                 <button v-if="canManageCrm && (auth.user?.admin || !user.admin)" class="button button-quiet button-small" type="button" @click="openMapping(user)"><Link2 :size="14"/>绑定 CRM</button>
                 <button v-if="canManagePermissions && !user.admin && (auth.user?.admin || user.username !== auth.user?.username)" class="button button-quiet button-small" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button>
+                <button v-if="canOperateUser(user, 'users.login.manage')" class="button button-quiet button-small" type="button" :disabled="lifecycleBusy !== null" @click="changeLoginStatus(user)">{{ user.enabled === false ? '恢复登录' : '限制登录' }}</button>
+                <button v-if="canOperateUser(user, 'users.delete')" class="button button-danger button-small" type="button" :disabled="lifecycleBusy !== null" @click="deleteUser(user)">删除用户</button>
               </div>
             </td>
           </tr>
@@ -344,6 +373,7 @@ onMounted(load);
 .user-search-clear:focus-visible { outline-offset: 0; }
 @media (prefers-reduced-motion: reduce) { .permission-user-search { transition: none; } }
 
+.permission-actions { flex-wrap: wrap; gap: 8px; }
 .create-user-form { display: grid; gap: 16px; }
 .permission-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .permission-bulk-actions > span { color: #637984; font-size: 12px; }

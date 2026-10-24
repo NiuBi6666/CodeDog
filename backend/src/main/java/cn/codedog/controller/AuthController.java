@@ -79,6 +79,9 @@ public class AuthController {
                 UsernamePasswordAuthenticationToken.unauthenticated(body.username().trim(), body.password()));
             request.getSession(true);
             request.changeSessionId();
+            User loginUser=users.findByUsername(authentication.getName()).orElseThrow();
+            if(!loginUser.isEnabled())throw new org.springframework.security.authentication.DisabledException("disabled");
+            request.getSession().setAttribute(cn.codedog.config.TeacherAccountFilter.VERSION, loginUser.getAccessVersion());
             var context = SecurityContextHolder.createEmptyContext();
             context.setAuthentication(authentication);
             SecurityContextHolder.setContext(context);
