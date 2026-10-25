@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, nextTick, reactive, ref, watch } from "vue";
-import { Link2, Save, Search, ShieldCheck, Unlink, UserPlus, X } from "@lucide/vue";
+import { Link2, MoreHorizontal, Save, Search, ShieldCheck, Unlink, UserPlus, X } from "@lucide/vue";
 import AdminLayout from "../components/AdminLayout.vue";
 import { api, jsonBody, notify } from "../api";
 import { auth, hasPermission } from "../auth";
@@ -52,6 +52,66 @@ const mappingSelected = ref(null);
 const mappingDraft = ref("");
 const mappingSaving = ref(false);
 const canManagePermissions = computed(() => hasPermission("users.permissions.manage"));
+const actionUser = ref(null);
+const actionPosition = ref({});
+let actionTrigger;
+function closeActions(restoreFocus = false) {
+  actionUser.value = null;
+  if (restoreFocus) actionTrigger?.focus({ preventScroll: true });
+}
+function hasMoreActions(user) {
+  return (canManageCrm.value && (auth.user?.admin || !user.admin)) ||
+    canOperateUser(user, "users.login.manage") || canOperateUser(user, "users.delete");
+}
+async function toggleActions(user, event) {
+  if (actionUser.value?.id === user.id) { closeActions(); return; }
+  actionTrigger = event.currentTarget;
+  const rect = actionTrigger.getBoundingClientRect();
+  const width = 184;
+  actionPosition.value = { width: `${width}px`, left: `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`,
+    ...(window.innerHeight - rect.bottom < 176 ? { bottom: `${window.innerHeight - rect.top + 6}px` } : { top: `${rect.bottom + 6}px` }) };
+  actionUser.value = user;
+  await nextTick();
+  document.querySelector('.user-actions-menu button:not(:disabled)')?.focus({ preventScroll: true });
+}
+function actionOutside(event) {
+  if (actionUser.value && !event.target.closest('.user-actions-menu, .user-more-trigger')) closeActions();
+}
+function actionKeys(event) {
+  if (!actionUser.value) return;
+  if (event.key === 'Escape') { event.preventDefault(); closeActions(true); }
+  if (event.key === 'Tab') closeActions();
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    const items = [...document.querySelectorAll('.user-actions-menu button:not(:disabled)')];
+    const index = items.indexOf(document.activeElement);
+    items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus({ preventScroll: true });
+  }
+}
+function runUserAction(action) {
+  const user = actionUser.value;
+  closeActions(true);
+  if (user) action(user);
+}
+function dismissActions() {
+  if (!actionUser.value || !actionTrigger) return;
+  const rect = actionTrigger.getBoundingClientRect();
+  if (rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth) { closeActions(); return; }
+  actionPosition.value = { width: '184px', left: `${Math.max(8, Math.min(rect.right - 184, window.innerWidth - 192))}px`,
+    ...(window.innerHeight - rect.bottom < 176 ? { bottom: `${window.innerHeight - rect.top + 6}px` } : { top: `${rect.bottom + 6}px` }) };
+}
+onMounted(() => {
+  document.addEventListener('click', actionOutside);
+  document.addEventListener('keydown', actionKeys);
+  window.addEventListener('resize', dismissActions);
+  window.addEventListener('scroll', dismissActions, true);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('click', actionOutside);
+  document.removeEventListener('keydown', actionKeys);
+  window.removeEventListener('resize', dismissActions);
+  window.removeEventListener('scroll', dismissActions, true);
+});
 const lifecycleBusy = ref(null);
 function canOperateUser(user, permission) {
   return hasPermission(permission) && !user.admin && user.username !== auth.user?.username;
@@ -228,7 +288,7 @@ function modalKeydown(event) {
     const dialog = document.querySelector(".permission-dialog[role=dialog]");
     const nodes = [...(dialog?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || [])]
       .filter(node => node.getClientRects().length);
-    if (!nodes.length) { event.preventDefault(); dialog?.focus(); return; }
+    if (!nodes.length) { event.preventDefault(); dialog?.focus({ preventScroll: true }); return; }
     const first = nodes[0], last = nodes[nodes.length - 1];
     if (!dialog.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) {
       event.preventDefault(); (event.shiftKey ? last : first).focus();
@@ -244,11 +304,11 @@ watch(() => Boolean(selected.value || mappingSelected.value || createOpen.value)
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", modalKeydown, true);
     await nextTick();
-    document.querySelector('.permission-dialog button[aria-label="关闭"]')?.focus();
+    document.querySelector('.permission-dialog button[aria-label="关闭"]')?.focus({ preventScroll: true });
   } else {
     document.removeEventListener("keydown", modalKeydown, true);
     document.body.style.overflow = previousOverflow || "";
-    previousFocus?.focus();
+    previousFocus?.focus({ preventScroll: true });
   }
 });
 onBeforeUnmount(() => {
@@ -283,11 +343,9 @@ onMounted(load);
             <td>{{ user.admin ? "全部权限" : `${user.permissions.length} 项` }}</td>
             <td>{{ formatDateTime(user.updatedAt) }}</td>
             <td>
-              <div class="button-row permission-actions">
-                <button v-if="canManageCrm && (auth.user?.admin || !user.admin)" class="button button-quiet button-small" type="button" @click="openMapping(user)"><Link2 :size="14"/>绑定 CRM</button>
-                <button v-if="canManagePermissions && !user.admin && (auth.user?.admin || user.username !== auth.user?.username)" class="button button-quiet button-small" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button>
-                <button v-if="canOperateUser(user, 'users.login.manage')" class="button button-quiet button-small" type="button" :disabled="lifecycleBusy !== null" @click="changeLoginStatus(user)">{{ user.enabled === false ? '恢复登录' : '限制登录' }}</button>
-                <button v-if="canOperateUser(user, 'users.delete')" class="button button-danger button-small" type="button" :disabled="lifecycleBusy !== null" @click="deleteUser(user)">删除用户</button>
+              <div class="permission-actions">
+                <button v-if="canManagePermissions && !user.admin && (auth.user?.admin || user.username !== auth.user?.username)" class="button button-quiet button-small user-permissions-action" type="button" @click="openPermissions(user)"><ShieldCheck :size="14"/>设置权限</button>
+                <button v-if="hasMoreActions(user)" class="button button-quiet button-small user-more-trigger" type="button" :aria-label="`${user.username} 的更多操作`" :aria-expanded="actionUser?.id === user.id" aria-controls="user-actions-menu" @click="toggleActions(user, $event)"><MoreHorizontal :size="16"/>更多</button>
               </div>
             </td>
           </tr>
@@ -296,6 +354,14 @@ onMounted(load);
         </tbody>
       </table>
     </div>
+
+    <Teleport to="body">
+      <div v-if="actionUser" id="user-actions-menu" class="user-actions-menu" :style="actionPosition" role="group" :aria-label="`${actionUser.username} 的更多操作`">
+        <button v-if="canManageCrm && (auth.user?.admin || !actionUser.admin)" type="button" @click="runUserAction(openMapping)"><Link2 :size="15"/>绑定 CRM</button>
+        <button v-if="canOperateUser(actionUser, 'users.login.manage')" type="button" :disabled="lifecycleBusy !== null" @click="runUserAction(changeLoginStatus)">{{ actionUser.enabled === false ? '恢复登录' : '限制登录' }}</button>
+        <button v-if="canOperateUser(actionUser, 'users.delete')" class="user-action-danger" type="button" :disabled="lifecycleBusy !== null" @click="runUserAction(deleteUser)">删除用户</button>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="createOpen" class="permission-dialog-backdrop ui-dialog-backdrop" role="presentation" @click.self="closeCreate">
@@ -373,7 +439,19 @@ onMounted(load);
 .user-search-clear:focus-visible { outline-offset: 0; }
 @media (prefers-reduced-motion: reduce) { .permission-user-search { transition: none; } }
 
-.permission-actions { flex-wrap: wrap; gap: 8px; }
+.permission-user-table .actions-column { width: 188px; }
+.permission-user-table td { padding-top: 14px; padding-bottom: 14px; vertical-align: middle; }
+.permission-actions { display: flex; flex-wrap: nowrap; min-width: 170px; align-items: center; gap: 8px; min-height: 34px; white-space: nowrap; }
+.permission-actions .button { flex-shrink: 0; height: 34px; min-height: 34px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+.user-permissions-action { color: var(--ui-primary); }
+.user-more-trigger { margin-left: auto; }
+.user-actions-menu { position: fixed; z-index: 1100; box-sizing: border-box; padding: 6px; border: 1px solid var(--ui-border, #d9e4e8); border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgba(25, 50, 58, .16); }
+.user-actions-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: #334e58; text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.user-actions-menu button:hover, .user-actions-menu button:focus-visible { background: #edf6f4; outline: none; }
+.user-actions-menu button:focus-visible { box-shadow: inset 0 0 0 2px #147d76; }
+.user-actions-menu button.user-action-danger { margin-top: 4px; border-top: 1px solid #edf0f2; border-radius: 0 0 6px 6px; color: #c43b36; }
+.user-actions-menu button.user-action-danger:hover { background: #fff1f0; }
+.user-actions-menu button:disabled { opacity: .5; cursor: default; }
 .create-user-form { display: grid; gap: 16px; }
 .permission-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .permission-bulk-actions > span { color: #637984; font-size: 12px; }
