@@ -729,7 +729,9 @@ class RbacIntegrationTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
         mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON)
             .content(json.writeValueAsString(java.util.Map.of("username",target.getUsername(),"password","member-password-123"))))
-            .andExpect(status().isUnauthorized());
+            .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error").value("该账号因违规已被限制登录"));
+        var blockedSession=login("Liam","test-only-password");
+        mvc.perform(get("/api/auth/me").session(blockedSession)).andExpect(status().isOk());
         mvc.perform(put("/api/admin/users/"+target.getId()+"/login-status").session(admin).with(csrf())
             .contentType(APPLICATION_JSON).content("{\"enabled\":true}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(true));

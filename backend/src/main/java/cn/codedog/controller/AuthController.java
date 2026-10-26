@@ -92,7 +92,10 @@ public class AuthController {
         } catch (AuthenticationException error) {
             audit.actor("ANONYMOUS", null, body.username().trim());
             audit.record("login_failed", request);
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码不正确");
+            boolean restricted = error instanceof org.springframework.security.authentication.DisabledException
+                && users.findByUsername(body.username().trim()).filter(user -> user.getDeletedAt() == null && !user.isEnabled()).isPresent();
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                restricted ? "该账号因违规已被限制登录" : "用户名或密码不正确");
         }
     }
 

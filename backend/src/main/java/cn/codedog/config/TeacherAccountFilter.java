@@ -36,7 +36,9 @@ public class TeacherAccountFilter extends OncePerRequestFilter {
                 if(session!=null)session.invalidate();
                 SecurityContextHolder.clearContext();
                 response.setStatus(401);response.setContentType("application/json");response.setCharacterEncoding("UTF-8");
-                json.writeValue(response.getWriter(),Map.of("error","账号已停用或登录已失效，请重新登录"));
+                String message = user != null && user.getDeletedAt() == null && !user.isEnabled()
+                    ? "该账号因违规已被限制登录" : "账号已停用或登录已失效，请重新登录";
+                json.writeValue(response.getWriter(),Map.of("error",message));
                 return;
             }
         }
