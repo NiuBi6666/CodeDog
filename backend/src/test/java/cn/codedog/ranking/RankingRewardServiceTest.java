@@ -394,4 +394,44 @@ class RankingRewardServiceTest {
   transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()));
   assertThatThrownBy(()->transactions().execute(status->service.createStudentRedemption("teacher-a","student-1",reward.id()))).isInstanceOf(ResponseStatusException.class);
  }
+  @Test void redemptionAutomaticallyPublishesOnceAfterCommitWithinOwner() {
+    var broadcaster = org.mockito.Mockito.mock(cn.codedog.service.RankingAnnouncementBroadcaster.class);
+    service = new RankingRewardService(jdbc, broadcaster);
+    service.createAnnouncement("teacher-a", "老师原公告", null);
+    service.createAnnouncement("teacher-b", "B老师公告", null);
+    org.mockito.Mockito.clearInvocations(broadcaster);
+    var reward = service.createReward("teacher-a", "编程礼盒", 10, true, null, 4);
+    transactions().executeWithoutResult(status -> {
+      service.createStudentRedemption("teacher-a", "student-1", reward.id(), "announcement-request-123456");
+      org.mockito.Mockito.verifyNoInteractions(broadcaster);
+    });
+    String message = "恭喜张同学同学，成功兑换编程礼盒";
+    assertThat(service.publicAnnouncement("teacher-a").text()).isEqualTo(message);
+    assertThat(service.publicAnnouncement("teacher-b").text()).isEqualTo("B老师公告");
+    assertThat(service.announcements("teacher-a")).hasSize(2);
+    org.mockito.Mockito.verify(broadcaster).publish(org.mockito.ArgumentMatchers.eq("teacher-a"),
+      org.mockito.ArgumentMatchers.argThat(value -> message.equals(value.text())));
+    transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", "student-1", reward.id(), "announcement-request-123456"));
+    assertThat(service.announcements("teacher-a")).hasSize(2);
+    org.mockito.Mockito.verifyNoMoreInteractions(broadcaster);
+    org.mockito.Mockito.clearInvocations(broadcaster);
+    transactions().executeWithoutResult(status -> {
+      service.createStudentRedemption("teacher-a", "student-1", reward.id(), "announcement-rollback-123456");
+      status.setRollbackOnly();
+    });
+    assertThat(service.announcements("teacher-a")).hasSize(2);
+    assertThat(service.redemptions("teacher-a")).hasSize(1);
+    org.mockito.Mockito.verifyNoInteractions(broadcaster);
+  }
+
+  @Test void failedRedemptionDoesNotCreateAnnouncement() {
+    var reward = service.createReward("teacher-a", "积分不足礼品", 999, true, null, 1);
+    assertThatThrownBy(() -> transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-a", "student-1", reward.id())))
+      .isInstanceOf(ResponseStatusException.class);
+    assertThat(service.announcements("teacher-a")).isEmpty();
+    assertThatThrownBy(() -> transactions().executeWithoutResult(status -> service.createStudentRedemption("teacher-b", "student-1", reward.id())))
+      .isInstanceOf(ResponseStatusException.class);
+    assertThat(service.announcements("teacher-b")).isEmpty();
+  }
+
 }

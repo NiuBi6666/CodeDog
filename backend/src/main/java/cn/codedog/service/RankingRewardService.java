@@ -265,7 +265,29 @@ public class RankingRewardService {
     }, key);
     long redemptionId=Objects.requireNonNull(key.getKey()).longValue();
     points.record(owner,studentId,"REDEMPTION","redeem:"+redemptionId,rawBefore,points.raw(owner,studentId),"兑换："+reward.name(),actor);
+    createRedemptionAnnouncement(owner, redemptionId, names.getFirst(), reward.name());
     return redemptionById(owner, redemptionId);
+  }
+
+  private void createRedemptionAnnouncement(String owner, long redemptionId, String studentName, String rewardName) {
+    String message = "恭喜" + studentName + "同学，成功兑换" + rewardName;
+    GeneratedKeyHolder key = new GeneratedKeyHolder();
+    jdbc.update(connection -> {
+      PreparedStatement statement = connection.prepareStatement(
+        "INSERT INTO ranking_announcements(owner_username,announcement_text,enabled,publish_at) VALUES(?,?,TRUE,CURRENT_TIMESTAMP(6))", new String[]{"id"});
+      statement.setString(1, owner); statement.setString(2, message); return statement;
+    }, key);
+    long announcementId = Objects.requireNonNull(key.getKey()).longValue();
+    if (audit != null) audit.detail(java.util.Map.of("automaticAnnouncement", java.util.Map.of(
+      "id", announcementId, "redemptionId", redemptionId, "owner", owner, "text", message, "status", "ONLINE")));
+    // The order and announcement commit together; never broadcast a rolled-back redemption.
+    if (announcements == null) return;
+    if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+      org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+        new org.springframework.transaction.support.TransactionSynchronization() {
+          @Override public void afterCommit() { publishAnnouncement(owner); }
+        });
+    } else { publishAnnouncement(owner); }
   }
 
   private RankingRewardPayload.Balance balanceValues(String owner, String studentId) {
