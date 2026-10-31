@@ -621,7 +621,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
       <div v-else-if="!rewards.length" class="ranking-admin-state"><Gift :size="25"/><span>还没有奖品</span></div>
       <div v-else class="ranking-reward-list">
         <article v-for="reward in rewards" :key="reward.id" class="ranking-reward-row">
-          <div class="ranking-reward-image"><img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name"><Gift v-else :size="26"/></div>
+          <div class="ranking-reward-image"><img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name" width="64" height="64" loading="lazy" decoding="async"><Gift v-else :size="26"/></div>
           <div class="ranking-reward-copy"><strong>{{ reward.name }}</strong><span>{{ numberText(reward.requiredPoints) }} 积分 · 剩余 {{ numberText(reward.stock) }} 件</span></div>
           <span class="ranking-status" :class="reward.enabled ? 'is-enabled' : 'is-disabled'">{{ !reward.enabled ? '已下线' : reward.stock > 0 ? '已上线' : '已上线 · 已兑完' }}</span>
           <div class="ranking-row-actions"><button v-if="canRewardsStatus" class="button button-quiet ranking-reward-status-button" type="button" :disabled="rewardStatusBusy !== null" :aria-label="`${reward.enabled ? '下线' : '上线'}${reward.name}`" @click="setRewardOnline(reward)"><CircleOff v-if="reward.enabled" :size="15"/><CheckCircle2 v-else :size="15"/>{{ reward.enabled ? '下线' : '上线' }}</button><button v-if="canRewardsEdit" class="icon-button" type="button" title="编辑奖品" @click="openReward(reward)"><Pencil :size="16"/></button><button v-if="canRewardsDelete" class="icon-button ranking-danger-button" type="button" title="删除奖品" @click="deleteReward(reward)"><Trash2 :size="16"/></button></div>

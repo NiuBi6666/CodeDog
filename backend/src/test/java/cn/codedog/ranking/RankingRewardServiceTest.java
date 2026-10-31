@@ -359,8 +359,11 @@ class RankingRewardServiceTest {
     service.updateAnnouncement("teacher-a","A公告");service.updateAnnouncement("teacher-b","B公告");
     assertThat(controller.rewards(request)).extracting(RankingRewardPayload.Reward::name).containsExactly("B奖品");
     assertThat(controller.announcement(request).text()).isEqualTo("B公告");
-    assertThat(controller.rewardImage(b.id(),request).getBody()).containsExactly(1,2,3,4);
-    assertThatThrownBy(() -> controller.rewardImage(a.id(),request)).isInstanceOf(ResponseStatusException.class)
+    assertThat(controller.rewardImage(b.id(),true,request).getBody()).containsExactly(1,2,3,4);
+    var etag=controller.rewardImage(b.id(),true,request).getHeaders().getETag();
+    request.addHeader("If-None-Match",etag);
+    assertThat(controller.rewardImage(b.id(),true,request).getStatusCode().value()).isEqualTo(304);
+    assertThatThrownBy(() -> controller.rewardImage(a.id(),true,request)).isInstanceOf(ResponseStatusException.class)
       .satisfies(error -> assertThat(((ResponseStatusException)error).getStatusCode().value()).isEqualTo(404));
   }
 

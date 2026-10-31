@@ -330,7 +330,7 @@ public class RankingRewardService {
 
   private RankingRewardPayload.Reward reward(long id, String name, int points, boolean enabled, boolean hasImage, Instant createdAt, Instant updatedAt, int stock, boolean publicImage) {
     String imagePath = publicImage ? "/api/public/rankings/rewards/" : "/api/rankings/admin/rewards/";
-    return new RankingRewardPayload.Reward(id, name, points, stock, enabled, hasImage, hasImage ? imagePath + id + "/image?v=" + (updatedAt == null ? 0 : updatedAt.toEpochMilli()) : null, createdAt, updatedAt);
+    return new RankingRewardPayload.Reward(id, name, points, stock, enabled, hasImage, hasImage ? imagePath + id + "/image?thumbnail=true&v=" + (updatedAt == null ? 0 : updatedAt.toEpochMilli()) : null, createdAt, updatedAt);
   }
 
   private String publicOwner() { return jdbc.queryForObject("SELECT username FROM users ORDER BY is_admin DESC,id LIMIT 1", String.class); }

@@ -93,11 +93,8 @@ public class RankingRewardPublicController {
   }
 
   @GetMapping("/rewards/{id}/image")
-  public ResponseEntity<byte[]> rewardImage(@PathVariable long id, HttpServletRequest request) {
+  public ResponseEntity<byte[]> rewardImage(@PathVariable long id, @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean thumbnail, HttpServletRequest request) {
     var image = rewards.publicRewardImage(studentAuth.current(request).ownerUsername(), id);
-    return ResponseEntity.ok()
-      .cacheControl(CacheControl.noCache())
-      .contentType(MediaType.parseMediaType(image.contentType()))
-      .body(image.data());
+    return cn.codedog.service.RewardImages.response(image,thumbnail,request.getHeader("If-None-Match"));
   }
 }

@@ -185,9 +185,9 @@ public class RankingRewardAdminController {
   }
 
   @GetMapping("/rewards/{id}/image")
-  public ResponseEntity<byte[]> rewardImage(@PathVariable long id, Principal principal) {
+  public ResponseEntity<byte[]> rewardImage(@PathVariable long id, @RequestParam(defaultValue = "false") boolean thumbnail, Principal principal, HttpServletRequest request) {
     var image = rewards.rewardImage(principal.getName(), id);
-    return ResponseEntity.ok().cacheControl(CacheControl.noCache()).contentType(MediaType.parseMediaType(image.contentType())).body(image.data());
+    return cn.codedog.service.RewardImages.response(image,thumbnail,request.getHeader("If-None-Match"));
   }
 
   @GetMapping("/redemptions")

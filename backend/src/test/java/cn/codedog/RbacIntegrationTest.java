@@ -840,4 +840,34 @@ class RbacIntegrationTest {
         mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":false}")).andExpect(status().isForbidden());
         jdbc.update("DELETE FROM ranking_rewards WHERE owner_username IN (?,?)",username,other);
     }
+
+    @Test void rewardThumbnailsKeepPermissionBoundaryAndConditionalRequestsRemainAudited() throws Exception {
+        jdbc.execute("""
+          CREATE TABLE IF NOT EXISTS ranking_rewards (
+            deleted_at TIMESTAMP(6),id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,
+            reward_name VARCHAR(100) NOT NULL,required_points INT NOT NULL,stock INT NOT NULL DEFAULT 0,
+            image_data BLOB,image_content_type VARCHAR(50),enabled BOOLEAN NOT NULL,
+            created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+          """);
+        String username=uniqueUsername("image");
+        User teacher=users.saveAndFlush(user(username,"image-test-password"));
+        var session=login(username,"image-test-password");
+        jdbc.update("INSERT INTO ranking_rewards(owner_username,reward_name,required_points,stock,enabled,image_data,image_content_type) VALUES(?,'图片测试',1,1,TRUE,?,'image/png')",username,new byte[]{1,2,3});
+        long id=jdbc.queryForObject("SELECT id FROM ranking_rewards WHERE owner_username=?",Long.class,username);
+        String path="/api/rankings/admin/rewards/"+id+"/image?thumbnail=true";
+        mvc.perform(get(path).session(session)).andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.read")));users.saveAndFlush(teacher);
+        String etag=mvc.perform(get(path).session(session)).andExpect(status().isOk())
+          .andExpect(header().string("Cache-Control",org.hamcrest.Matchers.containsString("private")))
+          .andReturn().getResponse().getHeader("ETag");
+        mvc.perform(get(path).session(session).header("If-None-Match",etag)).andExpect(status().isNotModified()).andExpect(content().string(""));
+        String foreign=uniqueUsername("foreignimg");
+        jdbc.update("INSERT INTO ranking_rewards(owner_username,reward_name,required_points,stock,enabled,image_data,image_content_type) VALUES(?,'其他老师图片',1,1,TRUE,?,'image/png')",foreign,new byte[]{1,2,3});
+        long other=jdbc.queryForObject("SELECT id FROM ranking_rewards WHERE owner_username=?",Long.class,foreign);
+        mvc.perform(get("/api/rankings/admin/rewards/"+other+"/image?thumbnail=true").session(session).header("If-None-Match",etag)).andExpect(status().isNotFound());
+        teacher.setPermissions(new LinkedHashSet<>());users.saveAndFlush(teacher);
+        mvc.perform(get(path).session(session).header("If-None-Match",etag)).andExpect(status().isForbidden());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE owner_username=? AND request_path=? AND status_code=304",Integer.class,username,"/api/rankings/admin/rewards/"+id+"/image")).isPositive();
+        jdbc.update("DELETE FROM ranking_rewards WHERE owner_username IN (?,?)",username,foreign);
+    }
 }

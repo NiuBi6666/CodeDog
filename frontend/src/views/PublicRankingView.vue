@@ -595,7 +595,7 @@ onBeforeUnmount(() => {
             <div v-if="rewards.length" class="reward-grid">
               <article v-for="reward in rewards" :key="reward.id" :class="['reward-card', `tier-${rewardTier(reward).code}`, { 'sold-out': reward.stock <= 0 }]" role="button" :aria-disabled="reward.stock <= 0" :tabindex="reward.stock > 0 ? 0 : -1" @click="openRewardRedeem(reward)" @keydown.enter.prevent="openRewardRedeem(reward)" @keydown.space.prevent="openRewardRedeem(reward)">
                 <div class="reward-image">
-                  <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name">
+                  <img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name" width="80" height="80" loading="lazy" decoding="async">
                   <Gift v-else aria-hidden="true" />
                 </div>
                 <div class="reward-copy"><span class="reward-tier" :title="'按所需积分区分的展示档位'">{{ rewardTier(reward).name }}</span><h4>{{ reward.name }}</h4><strong>{{ reward.requiredPoints }}<small> 积分</small></strong><small class="reward-stock">{{ reward.stock > 0 ? `剩余 ${reward.stock} 件` : "已兑完 · 无法兑换" }}</small></div>
