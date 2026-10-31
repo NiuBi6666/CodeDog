@@ -41,7 +41,7 @@ async function toggleRowMenu(row, event) {
 function runRowAction(action) { const row = rowMenuStudent.value; closeRowMenu(); if (row) action(row); }
 const board = ref(null);
 const accountStatuses = ref({});
-const graduatesOpen = ref(false);
+const studentList = ref("active");
 const graduates = ref([]);
 const graduatesLoading = ref(false);
 const graduatesError = ref("");
@@ -57,12 +57,18 @@ const filteredGraduates = computed(() => {
 });
 async function loadGraduates() {
   if (!canGraduatesRead.value) return;
-  graduatesLoading.value = true; graduatesError.value = "";
+  graduatesLoading.value = true; graduatesError.value = ""; graduates.value = [];
   try { graduates.value = await api("/rankings/admin/graduates"); }
   catch (failure) { graduatesError.value = failure.message || "已毕业学员加载失败"; }
   finally { graduatesLoading.value = false; }
 }
-async function openGraduates() { graduatesOpen.value = true; graduatesSearch.value = ""; await loadGraduates(); }
+async function selectStudentList(value) {
+  if (value === "graduates" && !canGraduatesRead.value) return;
+  if (value === "active" && !canBoardRead.value) return;
+  closeRowMenu();
+  studentList.value = value;
+  if (value === "graduates") await loadGraduates();
+}
 async function setGraduated(row, graduated) {
   if (graduationBusy.value) return;
   if (!await showConfirm(graduated
@@ -73,12 +79,10 @@ async function setGraduated(row, graduated) {
   try {
     await api(`/rankings/admin/students/${encodeURIComponent(row.studentId)}/graduation`, { method: graduated ? "PUT" : "DELETE" });
     await loadAll();
-    if (graduatesOpen.value) await loadGraduates();
     notify(graduated ? "已标记毕业，学员已从排名中隐藏" : "已恢复，学员重新参与排名");
   } catch (failure) { notify(failure.message || "操作失败，请重试"); }
   finally { graduationBusy.value = ""; }
 }
-function closeGraduates() { if (!graduationBusy.value) graduatesOpen.value = false; }
 const phoneImportInput = ref(null);
 const phonesImporting = ref(false);
 const phoneImportSummary = ref(null);
@@ -261,6 +265,8 @@ async function loadAll() {
   loading.value = true; error.value = "";
   try {
     const tasks = [];
+    if (!canBoardRead.value && canGraduatesRead.value) studentList.value = "graduates";
+    if (studentList.value === "graduates" && canGraduatesRead.value) tasks.push(loadGraduates());
     if (canBoardRead.value) tasks.push(loadAccountStatuses());
     if (canBoardRead.value) tasks.push(api("/rankings/admin/board").then((value) => { board.value = value; }));
     if (canAnnouncementsRead.value) tasks.push(api("/rankings/admin/announcements").then((value) => { announcements.value = normaliseAnnouncements(value); }));
@@ -474,7 +480,7 @@ async function savePoints() {
   finally { pointsSaving.value = false; }
 }
 async function copyStudentPassword() { await writeClipboard(recoveredPassword.value); notify("学生密码已复制"); }
-function closeOnEscape(event) { if (event.key === "Escape") { if (rowMenuStudent.value) { closeRowMenu(); rowMenuTrigger.value?.focus(); return; } closeGraduates(); shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); closeStudentPhone(); } }
+function closeOnEscape(event) { if (event.key === "Escape") { if (rowMenuStudent.value) { closeRowMenu(); rowMenuTrigger.value?.focus(); return; } shareOpen.value = false; closeReward(); redemptionOpen.value = false; closeStudentPassword(); closePoints(); closeStudentPhone(); } }
 
 onMounted(() => { document.addEventListener("keydown", closeOnEscape); document.addEventListener("click", dismissRowMenu); window.addEventListener("resize", closeRowMenu); window.addEventListener("scroll", positionRowMenu, true); activeTab.value = firstAllowedTab(); loadAll(); });
 onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); document.removeEventListener("click", dismissRowMenu); window.removeEventListener("resize", closeRowMenu); window.removeEventListener("scroll", positionRowMenu, true); });
@@ -525,7 +531,19 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
       </section>
 
       <section class="admin-panel ranking-list-panel">
-        <div class="panel-heading ranking-list-heading ranking-toolbar"><div><h2>全部学员排名</h2><small>{{ searchText ? `找到 ${filteredRows.length} 名学员` : `共 ${summary.studentCount} 名学员` }}</small></div><div class="ranking-list-header-actions"><button v-if="canGraduatesRead" class="button button-quiet" type="button" @click="openGraduates"><GraduationCap :size="16"/>已毕业学员</button><label v-if="canBoardRead" class="ranking-search"><Search :size="16"/><input v-model="searchText" type="search" placeholder="搜索学员姓名或 ID" aria-label="搜索学员姓名或 ID"></label></div></div>
+        <div class="panel-heading ranking-list-heading ranking-toolbar">
+          <div>
+            <nav class="student-list-tabs" aria-label="学员列表">
+              <button v-if="canBoardRead" type="button" :class="{ active: studentList === 'active' }" :aria-pressed="studentList === 'active'" @click="selectStudentList('active')">在读学员</button>
+              <button v-if="canGraduatesRead" type="button" :class="{ active: studentList === 'graduates' }" :aria-pressed="studentList === 'graduates'" @click="selectStudentList('graduates')">已毕业学员</button>
+            </nav>
+            <small v-if="studentList === 'active'">{{ searchText ? `找到 ${filteredRows.length} 名学员` : `共 ${summary.studentCount} 名学员` }}</small>
+            <small v-else>{{ graduatesSearch ? `找到 ${filteredGraduates.length} 名学员` : `共 ${graduates.length} 名已毕业学员` }}</small>
+          </div>
+          <label v-if="studentList === 'active' && canBoardRead" class="ranking-search"><Search :size="16"/><input v-model="searchText" type="search" placeholder="搜索学员姓名或 ID" aria-label="搜索学员姓名或 ID"></label>
+          <label v-else-if="canGraduatesRead" class="ranking-search"><Search :size="16"/><input v-model="graduatesSearch" type="search" placeholder="搜索已毕业学员姓名或 ID" aria-label="搜索已毕业学员"></label>
+        </div>
+        <template v-if="studentList === 'active' && canBoardRead">
         <div v-if="loading && !board" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载排名</span></div>
         <div v-else-if="board && !filteredRows.length" class="ranking-admin-state"><Search :size="23"/><span>没有找到匹配的学员</span></div>
         <div v-else-if="board" class="ranking-admin-table-wrap">
@@ -546,6 +564,13 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
             </tr></tbody>
           </table>
         </div>
+        </template>
+        <template v-else-if="canGraduatesRead">
+          <div v-if="graduatesError" class="notice notice-error graduate-list-error" role="alert">{{ graduatesError }} <button class="button button-quiet" type="button" @click="loadGraduates">重试</button></div>
+          <div v-else-if="graduatesLoading" class="ranking-admin-state"><RefreshCw class="spin-icon" :size="22"/><span>正在加载已毕业学员</span></div>
+          <div v-else-if="!filteredGraduates.length" class="ranking-admin-state"><GraduationCap :size="23"/><span>{{ graduatesSearch ? '没有找到匹配的学员' : '暂无已毕业学员' }}</span></div>
+          <div v-else class="ranking-admin-table-wrap"><table class="ranking-admin-table"><thead><tr><th>学员</th><th>毕业时间</th><th v-if="canRestore">操作</th></tr></thead><tbody><tr v-for="row in filteredGraduates" :key="row.studentId"><td><div class="ranking-student"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td><td>{{ formatDateTime(row.graduatedAt) }}</td><td v-if="canRestore"><button class="button button-quiet" type="button" :disabled="Boolean(graduationBusy)" :aria-label="`恢复${row.studentName}参与排名`" @click="setGraduated(row, false)"><RotateCcw :size="14"/>恢复</button></td></tr></tbody></table></div>
+        </template>
       </section>
     </template>
 
@@ -653,19 +678,6 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
       </form>
     </div>
 
-    <div v-if="graduatesOpen && canGraduatesRead" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closeGraduates">
-      <section class="ranking-share-dialog ui-modal graduation-dialog" role="dialog" aria-modal="true" aria-labelledby="graduates-title">
-        <header><div><span><GraduationCap :size="18"/></span><div><h2 id="graduates-title">已毕业学员</h2><p>毕业后不参与排名，恢复后按当前积分重新排名</p></div></div><button class="icon-button" type="button" aria-label="关闭已毕业学员" :disabled="Boolean(graduationBusy)" @click="closeGraduates"><X :size="17"/></button></header>
-        <div class="graduation-dialog-body">
-          <label class="ranking-search"><Search :size="16"/><input v-model="graduatesSearch" type="search" placeholder="搜索已毕业学员姓名或 ID" aria-label="搜索已毕业学员"></label>
-          <div v-if="graduatesError" class="notice notice-error" role="alert">{{ graduatesError }} <button class="button button-quiet" type="button" @click="loadGraduates">重试</button></div>
-          <div v-else-if="graduatesLoading" class="ranking-admin-state">正在加载已毕业学员</div>
-          <div v-else-if="!filteredGraduates.length" class="ranking-admin-state">{{ graduatesSearch ? '没有找到匹配的学员' : '暂无已毕业学员' }}</div>
-          <div v-else class="ranking-admin-table-wrap"><table class="ranking-admin-table"><thead><tr><th>学员</th><th>毕业时间</th><th v-if="canRestore">操作</th></tr></thead><tbody><tr v-for="row in filteredGraduates" :key="row.studentId"><td><div class="ranking-student"><span><strong>{{ row.studentName }}</strong><small>ID {{ row.studentId }}</small></span></div></td><td>{{ formatDateTime(row.graduatedAt) }}</td><td v-if="canRestore"><button class="button button-quiet" type="button" :disabled="Boolean(graduationBusy)" :aria-label="`恢复${row.studentName}参与排名`" @click="setGraduated(row, false)"><RotateCcw :size="14"/>恢复</button></td></tr></tbody></table></div>
-        </div>
-        <footer><button class="button button-quiet" type="button" :disabled="Boolean(graduationBusy)" @click="closeGraduates">关闭</button></footer>
-      </section>
-    </div>
     <div v-if="rowMenuStudent" id="ranking-row-actions-menu" class="ranking-row-menu" :style="rowMenuStyle" aria-label="学员更多操作" @click.stop>
       <button v-if="canEditPhone" type="button" @click="runRowAction(openStudentPhone)"><Pencil :size="15"/>修改手机号</button>
       <button v-if="auth.user?.admin" type="button" @click="runRowAction(openStudentPassword)"><Eye :size="15"/>查看密码</button>
@@ -675,18 +687,17 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
 </template>
 
 <style scoped>
-.ranking-list-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
 .ranking-reward-status-button { min-width:76px; height:34px; justify-content:center; white-space:nowrap; }
 .reward-publication-hint { font-size:13px; line-height:1.6; color:#687e86; }
 .ranking-graduation-column { width:100px; min-width:100px; white-space:nowrap; }
-.graduation-dialog { width:min(760px,calc(100vw - 32px)); }
-.graduation-dialog-body { padding:20px 24px; max-height:65vh; overflow:auto; }
-.graduation-dialog-body > .ranking-search { width:100%; margin-bottom:16px; }
-.graduation-dialog .ranking-search input { width:100%; min-width:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; outline:none; }
-.graduation-dialog-body .ranking-admin-table { min-width:520px; }
+.student-list-tabs { display:flex; align-items:center; gap:24px; margin:0 0 5px; }
+.student-list-tabs button { position:relative; display:inline-flex; align-items:center; min-height:36px; padding:0 0 6px; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:#7b8b91; font-family:inherit; font-size:17px; font-weight:650; line-height:1.4; cursor:pointer; }
+.student-list-tabs button.active { color:#0f766e; border-bottom-color:#0f766e; }
+.student-list-tabs button:hover { color:#0f766e; }
+.student-list-tabs button:focus-visible { outline:2px solid #0f766e; outline-offset:4px; border-radius:4px; }
+.graduate-list-error { margin:16px; }
 @media(max-width:760px) {
- .ranking-list-header-actions { width:100%; justify-content:flex-start; }
- .ranking-list-header-actions .ranking-search { width:100%; }
- .graduation-dialog-body { padding:16px; }
+ .student-list-tabs { gap:20px; }
+ .student-list-tabs button { font-size:16px; }
 }
 </style>
