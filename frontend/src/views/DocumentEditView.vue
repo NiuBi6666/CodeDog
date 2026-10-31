@@ -164,6 +164,7 @@ onBeforeUnmount(() => { window.clearTimeout(successTimer); window.clearTimeout(t
 
 <template>
   <AdminLayout :page-title="isNew ? '新建文档' : '编辑文档'" active-page="documents">
+    <div class="editor-sticky-heading">
     <div class="editor-titlebar"><input v-model="title" class="title-input" maxlength="200" aria-label="文档标题" placeholder="输入文档标题" @input="markDirty"><nav class="editor-actions" aria-label="文档操作"><RouterLink class="button button-quiet" to="/doc/list">文档列表</RouterLink><a v-if="!isNew" class="button button-quiet" :href="`/doc/show/${route.params.id}`">查看</a></nav></div>
     <div class="editor-toolbar" role="toolbar" aria-label="文档编辑工具">
       <div class="toolbar-tools">
@@ -197,6 +198,7 @@ onBeforeUnmount(() => { window.clearTimeout(successTimer); window.clearTimeout(t
       <button class="toolbar-save" type="button" @mousedown.prevent @click="saveNow"><Save :size="16"/>{{ isNew ? "创建" : "保存" }}</button>
       <input ref="imageInput" class="editor-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" @change="handleImageInput">
     </div>
+    </div>
     <div class="editor-shell admin-editor-shell"><div ref="editor" class="document editor-document" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" @input="editorInput" @mouseup="captureSelection" @keyup="captureSelection" @focus="captureSelection" @paste="handlePaste" @dblclick="editFormula"></div></div>
     <p v-if="saveState === 'error'" class="document-save-error" role="alert">{{ saveMessage }}</p>
     <div v-if="conflict" class="conflict-banner"><span>文档已在其他页面更新</span><button class="button button-primary" type="button" @click="reloadPage">载入最新版本</button></div>
@@ -209,6 +211,9 @@ onBeforeUnmount(() => { window.clearTimeout(successTimer); window.clearTimeout(t
 </template>
 
 <style scoped>
+.editor-sticky-heading { position: sticky; top: 60px; z-index: 20; padding: 10px 0 0; background: var(--bg, #edf1f3); }
+.editor-sticky-heading .editor-toolbar { position: static; }
+@media (max-width: 760px) { .editor-sticky-heading { top: 58px; } }
 .document-save-error { color: #b42318; margin: 12px 0; font-size: 14px; }
 .document-save-toast { position: fixed; top: 28px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; align-items: center; gap: 8px; padding: 14px 22px; max-width: calc(100vw - 32px); border: 1px solid #edf0ef; border-radius: 8px; background: #fff; color: #283b40; box-shadow: 0 8px 28px rgba(0, 0, 0, .15); font-size: 14px; line-height: 22px; pointer-events: none; }
 .document-save-toast svg { color: #fff; fill: #52c41a; stroke-width: 2.5; flex-shrink: 0; }
