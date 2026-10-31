@@ -125,11 +125,21 @@ public class RankingBoardService {
     if (visible.stream().noneMatch(row -> row.studentId().equals(studentId))) {
       full.rankings().stream().filter(row -> row.studentId().equals(studentId)).findFirst().ifPresent(visible::add);
     }
-    if (visible.isEmpty() || visible.stream().noneMatch(row -> row.studentId().equals(studentId))) {
+    if (visible.stream().noneMatch(row -> row.studentId().equals(studentId)) && !isGraduated(ownerValue, studentId)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "学员不在当前排行榜中");
     }
     return new RankingPayload.Board(full.campId(), full.campName(), full.classId(), full.className(), full.scope(),
         full.studentCount(), full.updatedAt(), full.trendBaselineDate(), List.copyOf(visible));
+  }
+
+  public boolean isGraduated(String owner,String studentId) {
+    return jdbc.queryForObject("""
+      SELECT COUNT(*) FROM ranking_student_graduations g
+      WHERE g.owner_username=? AND g.student_id=? AND g.graduated_at IS NOT NULL
+      AND EXISTS (SELECT 1 FROM ranking_students s WHERE s.owner_username=g.owner_username AND s.student_id=g.student_id)
+      AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=g.student_id
+        AND (o.state<>'ACTIVE' OR o.owner_username<>g.owner_username))
+      """,Integer.class,owner,studentId)>0;
   }
 
   public RankingPayload.OpportunitySummary opportunities(String studentValue) {
@@ -215,7 +225,7 @@ public class RankingBoardService {
           GROUP BY owner_username,student_id) a ON a.owner_username=s.owner_username AND a.student_id=s.student_id
         LEFT JOIN (SELECT owner_username,student_id,SUM(points_spent) spent_points FROM ranking_reward_redemptions
           GROUP BY owner_username,student_id) p ON p.owner_username=s.owner_username AND p.student_id=s.student_id
-        WHERE s.owner_username=? AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=s.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>s.owner_username))
+        WHERE s.owner_username=? AND NOT EXISTS (SELECT 1 FROM ranking_student_graduations g WHERE g.owner_username=s.owner_username AND g.student_id=s.student_id AND g.graduated_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=s.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>s.owner_username))
         GROUP BY s.student_id
         ORDER BY available_points DESC,score_reached_at ASC,accuracy_basis_points DESC,homework_points DESC,
           inclass_points DESC,completion_points DESC,s.student_id
@@ -248,7 +258,7 @@ public class RankingBoardService {
           AND a.class_id=s.class_id AND a.student_id=s.student_id
         LEFT JOIN (SELECT owner_username,student_id,SUM(points_spent) spent_points FROM ranking_reward_redemptions
           GROUP BY owner_username,student_id) p ON p.owner_username=s.owner_username AND p.student_id=s.student_id
-        WHERE s.owner_username=? AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=s.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>s.owner_username)) AND s.camp_id=?
+        WHERE s.owner_username=? AND NOT EXISTS (SELECT 1 FROM ranking_student_graduations g WHERE g.owner_username=s.owner_username AND g.student_id=s.student_id AND g.graduated_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM ranking_current_ownership o WHERE o.student_id=s.student_id AND (o.state<>'ACTIVE' OR o.owner_username<>s.owner_username)) AND s.camp_id=?
         """ + filter + " GROUP BY s.student_id ORDER BY available_points DESC,score_reached_at ASC,accuracy_basis_points DESC,"
         + "homework_points DESC,inclass_points DESC,completion_points DESC,s.student_id";
     return jdbc.query(sql, (rs, n) -> aggregateRow(rs), args.toArray());

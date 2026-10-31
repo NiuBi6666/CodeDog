@@ -290,4 +290,47 @@ class StudentAccountManagementIntegrationTest {
     assertThat(logs).doesNotContain("wrong-secret","updated-secret",hash,"123456");
   }
 
+
+  @Test void graduationPermissionsAreIndependentRevocableAndAuditedWithoutDeletingAccount() throws Exception {
+    String phone=phone();accounts.edit(owner,"s1",phone,"");
+    String url="/api/rankings/admin/students/s1/graduation";
+    MockHttpSession session=teacherLogin();
+    mvc.perform(put(url).session(session).with(csrf())).andExpect(status().isForbidden());
+    mvc.perform(get("/api/rankings/admin/graduates").session(session)).andExpect(status().isForbidden());
+    grant("rankings.students.graduate");
+    mvc.perform(put(url).session(session)).andExpect(status().isForbidden());
+    mvc.perform(put(url).session(session).with(csrf())).andExpect(status().isOk())
+      .andExpect(jsonPath("$.graduated").value(true)).andExpect(jsonPath("$.changed").value(true));
+    mvc.perform(put(url).session(session).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.changed").value(false));
+    mvc.perform(delete(url).session(session).with(csrf())).andExpect(status().isForbidden());
+    grant("rankings.graduates.read");
+    mvc.perform(put(url).session(session).with(csrf())).andExpect(status().isForbidden());
+    mvc.perform(get("/api/rankings/admin/graduates").session(session)).andExpect(status().isOk())
+      .andExpect(jsonPath("$[0].studentId").value("s1"));
+    grant("rankings.graduates.read","rankings.students.restore");
+    mvc.perform(delete(url).session(session).with(csrf())).andExpect(status().isOk())
+      .andExpect(jsonPath("$.graduated").value(false)).andExpect(jsonPath("$.changed").value(true));
+    grant();
+    mvc.perform(delete(url).session(session).with(csrf())).andExpect(status().isForbidden());
+    mvc.perform(get("/api/rankings/admin/graduates").session(session)).andExpect(status().isForbidden());
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_student_accounts WHERE owner_username=? AND student_id='s1'",Integer.class,owner)).isEqualTo(1);
+    var log=jdbc.queryForMap("SELECT owner_username,target_type,target_id,changes_json,detail_json,status_code FROM audit_log WHERE owner_username=? AND action='ranking_student_graduated:s1' AND status_code=200 ORDER BY id LIMIT 1",owner);
+    assertThat(log.get("target_type")).isEqualTo("STUDENT_GRADUATION");
+    assertThat(log.get("target_id")).isEqualTo("s1");
+    assertThat(log.get("changes_json").toString()).contains("graduated","false","true");
+    assertThat(log.get("detail_json").toString()).contains("studentId","graduatedAt","changed").doesNotContain(phone,"123456");
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE owner_username=? AND action='ranking_student_restored:s1' AND status_code=200",Integer.class,owner)).isEqualTo(1);
+  }
+  @Test void graduationRejectsForeignStudentsAndLeavesTheirAccountsAndStatusUntouched() throws Exception {
+    String foreign="foreign"+UUID.randomUUID().toString().substring(0,6);
+    add(foreign,"foreign-student","其他老师学生");
+    grant("rankings.students.graduate","rankings.students.restore","rankings.graduates.read");
+    MockHttpSession session=teacherLogin();
+    String url="/api/rankings/admin/students/foreign-student/graduation";
+    mvc.perform(put(url).session(session).with(csrf())).andExpect(status().isNotFound());
+    mvc.perform(delete(url).session(session).with(csrf())).andExpect(status().isNotFound());
+    jdbc.update("INSERT INTO ranking_student_graduations(owner_username,student_id,graduated_at,updated_by) VALUES(?,'foreign-student',CURRENT_TIMESTAMP,?)",foreign,foreign);
+    mvc.perform(get("/api/rankings/admin/graduates").session(session)).andExpect(status().isOk()).andExpect(content().json("[]"));
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_student_graduations WHERE owner_username=? AND graduated_at IS NOT NULL",Integer.class,foreign)).isEqualTo(1);
+  }
 }

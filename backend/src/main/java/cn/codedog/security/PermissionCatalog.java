@@ -16,6 +16,9 @@ public final class PermissionCatalog {
     public static final String QUESTIONNAIRE_VIEW = "questionnaire.view";
     public static final String RANKINGS_VIEW = "rankings.view";
     public static final String RANKINGS_BOARD_READ = "rankings.board.read";
+    public static final String RANKINGS_GRADUATES_READ = "rankings.graduates.read";
+    public static final String RANKINGS_GRADUATE = "rankings.students.graduate";
+    public static final String RANKINGS_RESTORE = "rankings.students.restore";
     public static final String RANKINGS_SHARE = "rankings.share";
     public static final String RANKINGS_ANNOUNCEMENTS_READ = "rankings.announcements.read";
     public static final String RANKINGS_ANNOUNCEMENTS_CREATE = "rankings.announcements.create";
@@ -86,6 +89,9 @@ public final class PermissionCatalog {
         new Group("rankings", "学生排名", List.of(
             page(RANKINGS_VIEW, "访问学生排名页面"),
             data(RANKINGS_BOARD_READ, "查看全量排名"),
+            data(RANKINGS_GRADUATES_READ, "查看已毕业学员"),
+            action(RANKINGS_GRADUATE, "标记学员毕业"),
+            action(RANKINGS_RESTORE, "恢复毕业学员排名"),
             action(RANKINGS_SHARE, "分享学生排行榜"),
             data(RANKINGS_ANNOUNCEMENTS_READ, "查看公告"),
             action(RANKINGS_ANNOUNCEMENTS_CREATE, "发布公告"),

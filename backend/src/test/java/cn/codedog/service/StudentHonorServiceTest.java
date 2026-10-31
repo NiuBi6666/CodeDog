@@ -67,4 +67,16 @@ class StudentHonorServiceTest {
   assertThatThrownBy(()->service.board(request)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
   assertThatThrownBy(()->service.claim(request)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);verifyNoInteractions(audit);
  }
+
+ @Test void graduatedStudentCanOpenBoardButNeverAppearsInTopTenOrOwnRow(){
+  setRows(List.of(entry("s0",1,2200,120)));
+  when(boards.isGraduated("teacherA","s11")).thenReturn(true);
+  jdbc.execute("CREATE TABLE ranking_lesson_results(owner_username VARCHAR(50),student_id VARCHAR(100),total_points INT)");
+  jdbc.update("INSERT INTO ranking_lesson_results VALUES('teacherA','s11',800)");
+  var view=service.board(request);
+  assertThat(view.board().rankings()).extracting(RankingPayload.Entry::studentId).containsExactly("s0");
+  assertThat(view.styles()).doesNotContainKey("s11");assertThat(view.honors()).doesNotContainKey("s11");
+  assertThat(view.myHonor().experience()).isEqualTo(800);assertThat(view.promotionDue()).isFalse();
+  assertThat(view.motivation()).contains("已毕业");
+ }
 }

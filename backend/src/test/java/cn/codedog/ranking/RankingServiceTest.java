@@ -472,4 +472,49 @@ class RankingServiceTest {
   assertThatThrownBy(()->points.repair("Liam","repair-test",3,0,"重复操作")).isInstanceOf(ResponseStatusException.class);
  }
 
+
+  @Test void graduationHidesEveryClassAndStudentBoardThenRestoresOriginalBalanceAndRanks() {
+    addStudent("Liam","graduate","毕业同学","2026-01-01T10:00:00Z",100,0,0);
+    addStudent("Liam","active","在读同学","2026-01-01T11:00:00Z",90,0,0);
+    addScopeAt("Liam","camp-two","class-two","第二营","第二班");
+    addStudentAt("Liam","camp-two","class-two","graduate","毕业同学","2026-01-01T10:00:00Z",3,0,0);
+    var graduates=new RankingGraduationService(jdbc);
+    var first=graduates.setGraduated("Liam","graduate",true,"Liam");
+    assertThat(first.changed()).isTrue();assertThat(first.graduatedBefore()).isFalse();
+    assertThat(graduates.setGraduated("Liam","graduate",true,"Liam").graduatedAt()).isEqualTo(first.graduatedAt());
+    assertThat(graduates.graduates("Liam")).extracting(RankingGraduationService.Graduate::studentId).containsExactly("graduate");
+    assertThat(service.allBoardForOwner("Liam").rankings()).extracting(RankingPayload.Entry::studentId).containsExactly("active");
+    assertThat(service.allBoardForOwner("Liam").rankings().getFirst().rank()).isEqualTo(1);
+    assertThat(service.board("CD-ADMIN001","camp","class","class").rankings()).extracting(RankingPayload.Entry::studentId).containsExactly("active");
+    assertThat(service.studentBoard("Liam","graduate").rankings()).extracting(RankingPayload.Entry::studentId).containsExactly("active");
+    assertThat(service.studentBoard("Liam","active").rankings()).extracting(RankingPayload.Entry::studentId).doesNotContain("graduate");
+    // A later course import must not implicitly restore participation.
+    jdbc.update("UPDATE ranking_lesson_results SET total_points=120 WHERE owner_username='Liam' AND student_id='graduate' AND camp_id='camp'");
+    assertThat(service.allBoardForOwner("Liam").rankings()).extracting(RankingPayload.Entry::studentId).doesNotContain("graduate");
+    assertThat(graduates.setGraduated("Liam","graduate",false,"Liam").changed()).isTrue();
+    assertThat(graduates.setGraduated("Liam","graduate",false,"Liam").changed()).isFalse();
+    assertThat(graduates.graduates("Liam")).isEmpty();
+    assertThat(service.allBoardForOwner("Liam").rankings()).extracting(RankingPayload.Entry::studentId).containsExactly("graduate","active");
+    assertThat(service.allBoardForOwner("Liam").rankings().getFirst().availablePoints()).isEqualTo(123);
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ranking_lesson_results WHERE student_id='graduate'",Integer.class)).isEqualTo(2);
+  }
+  @Test void graduationIsTenantScopedAndNeverChangesTransferredStudents() {
+    addStudent("Liam","shared","甲","2026-01-01T10:00:00Z",100,0,0);
+    addStudent("teacher-b","shared","乙","2026-01-01T10:00:00Z",90,0,0);
+    var graduates=new RankingGraduationService(jdbc);
+    graduates.setGraduated("Liam","shared",true,"Liam");
+    assertThat(graduates.graduates("teacher-b")).isEmpty();
+    assertThat(service.allBoardForOwner("teacher-b").rankings()).hasSize(1);
+    assertThatThrownBy(()->graduates.setGraduated("teacher-b","absent",true,"teacher-b")).isInstanceOf(ResponseStatusException.class);
+    jdbc.update("INSERT INTO ranking_current_ownership(student_id,owner_username,state) VALUES('shared','teacher-b','ACTIVE')");
+    assertThatThrownBy(()->graduates.setGraduated("Liam","shared",false,"Liam")).isInstanceOf(ResponseStatusException.class);
+    assertThat(graduates.graduates("Liam")).isEmpty();
+  }
+  @Test void fullyGraduatedTenantHasEmptyStudentBoardWithoutDeletingStudents() {
+    addStudent("Liam","only","唯一学员","2026-01-01T10:00:00Z",3,0,0);
+    new RankingGraduationService(jdbc).setGraduated("Liam","only",true,"Liam");
+    assertThat(service.studentBoard("Liam","only").rankings()).isEmpty();
+    assertThat(service.studentBoard("Liam","only").studentCount()).isZero();
+    assertThatThrownBy(()->service.studentBoard("Liam","missing")).isInstanceOf(ResponseStatusException.class);
+  }
 }

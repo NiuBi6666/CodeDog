@@ -24,20 +24,22 @@ public class StudentHonorService {
   public BoardView board(HttpServletRequest request) {
     var student=auth.current(request);
     var full=boards.allBoardForOwner(student.ownerUsername());
-    var mine=full.rankings().stream().filter(r->r.studentId().equals(student.studentId())).findFirst().orElseThrow(()->new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"学员不在当前排行榜中"));
+    var mine=full.rankings().stream().filter(r->r.studentId().equals(student.studentId())).findFirst().orElse(null);
+    boolean graduated=boards.isGraduated(student.ownerUsername(),student.studentId());
+    if(mine==null&&!graduated)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"学员不在当前排行榜中");
     var visible=new ArrayList<>(full.rankings().stream().limit(10).toList());
-    if(visible.stream().noneMatch(r->r.studentId().equals(student.studentId())))visible.add(mine);
+    if(mine!=null&&visible.stream().noneMatch(r->r.studentId().equals(student.studentId())))visible.add(mine);
     var board=new RankingPayload.Board(full.campId(),full.campName(),full.classId(),full.className(),full.scope(),full.studentCount(),full.updatedAt(),full.trendBaselineDate(),List.copyOf(visible));
     Map<String,HonorLevels.Honor> honors=new LinkedHashMap<>();
     visible.forEach(r->honors.put(r.studentId(),HonorLevels.of(r.totalPoints())));
-    var honor=honors.get(student.studentId());
-    String motivation=full.rankings().stream().filter(r->r.rank()<mine.rank()).reduce((a,b)->b)
+    var honor=mine==null?HonorLevels.of(jdbc.queryForObject("SELECT COALESCE(SUM(total_points),0) FROM ranking_lesson_results WHERE owner_username=? AND student_id=?",Integer.class,student.ownerUsername(),student.studentId())):honors.get(student.studentId());
+    String motivation=mine==null?"你已毕业，暂不参与排名；历史积分和兑换记录已保留。":full.rankings().stream().filter(r->r.rank()<mine.rank()).reduce((a,b)->b)
       .map(r->"距离超越上一名还差 "+((long)r.availablePoints()-mine.availablePoints()+1)+" 积分，冲鸭！")
       .orElse("你已站上榜首，继续积攒积分，守住荣耀！");
     audit.owner(student.ownerUsername());audit.actor("STUDENT",student.studentId(),student.studentName());
     audit.event("rankings","READ","student_honor_board_viewed");audit.target("RANKING_BOARD",student.ownerUsername());
-    audit.detail(Map.of("returnedCount",visible.size(),"includesSelf",true));audit.record("student_honor_board_viewed",request);
-    return new BoardView(board,Map.copyOf(honors),styles.publicStyles(student.ownerUsername(),visible),honor,HonorLevels.TIERS,honor.level()>announced(student.ownerUsername(),student.studentId()),motivation);
+    audit.detail(Map.of("returnedCount",visible.size(),"includesSelf",mine!=null));audit.record("student_honor_board_viewed",request);
+    return new BoardView(board,Map.copyOf(honors),styles.publicStyles(student.ownerUsername(),visible),honor,HonorLevels.TIERS,!graduated&&honor.level()>announced(student.ownerUsername(),student.studentId()),motivation);
   }
   @Transactional
   public Celebration claim(HttpServletRequest request) {
