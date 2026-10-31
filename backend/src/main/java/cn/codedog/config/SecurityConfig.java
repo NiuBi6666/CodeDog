@@ -101,6 +101,8 @@ public class SecurityConfig {
                     .access(permission(permissions, PermissionCatalog.RANKINGS_REWARDS_CREATE))
                 .requestMatchers(HttpMethod.PUT, "/api/rankings/admin/rewards/*")
                     .access(permission(permissions, PermissionCatalog.RANKINGS_REWARDS_EDIT))
+                .requestMatchers(HttpMethod.PATCH, "/api/rankings/admin/rewards/*/status")
+                    .access(permission(permissions, PermissionCatalog.RANKINGS_REWARDS_STATUS))
                 .requestMatchers(HttpMethod.DELETE, "/api/rankings/admin/rewards/*")
                     .access(permission(permissions, PermissionCatalog.RANKINGS_REWARDS_DELETE))
                 .requestMatchers(HttpMethod.GET, "/api/rankings/admin/redemptions")

@@ -434,4 +434,35 @@ class RankingRewardServiceTest {
     assertThat(service.announcements("teacher-b")).isEmpty();
   }
 
+
+  @Test void publishedRewardsIncludeSoldOutLastAndOfflineCannotRedeemEvenFromStalePage() {
+    var empty=service.createReward("teacher-a","低价已兑完",1,true,null,0);
+    var stocked=service.createReward("teacher-a","高价有库存",100,true,null,2);
+    var offline=service.createReward("teacher-a","下线商品",2,false,null,3);
+    assertThat(service.publicRewards("teacher-a")).extracting(RankingRewardPayload.Reward::id).containsExactly(stocked.id(),empty.id());
+    var change=transactions().execute(s->service.setRewardOnline("teacher-a",stocked.id(),false));
+    assertThat(change.before().enabled()).isTrue();assertThat(change.after().enabled()).isFalse();
+    assertThat(change.after().stock()).isEqualTo(2);
+    assertThat(service.publicRewards("teacher-a")).extracting(RankingRewardPayload.Reward::id).containsExactly(empty.id());
+    assertThatThrownBy(()->transactions().execute(s->service.createStudentRedemption("teacher-a","student-1",stocked.id())))
+      .isInstanceOf(ResponseStatusException.class).hasMessageContaining("已下线");
+    assertThat(service.redemptions("teacher-a")).isEmpty();
+    assertThat(service.rewards("teacher-a").stream().filter(r->r.id()==stocked.id()).findFirst().orElseThrow().stock()).isEqualTo(2);
+    assertThat(service.updateReward("teacher-a",stocked.id(),"修改下线商品",100,null,null,null,null).enabled()).isFalse();
+    transactions().execute(s->service.setRewardOnline("teacher-a",stocked.id(),true));
+    assertThat(service.publicRewards("teacher-a")).extracting(RankingRewardPayload.Reward::id).containsExactly(stocked.id(),empty.id());
+    assertThatThrownBy(()->transactions().execute(s->service.createStudentRedemption("teacher-a","student-1",empty.id())))
+      .isInstanceOf(ResponseStatusException.class).hasMessageContaining("已兑完");
+    assertThatThrownBy(()->service.setRewardOnline("teacher-b",stocked.id(),false)).isInstanceOf(ResponseStatusException.class);
+    assertThat(service.rewards("teacher-a")).extracting(RankingRewardPayload.Reward::id).contains(offline.id());
+  }
+  @Test void publicationStatusDoesNotResurrectDeletedRewardsAndIsRollbackSafe() {
+    var reward=service.createReward("teacher-a","回滚上下线",1,true,null,3);
+    transactions().execute(s->{service.setRewardOnline("teacher-a",reward.id(),false);s.setRollbackOnly();return null;});
+    assertThat(service.publicRewards("teacher-a")).extracting(RankingRewardPayload.Reward::id).contains(reward.id());
+    service.deleteReward("teacher-a",reward.id());
+    assertThatThrownBy(()->service.setRewardOnline("teacher-a",reward.id(),true)).isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(()->service.createStudentRedemption("teacher-a","student-1",reward.id())).isInstanceOf(ResponseStatusException.class);
+    assertThat(service.publicRewards("teacher-a")).isEmpty();
+  }
 }

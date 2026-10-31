@@ -129,7 +129,7 @@ public class RankingRewardService {
   }
 
   public List<RankingRewardPayload.Reward> publicRewards(String owner) {
-    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE AND deleted_at IS NULL ORDER BY required_points,id",
+    return jdbc.query("SELECT id,reward_name,required_points,enabled,image_data IS NOT NULL,created_at,updated_at,stock FROM ranking_rewards WHERE owner_username=? AND enabled=TRUE AND deleted_at IS NULL ORDER BY CASE WHEN stock>0 THEN 0 ELSE 1 END,required_points,id",
       (rs, n) -> reward(rs.getLong(1), rs.getString(2), rs.getInt(3), true, rs.getBoolean(5), instant(rs.getTimestamp(6)), instant(rs.getTimestamp(7)), rs.getInt(8), true), owner);
   }
 
@@ -161,12 +161,24 @@ public class RankingRewardService {
     String name = text(nameValue, "奖品名称", 100);
     int points = points(pointsValue);
     ImageValue imageValue = image(image, false);
+    boolean enabled = enabledValue == null ? before.enabled() : enabledValue;
     int changed = imageValue == null
-      ? jdbc.update("UPDATE ranking_rewards SET reward_name=?,required_points=?,enabled=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", name, points, enabledValue == null || enabledValue, id, owner)
-      : jdbc.update("UPDATE ranking_rewards SET reward_name=?,required_points=?,enabled=?,image_data=?,image_content_type=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", name, points, enabledValue == null || enabledValue, imageValue.data(), imageValue.contentType(), id, owner);
+      ? jdbc.update("UPDATE ranking_rewards SET reward_name=?,required_points=?,enabled=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", name, points, enabled, id, owner)
+      : jdbc.update("UPDATE ranking_rewards SET reward_name=?,required_points=?,enabled=?,image_data=?,image_content_type=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", name, points, enabled, imageValue.data(), imageValue.contentType(), id, owner);
     if (changed == 0) throw notFound("奖品不存在");
     if (stockValue != null) jdbc.update("UPDATE ranking_rewards SET stock=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=?", stockValue, id, owner);
     return rewardById(owner, id);
+  }
+
+  public record RewardStatusChange(RankingRewardPayload.Reward before, RankingRewardPayload.Reward after) {}
+
+  @Transactional
+  public RewardStatusChange setRewardOnline(String owner, long id, boolean online) {
+    var found=jdbc.queryForList("SELECT id FROM ranking_rewards WHERE id=? AND owner_username=? AND deleted_at IS NULL FOR UPDATE",id,owner);
+    if(found.isEmpty())throw notFound("奖品不存在");
+    var before=rewardById(owner,id);
+    if(before.enabled()!=online)jdbc.update("UPDATE ranking_rewards SET enabled=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=? AND owner_username=? AND deleted_at IS NULL",online,id,owner);
+    return new RewardStatusChange(before,rewardById(owner,id));
   }
 
   @Transactional
@@ -186,7 +198,7 @@ public class RankingRewardService {
   }
 
   public RankingRewardPayload.RewardImage publicRewardImage(String owner, long id) {
-    List<RankingRewardPayload.RewardImage> values = jdbc.query("SELECT image_data,image_content_type FROM ranking_rewards WHERE id=? AND owner_username=? AND enabled=TRUE AND image_data IS NOT NULL",
+    List<RankingRewardPayload.RewardImage> values = jdbc.query("SELECT image_data,image_content_type FROM ranking_rewards WHERE id=? AND owner_username=? AND enabled=TRUE AND deleted_at IS NULL AND image_data IS NOT NULL",
       (rs, n) -> new RankingRewardPayload.RewardImage(rs.getBytes(1), rs.getString(2)), id, owner);
     if (values.isEmpty()) throw notFound("奖品图片不存在");
     return values.getFirst();
@@ -239,11 +251,11 @@ public class RankingRewardService {
     // Lock every current student row before reading the balance so two tabs cannot spend the same points.
     List<String> names = jdbc.query("SELECT student_name FROM ranking_students WHERE owner_username=? AND student_id=? ORDER BY updated_at DESC FOR UPDATE", (rs, n) -> rs.getString(1), owner, studentId);
     if (names.isEmpty()) throw notFound("学员不存在");
-    List<RewardValue> rewardValues = jdbc.query("SELECT id,reward_name,required_points,enabled,stock FROM ranking_rewards WHERE id=? AND owner_username=? FOR UPDATE",
+    List<RewardValue> rewardValues = jdbc.query("SELECT id,reward_name,required_points,enabled,stock FROM ranking_rewards WHERE id=? AND owner_username=? AND deleted_at IS NULL FOR UPDATE",
       (rs, n) -> new RewardValue(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), rs.getInt(5)), rewardId, owner);
     if (rewardValues.isEmpty()) throw notFound("奖品不存在");
     RewardValue reward = rewardValues.getFirst();
-    if (!reward.enabled()) throw invalid("该奖品已停用");
+    if (!reward.enabled()) throw invalid("该奖品已下线，无法兑换");
     if (reward.stock() <= 0) throw invalid("该奖品已兑完，请选择其他奖品");
     RankingPointsService points = new RankingPointsService(jdbc);
     long rawBefore = points.raw(owner,studentId);

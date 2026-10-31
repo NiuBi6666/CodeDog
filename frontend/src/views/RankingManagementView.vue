@@ -187,12 +187,14 @@ const canRewardsRead = computed(() => hasPermission("rankings.rewards.read"));
 const canPointsEdit = computed(() => hasPermission("rankings.points.edit"));
 const canRewardsCreate = computed(() => hasPermission("rankings.rewards.create"));
 const canRewardsEdit = computed(() => hasPermission("rankings.rewards.edit"));
+const rewardStatusBusy = ref(null);
+const canRewardsStatus = computed(() => hasPermission("rankings.rewards.status"));
 const canRewardsDelete = computed(() => hasPermission("rankings.rewards.delete"));
 const canRedemptionsRead = computed(() => hasPermission("rankings.redemptions.read"));
 const canRedemptionsCreate = computed(() => hasPermission("rankings.redemptions.create"));
 const canRedemptionsFulfill = computed(() => hasPermission("rankings.redemptions.fulfill"));
 const canAnnouncementsTab = computed(() => canAnnouncementsRead.value || canAnnouncementsCreate.value || canAnnouncementsEdit.value || canAnnouncementsStatus.value);
-const canRewardsTab = computed(() => canRewardsRead.value || canRewardsCreate.value || canRewardsEdit.value || canRewardsDelete.value);
+const canRewardsTab = computed(() => canRewardsRead.value || canRewardsCreate.value || canRewardsEdit.value || canRewardsDelete.value || canRewardsStatus.value);
 const canRedemptionsTab = computed(() => canRedemptionsRead.value || canRedemptionsCreate.value || canRedemptionsFulfill.value);
 const canRefresh = computed(() => canBoardRead.value || canAnnouncementsRead.value || canRewardsRead.value || canRedemptionsRead.value);
 
@@ -336,6 +338,21 @@ async function saveAnnouncementEdit(item) {
   } catch (failure) { notify(failure.message); }
 }
 
+async function setRewardOnline(reward) {
+  if (rewardStatusBusy.value !== null) return;
+  const online = !reward.enabled;
+  if (!await showConfirm(online
+    ? `上线“${reward.name}”后将在学生端展示，有库存时可兑换。`
+    : `下线“${reward.name}”后将从学生端隐藏，且无法兑换。`,
+    { title: online ? "上线奖品" : "下线奖品", confirmText: online ? "确认上线" : "确认下线" })) return;
+  rewardStatusBusy.value = reward.id;
+  try {
+    const updated = await api(`/rankings/admin/rewards/${reward.id}/status`, { method: "PATCH", body: jsonBody({ online }) });
+    rewards.value = rewards.value.map(item => item.id === updated.id ? updated : item);
+    notify(online ? "奖品已上线" : "奖品已下线");
+  } catch (failure) { notify(failure.message || "状态修改失败，请重试"); }
+  finally { rewardStatusBusy.value = null; }
+}
 function openReward(reward = null) {
   rewardForm.value = reward ? { id: reward.id, name: reward.name, requiredPoints: reward.requiredPoints, stock: reward.stock, expectedStock: reward.stock, enabled: reward.enabled, imageUrl: reward.imageUrl || "" } : emptyRewardForm();
   rewardImage.value = null; rewardPreview.value = reward?.imageUrl || ""; rewardOpen.value = true;
@@ -351,7 +368,7 @@ async function saveReward() {
     const body = new FormData();
     body.set("stock", String(rewardForm.value.stock));
     if (rewardForm.value.id) body.set("expectedStock", String(rewardForm.value.expectedStock));
-    body.set("name", rewardForm.value.name); body.set("requiredPoints", String(rewardForm.value.requiredPoints)); body.set("enabled", String(rewardForm.value.enabled));
+    body.set("name", rewardForm.value.name); body.set("requiredPoints", String(rewardForm.value.requiredPoints));
     if (rewardImage.value) body.set("image", rewardImage.value);
     const path = rewardForm.value.id ? `/rankings/admin/rewards/${rewardForm.value.id}` : "/rankings/admin/rewards";
     await api(path, { method: rewardForm.value.id ? "PUT" : "POST", body });
@@ -581,8 +598,8 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
         <article v-for="reward in rewards" :key="reward.id" class="ranking-reward-row">
           <div class="ranking-reward-image"><img v-if="reward.imageUrl" :src="reward.imageUrl" :alt="reward.name"><Gift v-else :size="26"/></div>
           <div class="ranking-reward-copy"><strong>{{ reward.name }}</strong><span>{{ numberText(reward.requiredPoints) }} 积分 · 剩余 {{ numberText(reward.stock) }} 件</span></div>
-          <span class="ranking-status" :class="reward.enabled ? 'is-enabled' : 'is-disabled'">{{ !reward.enabled ? '已停用' : reward.stock > 0 ? '兑换中' : '已兑完' }}</span>
-          <div class="ranking-row-actions"><button v-if="canRewardsEdit" class="icon-button" type="button" title="编辑奖品" @click="openReward(reward)"><Pencil :size="16"/></button><button v-if="canRewardsDelete" class="icon-button ranking-danger-button" type="button" title="删除奖品" @click="deleteReward(reward)"><Trash2 :size="16"/></button></div>
+          <span class="ranking-status" :class="reward.enabled ? 'is-enabled' : 'is-disabled'">{{ !reward.enabled ? '已下线' : reward.stock > 0 ? '已上线' : '已上线 · 已兑完' }}</span>
+          <div class="ranking-row-actions"><button v-if="canRewardsStatus" class="button button-quiet ranking-reward-status-button" type="button" :disabled="rewardStatusBusy !== null" :aria-label="`${reward.enabled ? '下线' : '上线'}${reward.name}`" @click="setRewardOnline(reward)"><CircleOff v-if="reward.enabled" :size="15"/><CheckCircle2 v-else :size="15"/>{{ reward.enabled ? '下线' : '上线' }}</button><button v-if="canRewardsEdit" class="icon-button" type="button" title="编辑奖品" @click="openReward(reward)"><Pencil :size="16"/></button><button v-if="canRewardsDelete" class="icon-button ranking-danger-button" type="button" title="删除奖品" @click="deleteReward(reward)"><Trash2 :size="16"/></button></div>
         </article>
       </div>
     </section>
@@ -624,7 +641,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
 
     <div v-if="rewardOpen && (rewardForm.id ? canRewardsEdit : canRewardsCreate)" class="ranking-share-backdrop ui-dialog-backdrop" @click.self="closeReward">
       <form class="ranking-share-dialog ui-modal ranking-form-dialog" role="dialog" aria-modal="true" aria-label="排行榜管理" @submit.prevent="saveReward"><header><div><span><Gift :size="18"/></span><div><h2>{{ rewardForm.id ? '编辑奖品' : '添加奖品' }}</h2><p>设置展示信息与兑换积分</p></div></div><button class="icon-button" type="button" title="关闭" @click="closeReward"><X :size="17"/></button></header>
-        <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="999999999"></label><label><span>剩余库存</span><input v-model.number="rewardForm.stock" required type="number" min="0" max="999999999" step="1"><small>每次兑换扣减 1 件；0 件时无法兑换。</small></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><label class="ranking-checkbox"><input v-model="rewardForm.enabled" type="checkbox"><span>允许兑换</span></label></div>
+        <div class="ranking-form-body"><label><span>奖品名称</span><input v-model.trim="rewardForm.name" required maxlength="100" placeholder="例如：编程主题笔记本"></label><label><span>所需积分</span><input v-model.number="rewardForm.requiredPoints" required type="number" min="1" max="999999999"></label><label><span>剩余库存</span><input v-model.number="rewardForm.stock" required type="number" min="0" max="999999999" step="1"><small>每次兑换扣减 1 件；0 件时无法兑换。</small></label><label class="ranking-image-field"><span>奖品图片</span><div><div class="ranking-image-preview"><img v-if="rewardPreview" :src="rewardPreview" alt="奖品预览"><ImagePlus v-else :size="25"/></div><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="chooseRewardImage"><small>PNG、JPG、WebP 或 GIF，最大 2 MB</small></div></label><p class="reward-publication-hint">{{ rewardForm.id ? '展示状态请通过奖品列表的“上线／下线”按钮修改。' : '新建奖品默认上线；库存为 0 时仍展示，但不可兑换。' }}</p></div>
         <footer><button class="button button-quiet" type="button" @click="closeReward">取消</button><button class="button button-primary" type="submit" :disabled="rewardSaving">{{ rewardSaving ? '保存中' : '保存奖品' }}</button></footer>
       </form>
     </div>
@@ -659,6 +676,8 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", closeOnEscape); 
 
 <style scoped>
 .ranking-list-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
+.ranking-reward-status-button { min-width:76px; height:34px; justify-content:center; white-space:nowrap; }
+.reward-publication-hint { font-size:13px; line-height:1.6; color:#687e86; }
 .ranking-graduation-column { width:100px; min-width:100px; white-space:nowrap; }
 .graduation-dialog { width:min(760px,calc(100vw - 32px)); }
 .graduation-dialog-body { padding:20px 24px; max-height:65vh; overflow:auto; }

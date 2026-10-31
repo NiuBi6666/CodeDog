@@ -797,4 +797,47 @@ class RbacIntegrationTest {
         mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isUnauthorized());
     }
 
+
+    @Test void rewardPublicationHasIndependentPermissionRejectsBypassAndAuditsStatus() throws Exception {
+        jdbc.execute("""
+          CREATE TABLE IF NOT EXISTS ranking_rewards (
+            deleted_at TIMESTAMP(6),id BIGINT AUTO_INCREMENT PRIMARY KEY,owner_username VARCHAR(50) NOT NULL,
+            reward_name VARCHAR(100) NOT NULL,required_points INT NOT NULL,stock INT NOT NULL DEFAULT 0,
+            image_data BLOB,image_content_type VARCHAR(50),enabled BOOLEAN NOT NULL,
+            created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP)
+          """);
+        String username=uniqueUsername("pub");
+        User teacher=users.saveAndFlush(user(username,"publication-test-password"));
+        MockHttpSession session=login(username,"publication-test-password");
+        jdbc.update("INSERT INTO ranking_rewards(owner_username,reward_name,required_points,stock,enabled) VALUES(?,'发布测试',10,4,TRUE)",username);
+        long id=jdbc.queryForObject("SELECT id FROM ranking_rewards WHERE owner_username=?",Long.class,username);
+        String path="/api/rankings/admin/rewards/"+id+"/status";
+        mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":false}")).andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.edit","rankings.rewards.create")));users.saveAndFlush(teacher);
+        mvc.perform(multipart("/api/rankings/admin/rewards/{id}",id).with(req->{req.setMethod("PUT");return req;})
+          .session(session).with(csrf()).param("name","越权下线").param("requiredPoints","10").param("enabled","false")).andExpect(status().isForbidden());
+        mvc.perform(multipart("/api/rankings/admin/rewards").session(session).with(csrf())
+          .param("name","越权下线新商品").param("requiredPoints","10").param("enabled","false")).andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.status")));users.saveAndFlush(teacher);
+        mvc.perform(patch(path).session(session).contentType(APPLICATION_JSON).content("{\"online\":false}")).andExpect(status().isForbidden());
+        mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isUnprocessableEntity());
+        mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":false}")).andExpect(status().isOk())
+          .andExpect(jsonPath("$.enabled").value(false)).andExpect(jsonPath("$.stock").value(4));
+        String changes=jdbc.queryForObject("SELECT changes_json FROM audit_log WHERE action=? AND status_code=200 ORDER BY id DESC LIMIT 1",String.class,"ranking_reward_offline:"+id);
+        assertThat(changes).contains("enabled","true","false");
+        assertThat(jdbc.queryForObject("SELECT owner_username FROM audit_log WHERE action=? AND status_code=200 ORDER BY id DESC LIMIT 1",String.class,"ranking_reward_offline:"+id)).isEqualTo(username);
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.edit")));users.saveAndFlush(teacher);
+        mvc.perform(multipart("/api/rankings/admin/rewards/{id}",id).with(req->{req.setMethod("PUT");return req;})
+          .session(session).with(csrf()).param("name","编辑保留下线").param("requiredPoints","10")).andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
+        mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":true}")).andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("rankings.rewards.status")));users.saveAndFlush(teacher);
+        mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":true}")).andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(true));
+        String other=uniqueUsername("otherpub");
+        jdbc.update("INSERT INTO ranking_rewards(owner_username,reward_name,required_points,stock,enabled) VALUES(?,'其他老师',10,2,TRUE)",other);
+        long otherId=jdbc.queryForObject("SELECT id FROM ranking_rewards WHERE owner_username=?",Long.class,other);
+        mvc.perform(patch("/api/rankings/admin/rewards/{id}/status",otherId).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":false}")).andExpect(status().isNotFound());
+        teacher.setPermissions(new LinkedHashSet<>());users.saveAndFlush(teacher);
+        mvc.perform(patch(path).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"online\":false}")).andExpect(status().isForbidden());
+        jdbc.update("DELETE FROM ranking_rewards WHERE owner_username IN (?,?)",username,other);
+    }
 }

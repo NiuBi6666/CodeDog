@@ -130,6 +130,7 @@ public class RankingRewardAdminController {
   public RankingRewardPayload.Reward createReward(@RequestParam String name, @RequestParam Integer requiredPoints,
       @RequestParam(defaultValue = "true") Boolean enabled, @RequestParam(defaultValue = "0") Integer stock, @RequestParam(required = false) MultipartFile image,
       Principal principal, HttpServletRequest request) {
+    if (Boolean.FALSE.equals(enabled)) requireRewardStatusPermission();
     var value = rewards.createReward(principal.getName(), name, requiredPoints, enabled, image, stock);
     audit.change("REWARD", value.id(), java.util.Map.of(), rewardAudit(value));
     if (image != null && !image.isEmpty()) audit.detail(java.util.Map.of("image", audit.fileMetadata(image)));
@@ -138,15 +139,41 @@ public class RankingRewardAdminController {
 
   @PutMapping(value = "/rewards/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public RankingRewardPayload.Reward updateReward(@PathVariable long id, @RequestParam String name,
-      @RequestParam Integer requiredPoints, @RequestParam(defaultValue = "true") Boolean enabled,
+      @RequestParam Integer requiredPoints, @RequestParam(required = false) Boolean enabled,
       @RequestParam(required = false) MultipartFile image, @RequestParam(required = false) Integer stock,
       @RequestParam(required = false) Integer expectedStock, Principal principal, HttpServletRequest request) {
     var before = rewards.rewards(principal.getName()).stream().filter(item -> item.id() == id).findFirst().orElse(null);
-    var value = rewards.updateReward(principal.getName(), id, name, requiredPoints, enabled, image, stock, expectedStock);
+    Boolean statusChange = null;
+    if (enabled != null && before != null && enabled != before.enabled()) {
+      requireRewardStatusPermission(); statusChange = enabled;
+    }
+    var value = rewards.updateReward(principal.getName(), id, name, requiredPoints, statusChange, image, stock, expectedStock);
     audit.change("REWARD", id, before == null ? java.util.Map.of() : rewardAudit(before), rewardAudit(value));
     if (image != null && !image.isEmpty()) audit.detail(java.util.Map.of("image", audit.fileMetadata(image)));
     audit.record("ranking_reward_updated:" + id, request); return value;
   }
+
+  @PatchMapping("/rewards/{id}/status")
+  public RankingRewardPayload.Reward rewardStatus(@PathVariable long id, @RequestBody RewardStatusRequest body,
+      Principal principal, HttpServletRequest request) {
+    if (body == null || body.online() == null)
+      throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,"请选择上线或下线状态");
+    var value = rewards.setRewardOnline(principal.getName(),id,body.online());
+    audit.owner(principal.getName());
+    audit.event("rankings","UPDATE",body.online()?"ranking_reward_online":"ranking_reward_offline");
+    audit.change("REWARD",id,rewardAudit(value.before()),rewardAudit(value.after()));
+    audit.detail(java.util.Map.of("online",value.after().enabled(),"changed",value.before().enabled()!=value.after().enabled(),
+      "stock",value.after().stock(),"visibleToStudents",value.after().enabled()));
+    audit.record((body.online()?"ranking_reward_online:":"ranking_reward_offline:")+id,request);
+    return value.after();
+  }
+
+  private void requireRewardStatusPermission() {
+    if (!permissions.has(org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication(),
+        cn.codedog.security.PermissionCatalog.RANKINGS_REWARDS_STATUS))
+      throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN,"没有上线或下线奖品的权限");
+  }
+  public record RewardStatusRequest(Boolean online) {}
 
   @DeleteMapping("/rewards/{id}")
   @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
