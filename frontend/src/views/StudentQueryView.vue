@@ -46,6 +46,15 @@ function tableText() {
     row.student?.gender, row.student?.age, row.student?.grade, row.student?.className, row.state].map((value) => value || "-").join("\t"))].join("\n");
 }
 async function copyResults() { await writeClipboard(tableText()); notify("查询结果已复制"); }
+async function copyStudentIds() {
+  if (!hasPermission("students.copy")) return;
+  const ids = resultRows().map((row) => row.student?.userId).filter((id) => id != null && String(id).trim() !== "").map(String);
+  if (!ids.length) { notify("没有可复制的学生ID"); return; }
+  try {
+    await writeClipboard(ids.join("\n"));
+    notify("学生ID已复制");
+  } catch (_) { notify("复制失败，请重试"); }
+}
 function exportCsv() {
   const csv = "\uFEFF" + tableText().split("\n").map((line) => line.split("\t").map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -79,7 +88,7 @@ function exportCsv() {
         <div v-if="mode === 'name'" :class="{ warn: result.summary.ambiguous }"><strong>{{ result.summary.ambiguous }}</strong><span>重名</span></div>
       </section>
       <section class="admin-panel results-panel">
-        <div class="panel-heading"><h2>查询结果</h2><div class="button-row"><button v-if="hasPermission('students.copy')" class="button button-quiet button-small" type="button" @click="copyResults">复制结果</button><button v-if="hasPermission('students.export')" class="button button-quiet button-small" type="button" @click="exportCsv">导出 CSV</button></div></div>
+        <div class="panel-heading"><h2>查询结果</h2><div class="button-row"><button v-if="hasPermission('students.copy')" class="button button-quiet button-small" type="button" :disabled="!resultRows().some((row) => row.student?.userId)" @click="copyStudentIds">复制ID</button><button v-if="hasPermission('students.copy')" class="button button-quiet button-small" type="button" @click="copyResults">复制结果</button><button v-if="hasPermission('students.export')" class="button button-quiet button-small" type="button" @click="exportCsv">导出 CSV</button></div></div>
         <div class="document-table-wrap"><table class="document-table" data-result-table>
           <thead><tr><th>{{ mode === "id" ? "输入 ID" : "输入姓名" }}</th><th>{{ mode === "id" ? "姓名" : "学生 ID" }}</th><th>性别</th><th>年龄</th><th>年级</th><th>班级</th><th>状态</th></tr></thead>
           <tbody><tr v-for="(row, index) in resultRows()" :key="`${row.input}-${row.student?.userId || index}`">
