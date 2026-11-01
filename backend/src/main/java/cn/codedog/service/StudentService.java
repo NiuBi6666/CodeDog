@@ -8,6 +8,8 @@ import cn.codedog.dao.StudentRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class StudentService {
@@ -15,6 +17,21 @@ public class StudentService {
     private final StudentRepository repository;
 
     public StudentService(StudentRepository repository) { this.repository = repository; }
+    @Transactional
+    public ImportResult importStudents(MultipartFile file, StudentInfoExcelReader reader) {
+        var parsed = reader.parse(file);
+        List<String> ids = parsed.students().stream().map(StudentInfoExcelReader.StudentInfo::userId).toList();
+        Map<String, Student> existing = new HashMap<>();
+        repository.findByUserIdIn(ids).forEach(student -> existing.put(student.getUserId(), student));
+        int created = 0, updated = 0;
+        for (var value : parsed.students()) {
+            Student student = existing.get(value.userId());
+            if (student == null) { student = new Student(); student.setUserId(value.userId()); created++; }
+            else if (!Objects.equals(student.getName(), value.name())) updated++;
+            student.setName(value.name()); repository.save(student);
+        }
+        return new ImportResult(parsed.students().size(), created, updated);
+    }
 
     public QueryResult query(String mode, List<?> rawValues) {
         if (!Set.of("name", "id").contains(mode) || rawValues == null)
@@ -55,4 +72,5 @@ public class StudentService {
     public record QueryItem(String inputName, String inputId, Student student, List<Student> matches) {}
     public record Summary(int total, int found, int missing, int ambiguous) {}
     public record QueryResult(String mode, List<QueryItem> results, Summary summary) {}
+    public record ImportResult(int total, int created, int updated) {}
 }

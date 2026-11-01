@@ -8,9 +8,20 @@ import { splitQueryValues } from "../utils";
 
 const route = useRoute(); const router = useRouter();
 const mode = computed(() => route.query.mode === "id" ? "id" : "name");
-const rawValues = ref(""); const result = ref(null); const error = ref(""); const busy = ref(false);
+const rawValues = ref(""); const result = ref(null); const error = ref(""); const busy = ref(false); const uploadBusy = ref(false); const fileInput = ref(null);
 watch(mode, () => { rawValues.value = ""; result.value = null; error.value = ""; });
 function setMode(value) { router.push({ path: "/student/query", query: { mode: value } }); }
+async function uploadStudents(event) {
+  const file = event.target.files?.[0]; event.target.value = "";
+  if (!file) return;
+  error.value = ""; uploadBusy.value = true;
+  try {
+    const form = new FormData(); form.append("file", file);
+    const summary = await api("/students/import", { method: "POST", body: form });
+    notify("学员信息上传成功：共 " + summary.total + " 条，新增 " + summary.created + " 条，更新 " + summary.updated + " 条");
+  } catch (failure) { error.value = failure.message; }
+  finally { uploadBusy.value = false; }
+}
 async function query() {
   error.value = ""; result.value = null;
   const values = splitQueryValues(rawValues.value);
@@ -45,7 +56,10 @@ function exportCsv() {
 
 <template>
   <AdminLayout page-title="查询学生" active-page="students">
-    <div class="admin-page-heading"><div><h1>查询学生</h1><p>姓名与学生 ID 双向查询</p></div></div>
+    <div class="admin-page-heading"><div><h1>查询学生</h1><p>姓名与学生 ID 双向查询</p></div><div class="button-row">
+      <input ref="fileInput" type="file" accept=".xlsx,.xls" hidden @change="uploadStudents">
+      <button v-if="hasPermission('students.import')" class="button button-primary" type="button" :disabled="uploadBusy" @click="fileInput?.click()">{{ uploadBusy ? "上传中..." : "上传学员信息" }}</button>
+    </div></div>
     <div class="segmented-tabs" role="tablist" aria-label="查询方式">
       <button role="tab" :aria-selected="mode === 'name'" :class="{ active: mode === 'name' }" type="button" @click="setMode('name')">按姓名查 ID</button>
       <button role="tab" :aria-selected="mode === 'id'" :class="{ active: mode === 'id' }" type="button" @click="setMode('id')">按 ID 查姓名</button>

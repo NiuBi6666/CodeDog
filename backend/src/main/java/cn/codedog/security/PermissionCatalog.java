@@ -11,6 +11,7 @@ public final class PermissionCatalog {
     public static final String DASHBOARD_LATEST_DOCUMENT = "dashboard.latest_document";
     public static final String STUDENTS_VIEW = "students.view";
     public static final String STUDENTS_QUERY = "students.query";
+    public static final String STUDENTS_IMPORT = "students.import";
     public static final String STUDENTS_COPY = "students.copy";
     public static final String STUDENTS_EXPORT = "students.export";
     public static final String QUESTIONNAIRE_VIEW = "questionnaire.view";
@@ -81,6 +82,7 @@ public final class PermissionCatalog {
         new Group("students", "查询学生", List.of(
             page(STUDENTS_VIEW, "访问查询学生页面"),
             action(STUDENTS_QUERY, "执行学生查询"),
+            action(STUDENTS_IMPORT, "上传学员信息"),
             action(STUDENTS_COPY, "复制查询结果"),
             action(STUDENTS_EXPORT, "导出查询结果")
         )),
