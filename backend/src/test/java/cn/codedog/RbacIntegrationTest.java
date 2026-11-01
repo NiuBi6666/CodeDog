@@ -870,4 +870,32 @@ class RbacIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE owner_username=? AND request_path=? AND status_code=304",Integer.class,username,"/api/rankings/admin/rewards/"+id+"/image")).isPositive();
         jdbc.update("DELETE FROM ranking_rewards WHERE owner_username IN (?,?)",username,foreign);
     }
+
+    @Test void studentDirectoryUploadRequiresPermissionAndUpsertsWithoutChangingOtherFields() throws Exception {
+        String username=uniqueUsername("directory");
+        User teacher=users.saveAndFlush(user(username,"directory-password"));
+        var session=login(username,"directory-password");
+        String id="directory-"+java.util.UUID.randomUUID();
+        var book=new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+        var sheet=book.createSheet();
+        var header=sheet.createRow(0);header.createCell(0).setCellValue("用户ID");header.createCell(1).setCellValue("姓名");
+        var row=sheet.createRow(1);row.createCell(0).setCellValue(id);row.createCell(1).setCellValue("导入测试同学");
+        var bytes=new java.io.ByteArrayOutputStream();book.write(bytes);
+        var file=new org.springframework.mock.web.MockMultipartFile("file","students.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",bytes.toByteArray());
+        mvc.perform(multipart("/api/students/import").file(file).session(session).with(csrf())).andExpect(status().isForbidden());
+        teacher.setPermissions(new LinkedHashSet<>(java.util.Set.of("students.import","students.query")));users.saveAndFlush(teacher);
+        mvc.perform(multipart("/api/students/import").file(file).session(session)).andExpect(status().isForbidden());
+        mvc.perform(multipart("/api/students/import").file(file).session(session).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.created").value(1));
+        mvc.perform(multipart("/api/students/import").file(file).session(session).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.created").value(0)).andExpect(jsonPath("$.updated").value(0));
+        jdbc.update("UPDATE students SET grade='原年级' WHERE user_id=?",id);
+        row.getCell(1).setCellValue("新姓名");bytes.reset();book.write(bytes);book.close();
+        file=new org.springframework.mock.web.MockMultipartFile("file","students.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",bytes.toByteArray());
+        mvc.perform(multipart("/api/students/import").file(file).session(session).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.updated").value(1));
+        mvc.perform(post("/api/students/query").session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(java.util.Map.of("mode","id","values",java.util.List.of(id))))).andExpect(status().isOk()).andExpect(jsonPath("$.results[0].student.name").value("新姓名")).andExpect(jsonPath("$.results[0].student.grade").value("原年级"));
+        mvc.perform(post("/api/students/query").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"mode\":\"name\",\"values\":[\"新姓名\"]}")).andExpect(status().isOk()).andExpect(jsonPath("$.summary.found").value(1));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE owner_username=? AND event_code='student_import' AND changes_json LIKE '%新姓名%'",Integer.class,username)).isPositive();
+        teacher.setPermissions(new LinkedHashSet<>());users.saveAndFlush(teacher);
+        mvc.perform(multipart("/api/students/import").file(file).session(session).with(csrf())).andExpect(status().isForbidden());
+        jdbc.update("DELETE FROM students WHERE user_id=?",id);
+    }
 }

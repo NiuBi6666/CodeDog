@@ -15,8 +15,9 @@ import org.springframework.web.multipart.MultipartFile;
 public class StudentService {
     public static final int MAX_QUERIES = 500;
     private final StudentRepository repository;
+    private final AuditService audit;
 
-    public StudentService(StudentRepository repository) { this.repository = repository; }
+    public StudentService(StudentRepository repository, AuditService audit) { this.repository = repository; this.audit = audit; }
     @Transactional
     public ImportResult importStudents(MultipartFile file, StudentInfoExcelReader reader) {
         var parsed = reader.parse(file);
@@ -28,7 +29,9 @@ public class StudentService {
             Student student = existing.get(value.userId());
             if (student == null) { student = new Student(); student.setUserId(value.userId()); created++; }
             else if (!Objects.equals(student.getName(), value.name())) updated++;
+            Map<String, Object> before = student.getId() == null ? Map.of() : Map.of("userId", student.getUserId(), "name", student.getName());
             student.setName(value.name()); repository.save(student);
+            if (!Objects.equals(before.get("name"), value.name())) audit.change("STUDENT_DIRECTORY", value.userId(), before, Map.of("userId", value.userId(), "name", value.name()));
         }
         return new ImportResult(parsed.students().size(), created, updated);
     }

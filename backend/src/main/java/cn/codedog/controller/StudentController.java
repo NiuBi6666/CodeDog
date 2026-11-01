@@ -31,7 +31,8 @@ public class StudentController {
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     public StudentService.ImportResult importStudents(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
         StudentService.ImportResult result = service.importStudents(file, reader);
-        audit.fileMetadata(file);
+        audit.event("students", "IMPORT", "student_import");
+        audit.detail(java.util.Map.of("file", audit.fileMetadata(file)));
         audit.detail(java.util.Map.of("total", result.total(), "created", result.created(), "updated", result.updated()));
         audit.record("student_import", request);
         return result;
