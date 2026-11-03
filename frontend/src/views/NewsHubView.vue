@@ -55,13 +55,6 @@ onMounted(()=>{load();loadAi();});
       <div v-if="error" class="notice notice-error" role="alert">{{error}}</div>
       <div v-if="!data&&!error" class="admin-panel panel-empty" role="status">正在读取新闻状态…</div>
       <template v-if="data">
-        <nav class="ranking-workspace-tabs news-workspace-tabs" role="tablist" aria-label="新闻聚合功能">
-          <button v-for="(tab,index) in tabs" :id="'news-tab-'+tab.id" :key="tab.id" type="button" role="tab"
-            :class="{active:activeTab===tab.id}" :aria-selected="activeTab===tab.id" :aria-controls="'news-panel-'+tab.id"
-            :tabindex="activeTab===tab.id?0:-1" @click="selectedTab=tab.id" @keydown="moveTab($event,index)">
-            <component :is="tab.icon" :size="17" aria-hidden="true" />{{tab.label}}
-          </button>
-        </nav>
         <section class="admin-panel news-section news-service-status" aria-label="服务配置状态">
           <strong>服务配置</strong>
           <span class="status-badge" :class="data.configuration.ai_configured?'status-normal':'status-warning'">正文翻译 · {{data.configuration.ai_configured?'已配置':'未配置'}}</span>
@@ -69,6 +62,13 @@ onMounted(()=>{load();loadAi();});
           <span class="status-badge" :class="data.configuration.webhook_configured?'status-normal':'status-warning'">采集鉴权 · {{data.configuration.webhook_configured?'已配置':'未配置'}}</span>
           <span v-if="data.configuration.model" class="news-service-detail">当前服务：{{data.configuration.model}}</span>
         </section>
+        <nav class="ranking-workspace-tabs news-workspace-tabs" role="tablist" aria-label="新闻聚合功能">
+          <button v-for="(tab,index) in tabs" :id="'news-tab-'+tab.id" :key="tab.id" type="button" role="tab"
+            :class="{active:activeTab===tab.id}" :aria-selected="activeTab===tab.id" :aria-controls="'news-panel-'+tab.id"
+            :tabindex="activeTab===tab.id?0:-1" @click="selectedTab=tab.id" @keydown="moveTab($event,index)">
+            <component :is="tab.icon" :size="17" aria-hidden="true" />{{tab.label}}
+          </button>
+        </nav>
 
         <div v-if="auth.user?.admin" v-show="activeTab==='collector'" id="news-panel-collector" role="tabpanel" aria-labelledby="news-tab-collector" tabindex="0">
           <NewsCollectorSettings @updated="load" />
