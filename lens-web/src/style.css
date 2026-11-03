@@ -74,3 +74,6 @@
   .sync-button { font-size:11px; gap:6px; }
   .sync-button span { font-size:16px; }
 }
+
+.paragraph-pair > .en-paragraph { margin-top:0; }
+.paragraph-pair > .en-paragraph + .zh-paragraph { margin-top:9px; }
