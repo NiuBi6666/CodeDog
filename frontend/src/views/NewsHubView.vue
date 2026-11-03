@@ -47,7 +47,7 @@ onMounted(()=>{load();loadAi();});
       <div class="admin-page-heading">
         <div><h1>新闻聚合</h1><p>管理新闻来源、采集配置与正文翻译</p></div>
         <div class="button-row">
-          <a class="button button-quiet" href="/lens/" target="_blank" rel="noopener">打开新闻站 ↗</a>
+          <a class="button button-quiet" href="/news" target="_blank" rel="noopener">打开新闻站 ↗</a>
           <button class="button button-quiet" type="button" @click="load">刷新状态</button>
           <button v-if="hasPermission('news.refresh')" class="button button-primary" type="button" :disabled="busy" @click="refresh">{{busy?'提交中…':'立即采集'}}</button>
         </div>

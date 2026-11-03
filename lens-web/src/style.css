@@ -92,3 +92,9 @@
 .selection-status { margin:0; font-size:13px; color:#526174; }
 .selection-error { margin:0 0 10px; color:#9b4534; font-size:13px; line-height:1.6; }
 .selection-translator button:focus-visible { outline:2px solid #4c7187; outline-offset:3px; }
+
+/* CDNews wordmark and CD monogram share the site's editorial ink. */
+.brand-mark { width:36px; height:36px; border-radius:50%; flex-shrink:0; }
+.brand strong { font-family:Georgia,'Times New Roman',serif; font-size:23px; letter-spacing:-.035em; font-weight:700; }
+.brand small { font-size:8px; letter-spacing:.07em; }
+@media(max-width:760px) { .brand small { font-size:7px; letter-spacing:0; } }

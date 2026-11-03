@@ -21,7 +21,7 @@ const PublicRankingView = () => import("./views/PublicRankingView.vue");
 const NewsHubView = () => import("./views/NewsHubView.vue");
 
 const routes = [
-  { path: "/news", component: NewsHubView, meta: { auth: true, permission: "news.view", bodyClass: "admin-layout", title: "新闻聚合 - CodeDog" } },
+  { path: "/admin/news", component: NewsHubView, meta: { auth: true, permission: "news.view", bodyClass: "admin-layout", title: "新闻聚合 - CodeDog" } },
   { path: "/exams", component: ExamManageView, meta: { auth: true, permission: "exams.view", bodyClass: "admin-layout", title: "成绩管理 - CodeDog" } },
   { path: "/exam/:token", component: PublicExamView, meta: { bodyClass: "exam-public-page", title: "考试成绩查询" } },
   { path: "/ranking-board", component: PublicRankingView, meta: { bodyClass: "ranking-public-page", title: "C++积分中心" } },

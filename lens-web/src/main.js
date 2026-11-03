@@ -4,7 +4,7 @@ import App from "./App.vue";
 import "./style.css";
 
 const router = createRouter({
-  history: createWebHistory("/lens/"),
+  history: createWebHistory("/news/"),
   routes: [{ path: "/", component: App }, { path: "/article/:id", component: App }],
   scrollBehavior: () => ({ top: 0 }),
 });

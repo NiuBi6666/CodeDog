@@ -34,7 +34,7 @@ async function signOut() {
       </div>
       <nav class="admin-nav">
         <p>功能导航</p>
-        <RouterLink v-if="hasPermission('news.view')" :class="{ active: activePage === 'news' }" to="/news"><FileText class="nav-icon" :size="17"/><span>新闻聚合</span></RouterLink>
+        <RouterLink v-if="hasPermission('news.view')" :class="{ active: activePage === 'news' }" to="/admin/news"><FileText class="nav-icon" :size="17"/><span>新闻聚合</span></RouterLink>
         <RouterLink v-if="hasPermission('dashboard.view')" :class="{ active: activePage === 'dashboard' }" to="/index"><Home class="nav-icon" :size="17"/><span>首页</span></RouterLink>
         <RouterLink v-if="hasPermission('students.view')" :class="{ active: activePage === 'students' }" to="/student/query"><Search class="nav-icon" :size="17"/><span>查询学生</span></RouterLink>
         <RouterLink v-if="hasPermission('questionnaire.view')" :class="{ active: activePage === 'questionnaire' }" to="/questionnaire"><ListChecks class="nav-icon" :size="17"/><span>问卷与作业</span></RouterLink>
