@@ -4,8 +4,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ENGINES = {'bing', 'alibaba', 'baidu'}
 gate = threading.BoundedSemaphore(1)
+selection_gate = threading.BoundedSemaphore(1)
 _clients = threading.local()
 _pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='lens-paragraph')
+_selection_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='lens-selection')
 
 class RateController:
     def __init__(self, backoffs=(5, 15, 30)):
@@ -79,15 +81,17 @@ def validate(body):
         raise ValueError('invalid paragraphs')
     return engine, paragraphs
 
-def translate(body, translator=translate_piece, controller=None, on_result=None):
+def translate(body, translator=translate_piece, controller=None, on_result=None, selection=False):
     engine, paragraphs = validate(body)
-    deadline = time.monotonic() + 540
+    if selection and (len(paragraphs) != 1 or len(paragraphs[0]) > 1000):
+        raise ValueError('invalid selection')
+    deadline = time.monotonic() + (20 if selection else 540)
     controller = controller or rate
     def paragraph_work(paragraph):
         translated = []
         try:
             for part in pieces(paragraph):
-                for attempt in range(3):
+                for attempt in range(1 if selection else 3):
                     controller.acquire(deadline)
                     try:
                         result = translator(part, engine)
@@ -96,7 +100,7 @@ def translate(body, translator=translate_piece, controller=None, on_result=None)
                     except Exception as exc:
                         limited = getattr(getattr(exc, 'response', None), 'status_code', None) == 429 or '429' in str(exc)
                         controller.finish(False, limited)
-                        if attempt == 2:
+                        if selection or attempt == 2:
                             raise
                     else:
                         controller.finish(True)
@@ -106,7 +110,8 @@ def translate(body, translator=translate_piece, controller=None, on_result=None)
         except Exception:
             return None
     # Futures are read in input order; completed paragraphs survive a neighbour's failure.
-    futures = {_pool.submit(paragraph_work, p): i for i, p in enumerate(paragraphs)}
+    pool = _selection_pool if selection else _pool
+    futures = {pool.submit(paragraph_work, p): i for i, p in enumerate(paragraphs)}
     result = [None] * len(paragraphs)
     for future in as_completed(futures):
         index = futures[future]
@@ -140,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.reply(200 if self.path == '/health' else 404, {'status': 'ready', **rate.status()} if self.path == '/health' else {})
     def do_POST(self):
-        if self.path not in ('/translate', '/seal'):
+        if self.path not in ('/translate', '/translate-selection', '/seal'):
             return self.reply(404, {})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -159,13 +164,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {'encrypted_value': encrypted})
             except Exception:
                 return self.reply(400, {'error': 'invalid encryption request'})
-        if not gate.acquire(blocking=False):
+        selection = self.path == '/translate-selection'
+        request_gate = selection_gate if selection else gate
+        if not request_gate.acquire(blocking=False):
             return self.reply(429, {'error': 'translator busy'})
         try:
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 return self.reply(400, {'error': 'invalid request'})
-            if self.headers.get('Accept') == 'application/x-ndjson':
+            if not selection and self.headers.get('Accept') == 'application/x-ndjson':
                 try:
                     validate(body)
                 except (ValueError, TypeError):
@@ -185,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                 emit({'complete':True, 'success':all(result['paragraphs'])})
                 return
             try:
-                result = translate(body)
+                result = translate(body, selection=selection)
             except (ValueError, TypeError):
                 return self.reply(400, {'error': 'invalid translation request or result'})
             except Exception:
@@ -194,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             self.reply(400, {'error': 'invalid JSON'})
         finally:
-            gate.release()
+            request_gate.release()
 
 if __name__ == '__main__':
     ThreadingHTTPServer(('0.0.0.0', 8090), Handler).serve_forever()

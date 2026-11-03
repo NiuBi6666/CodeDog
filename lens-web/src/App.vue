@@ -3,6 +3,7 @@ import { computed,ref,watch,onMounted,onBeforeUnmount } from 'vue';
 import { useRoute,useRouter } from 'vue-router';
 import { syncMessage,syncExpired } from './sync-state.js';
 import { relativeTime,groupStories } from './reading-utils.js';
+import SelectionTranslator from './SelectionTranslator.vue';
 const route=useRoute(),router=useRouter();
 const categories=['全部','科技','国际','财经','教育'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),page=ref(0),total=ref(0);
@@ -72,12 +73,13 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);}
       </aside>
       <article v-if="selected" class="reader-panel"><button class="back-to-list" @click="router.push('/')">← 返回新闻列表</button>
         <div class="reader-toolbar"><span class="eyebrow">{{ selected.category_en }} / {{ selected.source_name }}</span><div class="reading-tools"><a :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原网页 ↗</a><button :disabled="fontSize<=15" aria-label="缩小正文字号" @click="fontSize=Math.max(15,fontSize-1)">A−</button><button :disabled="fontSize>=22" aria-label="放大正文字号" @click="fontSize=Math.min(22,fontSize+1)">A+</button></div></div>
-        <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><span class="dot">·</span><span>{{ selected.author }}</span><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><h1 :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1><p v-if="effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en">{{ selected.title_en }}</p>
+        <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><span class="dot">·</span><span>{{ selected.author }}</span><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><h1 :data-selectable-original="effectiveMode==='en'?'':undefined" :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1><p v-if="effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en" data-selectable-original>{{ selected.title_en }}</p>
           <section v-if="effectiveMode!=='en'&&selected.summary_zh.length" class="takeaways" aria-label="核心导读"><h2>核心导读</h2><ul><li v-for="point in selected.summary_zh.slice(0,3)" :key="point">{{ point }}</li></ul></section>
           <div v-if="selected.cover_image" class="cover-wrap"><img v-if="selected.cover_image && !imageFailed" :src="proxyImage(selected.cover_image)" :alt="selected.title_en" @error="imageFailed = true" /><div v-else class="cover-fallback"><span>{{ selected.source_mark }}</span><small>IMAGE UNAVAILABLE</small></div></div>
-          <div class="paragraphs" :style="{'--reading-size':fontSize+'px'}"><div v-for="(paragraph, index) in selected.content_zh" :key="paragraph" class="paragraph-pair" tabindex="0"><p v-if="effectiveMode !== 'zh'" class="en-paragraph">{{ selected.content_en[index] }}</p><p v-if="effectiveMode !== 'en'" class="zh-paragraph">{{ paragraph }}</p></div></div>
+          <div class="paragraphs" :style="{'--reading-size':fontSize+'px'}"><div v-for="(paragraph, index) in selected.content_zh" :key="paragraph" class="paragraph-pair" tabindex="0"><p v-if="effectiveMode !== 'zh'" class="en-paragraph" data-selectable-original lang="en">{{ selected.content_en[index] }}</p><p v-if="effectiveMode !== 'en'" class="zh-paragraph">{{ paragraph }}</p></div></div>
           <footer class="article-footer"><div><span class="eyebrow">RELATED COVERAGE</span><div class="related"><a v-for="item in selected.related_sources" :key="item.origin_url" :href="item.origin_url" target="_blank" rel="noopener noreferrer">{{ item.source_name }} ↗</a></div></div><a class="original-link" :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原文 ↗</a></footer>
         </div>
+        <SelectionTranslator :article-id="selected.id" />
       </article><section v-else class="reader-panel reader-empty"><span class="eyebrow">LENS · GLOBAL EDITION</span><h2>等待下一篇好报道</h2><p>新闻将在采集、正文校验和双语编译完成后出现。</p></section>
     </main>
   </div>

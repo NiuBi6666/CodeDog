@@ -92,3 +92,28 @@ class StreamingTest(unittest.TestCase):
         result=translate({'paragraphs':['slow','fast']},fake,RateController((0,0,0)),lambda i,text:emitted.append((i,text)))
         self.assertEqual([i for i,_ in emitted],[1,0])
         self.assertEqual(result['paragraphs'],['译文slow','译文fast'])
+
+class SelectionTest(unittest.TestCase):
+    def test_selection_has_independent_queue_and_reuses_engine(self):
+        from service import _pool
+        release=threading.Event()
+        occupied=[_pool.submit(release.wait, 2) for _ in range(2)]
+        try:
+            result=translate({'engine':'bing','paragraphs':['Artificial intelligence']},
+                lambda text,engine: '人工智能' if engine=='bing' else None,
+                RateController((0,0,0)),selection=True)
+            self.assertEqual(result['paragraphs'],['人工智能'])
+        finally:
+            release.set()
+            for future in occupied:future.result()
+    def test_selection_validates_length_and_does_not_retry_provider_failure(self):
+        count=[]
+        def fail(*args):
+            count.append(1)
+            raise RuntimeError('429')
+        result=translate({'paragraphs':['Hello']},fail,RateController((0,0,0)),selection=True)
+        self.assertEqual(result['paragraphs'],[None])
+        self.assertEqual(len(count),1)
+        for paragraphs in [['a'*1001],['one','two']]:
+            with self.assertRaises(ValueError):
+                translate({'paragraphs':paragraphs},fail,selection=True)

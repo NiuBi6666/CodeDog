@@ -43,7 +43,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(requests -> requests
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.GET,"/api/news","/api/news/sync-status","/api/news/*","/api/crawler/tasks").permitAll()
-                .requestMatchers(HttpMethod.POST,"/api/crawler/ingest","/api/user/refresh").permitAll()
+                .requestMatchers(HttpMethod.POST,"/api/crawler/ingest","/api/user/refresh","/api/news/translate").permitAll()
                 .requestMatchers(HttpMethod.GET,"/api/admin/news/collector-settings").access(admin(permissions))
                 .requestMatchers(HttpMethod.PUT,"/api/admin/news/collector-settings").access(admin(permissions))
                 .requestMatchers(HttpMethod.POST,"/api/admin/news/collector-settings/provision").access(admin(permissions))
