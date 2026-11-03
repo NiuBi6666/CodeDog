@@ -36,6 +36,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-public_doc}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-public_doc}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      NEWS_FAST_COLLECTOR_URL: http://lens-collector:8091
       LEGACY_IMPORT_ENABLED: ${LEGACY_IMPORT_ENABLED:-false}
       RANKING_DEFAULT_CRM_TEACHER_ID: ${RANKING_DEFAULT_CRM_TEACHER_ID:-}
       CODEDOG_PASSWORD_RECOVERY_KEY: ${CODEDOG_PASSWORD_RECOVERY_KEY:-}
@@ -52,6 +53,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  lens-collector:
+    build: ./integrations/news
+    container_name: codedog-lens-collector
+    restart: unless-stopped
+    networks:
+      - lens-translation
+    environment:
+      NEWS_API_URL: http://backend:8080
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 256m
+    pids_limit: 64
 
   lens-translator:
     build: ./integrations/translation

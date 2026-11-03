@@ -25,12 +25,13 @@ public class NewsService {
  private final AtomicBoolean stopping=new AtomicBoolean();
  private final JdbcTemplate db; private final ObjectMapper json; private final TransactionTemplate tx;
  private final NewsCollectorSettings collector;
+ private final NewsFastCollector fastCollector;
  private final NewsAiSettings aiSettings; private final NewsTranslation translation;
  private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
  public NewsService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,NewsAiSettings aiSettings,NewsTranslation translation,
-  NewsCollectorSettings collector) {
+  NewsCollectorSettings collector,NewsFastCollector fastCollector) {
   this.db=db;this.json=json;tx=new TransactionTemplate(manager);this.collector=collector;
-  this.aiSettings=aiSettings;this.translation=translation;
+  this.fastCollector=fastCollector;this.aiSettings=aiSettings;this.translation=translation;
  }
 
  public boolean aiReady(){return translation.configured();}
@@ -63,6 +64,18 @@ public class NewsService {
    return Map.of("status",exists?"already_accepted":"accepted","batch_id",id);
   }catch(ResponseStatusException e){throw e;}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"JSON 无效");}
  }
+ public List<String> unseen(JsonNode body){
+  JsonNode urls=body.path("urls");require(urls.isArray()&&urls.size()<=100,HttpStatus.BAD_REQUEST,"最多检查 100 个 URL");
+  var values=new LinkedHashMap<String,String>();
+  for(var url:urls){require(url.isTextual()&&url.asText().length()<=2000,HttpStatus.BAD_REQUEST,"URL 无效");
+   try{values.putIfAbsent(canonical(url.asText()),url.asText());}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"URL 无效");}}
+  if(values.isEmpty())return List.of();
+  var hashes=values.keySet().stream().map(NewsService::digest).toList();
+  var existing=new HashSet<>(db.queryForList("SELECT url_hash FROM lens_articles WHERE url_hash IN ("+String.join(",",Collections.nCopies(hashes.size(),"?"))+")",String.class,hashes.toArray()));
+  return values.entrySet().stream().filter(e->!existing.contains(digest(e.getKey()))).map(Map.Entry::getValue).toList();
+ }
+ public boolean parallelTitles(){return translation.config().mode().equals("api");}
+ public List<Map<String,Object>> fastSources(){return db.queryForList("SELECT id,rss_url FROM lens_sources WHERE is_active=TRUE ORDER BY priority DESC LIMIT 30");}
  public List<Map<String,Object>> tasks(boolean force){return tx.execute(status->{
   var list=db.queryForList("SELECT * FROM lens_sources WHERE is_active=TRUE AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP) ORDER BY priority DESC FOR UPDATE");
   var due=new ArrayList<Map<String,Object>>();Instant now=Instant.now();
@@ -115,7 +128,7 @@ public class NewsService {
    if(!existing.isEmpty())return Map.<String,Object>of("run_id",existing.getFirst().get("id"),"status",existing.getFirst().get("status"),"message","已有采集任务，请等待抓取和标题翻译完成");
    var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
    db.update(connection->{var statement=connection.prepareStatement("INSERT INTO lens_refresh_runs(status,requested_by,request_id,request_ip) VALUES('queued',?,?,?)",new String[]{"id"});statement.setString(1,actor);statement.setString(2,requestId);statement.setString(3,ip.length()>100?ip.substring(0,100):ip);return statement;},keys);
-   return Map.<String,Object>of("run_id",keys.getKey().longValue(),"status","queued","message","采集任务已提交，等待 GitHub 抓取；标题翻译后进入列表，打开详情时翻译全文");
+   return Map.<String,Object>of("run_id",keys.getKey().longValue(),"status","queued","message","采集任务已提交，正在启动快速抓取；标题翻译后进入列表，打开详情时翻译全文");
   });
  }
  public Map<String,Object> syncStatus(Long runId){
@@ -138,9 +151,9 @@ public class NewsService {
    tx.executeWithoutResult(status->{if(db.update("UPDATE lens_refresh_runs SET status='uncertain',last_error='调度结果未确认，请检查 GitHub 工作流记录',lease_until=NULL WHERE id=? AND status='dispatching' AND lease_until<CURRENT_TIMESTAMP",id)==1)dispatchAudit(old,"uncertain","调度结果未确认，请检查 GitHub 工作流记录");});
   }
   var rows=db.queryForList("SELECT * FROM lens_refresh_runs WHERE status='queued' ORDER BY id LIMIT 1");if(rows.isEmpty()||stopping.get())return;var row=rows.getFirst();long id=((Number)row.get("id")).longValue();
-  if(db.update("UPDATE lens_refresh_runs SET status='dispatching',lease_until=? WHERE id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(60)),id)!=1)return;
+  if(db.update("UPDATE lens_refresh_runs SET status='dispatching',lease_until=? WHERE id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(240)),id)!=1)return;
   String result="dispatched",error=null;
-  try{collector.dispatch(id);}catch(ResponseStatusException e){result="failed";error=e.getReason();}catch(Exception e){result="uncertain";error="GitHub 调度结果未确认，请检查工作流记录；不会自动重复触发";}
+  try{if(!fastCollector.collect(id,collector.secret()))collector.dispatch(id);}catch(ResponseStatusException e){result="failed";error=e.getReason();}catch(Exception e){result="uncertain";error="GitHub 调度结果未确认，请检查工作流记录；不会自动重复触发";}
   final String completed=result,reason=error;
   tx.executeWithoutResult(status->{db.update("UPDATE lens_refresh_runs SET status=?,last_error=?,lease_until=NULL WHERE id=? AND status='dispatching'",completed,reason,id);dispatchAudit(row,completed,reason);});
  }

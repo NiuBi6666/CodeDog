@@ -3,7 +3,7 @@ import {syncMessage,syncExpired} from './sync-state';
 describe('sync progress',()=>{
  it('distinguishes dispatch, crawl, ingestion and translation',()=>{
   expect(syncMessage({phase:'queued'})).toContain('等待调度');
-  expect(syncMessage({phase:'crawling'})).toContain('等待排队和抓取');
+  expect(syncMessage({phase:'crawling'})).toContain('正在抓取最新报道');
   expect(syncMessage({phase:'ingesting',queued_batches:3,pending_articles:4})).toContain('3 个批次');
   expect(syncMessage({phase:'translating',processing_articles:1,pending_articles:5},2)).toContain('已新增 2 篇');
   expect(syncMessage({phase:'translating',processing_articles:1,pending_articles:5})).toContain('另有 5 篇排队');

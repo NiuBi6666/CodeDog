@@ -37,13 +37,13 @@ public class SecurityConfig {
         csrf.setCookiePath("/");
         http
             .csrf(configurer -> configurer.csrfTokenRepository(csrf)
-                .ignoringRequestMatchers("/api/crawler/ingest", "/api/user/refresh", "/api/public/rankings/extension/connect",
+                .ignoringRequestMatchers("/api/crawler/filter", "/api/crawler/ingest", "/api/user/refresh", "/api/public/rankings/extension/connect",
                     "/api/public/rankings/extension/import", "/api/public/rankings/extension/contacts"))
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(requests -> requests
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.GET,"/api/news","/api/news/sync-status","/api/news/*","/api/crawler/tasks").permitAll()
-                .requestMatchers(HttpMethod.POST,"/api/crawler/ingest","/api/user/refresh","/api/news/translate","/api/news/*/translation").permitAll()
+                .requestMatchers(HttpMethod.POST,"/api/crawler/filter","/api/crawler/ingest","/api/user/refresh","/api/news/translate","/api/news/*/translation").permitAll()
                 .requestMatchers(HttpMethod.GET,"/api/admin/news/collector-settings").access(admin(permissions))
                 .requestMatchers(HttpMethod.PUT,"/api/admin/news/collector-settings").access(admin(permissions))
                 .requestMatchers(HttpMethod.POST,"/api/admin/news/collector-settings/provision").access(admin(permissions))

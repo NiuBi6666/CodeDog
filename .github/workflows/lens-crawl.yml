@@ -32,6 +32,8 @@ jobs:
           cache-dependency-path: integrations/news/requirements.txt
       - name: Install collector libraries
         run: pip install -r integrations/news/requirements.txt
+      - name: Verify collector
+        run: python -m unittest discover -s integrations/news -p "test_*.py"
       - name: Collect, clean and push news
         env:
           NEWS_API_URL: ${{ vars.NEWS_API_URL || 'https://codedog.online' }}

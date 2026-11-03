@@ -58,6 +58,7 @@ class NewsTranslationWorkerIntegrationTest {
  @DynamicPropertySource static void properties(DynamicPropertyRegistry registry){registry.add("NEWS_TRANSLATOR_URL",()->"http://127.0.0.1:"+server.getAddress().getPort());}
  @MockBean NewsAiSettings ai;
  @MockBean NewsCollectorSettings collector;
+ @MockBean cn.codedog.news.NewsFastCollector fastCollector;
  @Autowired org.springframework.test.web.servlet.MockMvc mvc;
  @Autowired NewsTranslation translation;
  @Autowired JdbcTemplate db;@Autowired DataSource ds;@Autowired NewsService news;
@@ -216,6 +217,32 @@ class NewsTranslationWorkerIntegrationTest {
   db.update("UPDATE lens_articles SET next_attempt_at=NULL");
   response.set("{\"paragraphs\":[\"标题已翻译\",\"第一段\",\"第二段\"]}");news.translateNext();
   assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("ready");
+ }
+
+ @Test void fastCollectionAvoidsGithubAndRetainsDispatchAudit()throws Exception{
+  when(fastCollector.collect(anyLong(),any())).thenReturn(true);
+  long id=((Number)news.refresh().get("run_id")).longValue();news.dispatchQueued();
+  verify(collector,never()).dispatch(anyLong());
+  assertThat(news.syncStatus(id).get("status")).isEqualTo("dispatched");
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE event_code='news_dispatch_completed' AND target_id=?",Long.class,String.valueOf(id))).isPositive();
+ }
+ @Test void apiTitlesRunConcurrentlyAndCommitIndependently()throws Exception{
+  db.update("UPDATE lens_articles SET body_requested_at=NULL");
+  db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");
+  when(ai.configured()).thenReturn(true);
+  var config=new NewsAiSettings.RuntimeConfig("https://api.example.com/v1","parallel-test","test-only");
+  when(ai.runtime()).thenReturn(config);
+  db.update("INSERT INTO lens_articles(url_hash,origin_url,source_id,source_name,category,title_en,content_en,published_at) SELECT 'parallel-second','https://example.com/second',source_id,source_name,category,'Second headline','English body',published_at FROM lens_articles LIMIT 1");
+  var entered=new java.util.concurrent.CountDownLatch(2);var release=new java.util.concurrent.CountDownLatch(1);
+  when(ai.complete(eq(config),anyList(),eq(1200))).thenAnswer(call->{entered.countDown();assertThat(release.await(3,java.util.concurrent.TimeUnit.SECONDS)).isTrue();return "{\"choices\":[{\"message\":{\"content\":\"并行标题\"}}]}";});
+  try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+   var first=pool.submit(()->news.translateTitlesNext());
+   for(int n=0;n<100&&db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE title_lease_until IS NOT NULL",Long.class)==0;n++)Thread.sleep(10);
+   var second=pool.submit(()->news.translateTitlesNext());
+   try{assertThat(entered.await(2,java.util.concurrent.TimeUnit.SECONDS)).isTrue();}finally{release.countDown();}
+   first.get(3,java.util.concurrent.TimeUnit.SECONDS);second.get(3,java.util.concurrent.TimeUnit.SECONDS);
+  }
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE title_zh='并行标题' AND content_zh IS NULL",Long.class)).isEqualTo(2);
  }
 
 }

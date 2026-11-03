@@ -81,5 +81,18 @@ class NewsIntegrationTest {
   assertThatThrownBy(()->NewsService.aligned(json.readTree("{\"paragraphs\":[{\"id\":1,\"text\":\"错位\"}]}"),expected)).isInstanceOf(IllegalArgumentException.class);
   assertThat(NewsService.aligned(json.readTree("{\"paragraphs\":[{\"id\":0,\"text\":\"你好\"}]}"),expected)).containsExactly("你好");
  }
+ @Test void preflightRequiresCollectorSecretBoundsInputAndSkipsPendingArticles()throws Exception{
+  mvc.perform(post("/api/crawler/filter").contentType(APPLICATION_JSON).content("{\"urls\":[]}")).andExpect(status().isUnauthorized());
+  mvc.perform(post("/api/crawler/filter").header("X-Webhook-Secret","wrong").contentType(APPLICATION_JSON).content("{\"urls\":[]}")).andExpect(status().isUnauthorized());
+  mvc.perform(get("/api/crawler/tasks?fast=true").header("X-Webhook-Secret",SECRET)).andExpect(status().isOk());
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_sources WHERE lease_until IS NOT NULL",Long.class)).isZero();
+  String url="https://example.com/existing";
+  db.update("INSERT INTO lens_articles(url_hash,origin_url,source_id,source_name,category,title_en,content_en,published_at) VALUES(?,?,1,'Test','科技','Existing','Body',CURRENT_TIMESTAMP)",NewsService.digest(url),url);
+  mvc.perform(post("/api/crawler/filter").header("X-Webhook-Secret",SECRET).contentType(APPLICATION_JSON).content(json.writeValueAsBytes(Map.of("urls",List.of(url+"?utm_source=rss",url,"https://example.com/new","https://example.com/new")))))
+   .andExpect(status().isOk()).andExpect(jsonPath("$.urls.length()").value(1)).andExpect(jsonPath("$.urls[0]").value("https://example.com/new"));
+  mvc.perform(post("/api/crawler/filter").header("X-Webhook-Secret",SECRET).contentType(APPLICATION_JSON).content(json.writeValueAsBytes(Map.of("urls",Collections.nCopies(101,url)))))
+   .andExpect(status().isBadRequest());
+  mvc.perform(post("/api/crawler/filter").header("X-Webhook-Secret",SECRET).contentType(APPLICATION_JSON).content("{\"urls\":[\"http://invalid.example\"]}")).andExpect(status().isBadRequest());
+ }
  static String sign(byte[] bytes,String ts)throws Exception{Mac m=Mac.getInstance("HmacSHA256");m.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8),"HmacSHA256"));m.update((ts+".").getBytes(StandardCharsets.UTF_8));return HexFormat.of().formatHex(m.doFinal(bytes));}
 }

@@ -26,7 +26,12 @@ public class NewsController {
  @GetMapping("/admin/news/articles/{id}")public Object review(@PathVariable long id){event("article_review",id);return news.article(id,true);}
  @PostMapping("/admin/news/articles/{id}/retry")public Object retry(@PathVariable long id){news.retry(id);event("article_retry",id);audit.detail(Map.of("queued",1));return Map.of("status","pending");}
  @PostMapping({"/user/refresh","/admin/news/refresh"})public Object refresh(HttpServletRequest request){event("refresh",null);var principal=request.getUserPrincipal();return news.refresh(principal==null?"anonymous":principal.getName(),request.getRemoteAddr(),AuditContext.current().requestId());}
- @GetMapping("/crawler/tasks")public Object tasks(@RequestHeader(value="X-Webhook-Secret",required=false)String token,@RequestParam(name="force_all",defaultValue="false")boolean force){news.authenticate(token);return Map.of("sources",news.tasks(force));}
+ @GetMapping("/crawler/tasks")public Object tasks(@RequestHeader(value="X-Webhook-Secret",required=false)String token,@RequestParam(name="force_all",defaultValue="false")boolean force,@RequestParam(defaultValue="false")boolean fast){news.authenticate(token);return Map.of("sources",fast?news.fastSources():news.tasks(force));}
+ @PostMapping(value="/crawler/filter",consumes="application/json")public Object filter(HttpServletRequest request,@RequestHeader(value="X-Webhook-Secret",required=false)String token)throws Exception{
+  news.authenticate(token);byte[] body=request.getInputStream().readNBytes(256*1024+1);
+  if(body.length>256*1024)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"URL 列表过大");
+  try{return Map.of("urls",news.unseen(new com.fasterxml.jackson.databind.ObjectMapper().readTree(body)));}catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"JSON 无效");}
+ }
  @PostMapping(value="/crawler/ingest",consumes="application/json")public Object ingest(HttpServletRequest request,@RequestHeader(value="X-Webhook-Secret",required=false)String token,@RequestHeader(value="X-Webhook-Timestamp",required=false)String timestamp,@RequestHeader(value="X-Webhook-Signature",required=false)String signature)throws Exception{
   byte[] body=request.getInputStream().readNBytes(2*1024*1024+1);news.verify(body,token,timestamp,signature);return news.accept(body);
  }
