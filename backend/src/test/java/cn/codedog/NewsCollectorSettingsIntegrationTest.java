@@ -59,7 +59,7 @@ class NewsCollectorSettingsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;@Autowired ObjectMapper json;
  @Autowired NewsCollectorSettings settings;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  MockHttpSession admin;
- @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql")).execute(ds);}
+ @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql")).execute(ds);db.execute("CREATE UNIQUE INDEX idx_collector_test_audit_request_id ON audit_log(request_id)");}
  @BeforeEach void setup()throws Exception{db.update("DELETE FROM lens_collector_settings");db.update("DELETE FROM lens_refresh_runs");calls.clear();variables.clear();fail="";admin=login("Liam","test-only-password");}
  @AfterAll void stop(){server.stop(0);}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
@@ -101,6 +101,15 @@ class NewsCollectorSettingsIntegrationTest {
   fail="variables";queue();settings.processProvision();assertThat(news.githubReady()).isFalse();assertThat(calls.stream().anyMatch(c->c.contains("/dispatches"))).isFalse();
   fail="";queue();settings.processProvision();assertThat(news.githubReady()).isTrue();assertThat(calls.stream().filter(c->c.contains("/dispatches"))).hasSize(1);
   assertThat(db.queryForList("SELECT error_message FROM audit_log WHERE event_code='collector_setup_completed' AND result='failed'").toString()).doesNotContain(TOKEN).contains("权限");
+ }
+ @Test void completionAuditHasIndependentIdAndPreservesOriginUnderProductionUniqueness()throws Exception{
+  save();queue();String origin=db.queryForObject("SELECT request_id FROM lens_collector_settings WHERE id=1",String.class);
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE request_id=?",Long.class,origin)).isEqualTo(1);
+  settings.processProvision();assertThat(settings.view().get("setup_state")).isEqualTo("ready");
+  var completion=db.queryForMap("SELECT request_id,detail_json FROM audit_log WHERE event_code='collector_setup_completed' AND detail_json LIKE ?", "%"+origin+"%");
+  assertThat(completion.get("request_id")).isNotEqualTo(origin);
+  assertThat(json.readTree((String)completion.get("detail_json")).path("origin_request_id").asText()).isEqualTo(origin);
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE request_id=?",Long.class,origin)).isEqualTo(1);
  }
  @Test void expiredSetupLeaseRecoversWithoutDuplicateDispatch()throws Exception{
   save();queue();db.update("UPDATE lens_collector_settings SET setup_state='processing',lease_until=? WHERE id=1",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)));
