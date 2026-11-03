@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: news-news-collector
+  group: news-collector
   cancel-in-progress: false
 jobs:
   collect:
