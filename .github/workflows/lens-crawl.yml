@@ -9,6 +9,10 @@ on:
         description: Ignore per-source refresh interval
         type: boolean
         default: false
+      run_id:
+        description: News sync task identifier
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -24,11 +28,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: integrations/news/requirements.txt
       - name: Install collector libraries
         run: pip install -r integrations/news/requirements.txt
       - name: Collect, clean and push news
         env:
           NEWS_API_URL: ${{ vars.NEWS_API_URL || 'https://codedog.online' }}
           NEWS_WEBHOOK_SECRET: ${{ secrets.NEWS_WEBHOOK_SECRET }}
+          NEWS_RUN_ID: ${{ inputs.run_id || '' }}
           FORCE_ALL: ${{ inputs.force_all && 'true' || 'false' }}
         run: python integrations/news/crawler.py

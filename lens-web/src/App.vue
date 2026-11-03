@@ -1,6 +1,7 @@
 <script setup>
 import { computed,ref,watch,onMounted,onBeforeUnmount } from 'vue';
 import { useRoute,useRouter } from 'vue-router';
+import { syncMessage,syncExpired } from './sync-state.js';
 const route=useRoute(),router=useRouter();
 const categories=['全部','科技','国际','财经','教育'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),page=ref(0),total=ref(0);
@@ -8,15 +9,35 @@ const mode=ref('bilingual'),syncing=ref(false),notice=ref(''),imageFailed=ref(fa
 const articleMode=ref(null),effectiveMode=computed(()=>articleMode.value||mode.value);
 const sources=computed(()=>['全部来源',...sourceList.value]);
 const filtered=computed(()=>articles.value);
-let generation=0,detailGeneration=0,poll,debounce,pollCount=0;
+let generation=0,detailGeneration=0,poll,debounce;
 function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,source_mark:a.source_name?.slice(0,1)||'L',category_en:{科技:'TECH',国际:'WORLD',财经:'MARKETS',教育:'EDUCATION'}[a.category]||'NEWS',published_at:new Date(a.published_at).toLocaleString('zh-CN'),summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_en),content_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
 async function request(path,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('/api'+path,{...options,signal:controller.signal});const p=await r.json();if(!r.ok)throw Error(p.error||'请求失败');return p;}catch(e){throw Error(e.name==='AbortError'?'请求超时，请稍后重试':e.message);}finally{clearTimeout(timer);}}
 async function detail(id){const g=++detailGeneration;try{const a=await request('/news/'+id);if(g===detailGeneration){selected.value=normalize(a);imageFailed.value=false;articleMode.value=null;}}catch(e){if(g===detailGeneration){selected.value=null;error.value=e.message;}}}
-async function load(append=false){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else if(articles.value.length){await detail(articles.value[0].id);}else selected.value=null;}catch(e){if(g===generation)error.value=e.message;}finally{if(g===generation)loading.value=false;}}
+async function load(append=false){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else if(articles.value.length){if(!selected.value||!articles.value.some(a=>a.id===selected.value.id))await detail(articles.value[0].id);}else selected.value=null;}catch(e){if(g===generation)error.value=e.message;}finally{if(g===generation)loading.value=false;}}
 function selectArticle(id){router.push('/article/'+id);}
 function more(){page.value++;load(true);}
-function stopPoll(){clearInterval(poll);poll=null;syncing.value=false;}
-async function sync(){if(syncing.value)return;syncing.value=true;notice.value='正在提交采集任务…';const oldIds=new Set(articles.value.map(a=>a.id));try{const p=await request('/user/refresh',{method:'POST'});notice.value=p.message;pollCount=0;poll=setInterval(async()=>{pollCount++;await load();const added=articles.value.filter(a=>!oldIds.has(a.id)).length;if(added){notice.value='已收到 '+added+' 篇新报道';stopPoll();}else if(pollCount>=60){notice.value='暂未收到新报道，任务可能仍在排队或编译；可稍后刷新列表。';stopPoll();}},10000);}catch(e){notice.value=e.message;stopPoll();}}
+function stopPoll(){clearTimeout(poll);poll=null;syncing.value=false;}
+async function sync(){
+ if(syncing.value)return;syncing.value=true;notice.value='正在提交采集任务…';
+ try{
+  const before=await request('/news/sync-status');
+  const initial=Number(before.published_articles||0),started=Date.now();
+  const p=await request('/user/refresh',{method:'POST'});notice.value=p.message;
+  async function tick(){
+   if(!syncing.value)return;
+   try{
+    const s=await request('/news/sync-status?run_id='+encodeURIComponent(p.run_id));
+    await load();
+    if(!syncing.value)return;
+    notice.value=syncMessage(s,Math.max(0,Number(s.published_articles||0)-initial));
+    if(['failed','uncertain','idle'].includes(s.phase)){stopPoll();return;}
+    if(syncExpired(started)){notice.value='等待时间较长，后台仍会继续抓取和翻译；可稍后刷新列表。';stopPoll();return;}
+    poll=setTimeout(tick,5000);
+   }catch(e){notice.value='暂时无法查询进度，后台任务仍会继续；可稍后刷新。';stopPoll();}
+  }
+  poll=setTimeout(tick,5000);
+ }catch(e){notice.value=e.message;stopPoll();}
+}
 function proxyImage(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
 watch([category,source],()=>{page.value=0;load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{page.value=0;load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else if(articles.value.length)detail(articles.value[0].id);});
 onMounted(()=>load());onBeforeUnmount(()=>{stopPoll();clearTimeout(debounce);});

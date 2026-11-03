@@ -1,5 +1,7 @@
 package cn.codedog;
 import cn.codedog.news.NewsService;
+import cn.codedog.news.NewsCollectorSettings;
+import cn.codedog.news.NewsTranslation;
 import cn.codedog.news.NewsAiSettings;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import static org.mockito.Mockito.*;
@@ -24,17 +26,33 @@ import static org.assertj.core.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NewsTranslationWorkerIntegrationTest {
  static final AtomicReference<String> response=new AtomicReference<>();
+ static final AtomicReference<java.util.concurrent.CountDownLatch> block=new AtomicReference<>();
+ static final AtomicReference<java.util.concurrent.CountDownLatch> entered=new AtomicReference<>();
+ static final AtomicReference<String> requestBody=new AtomicReference<>();
+ static volatile boolean streaming=false;
  static HttpServer server;
  static {try{server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);server.createContext("/translate",exchange->{
   String input=new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8);
-  assertThat(input).contains("paragraphs","Original headline unchanged").doesNotContain("summary","api_key");
+  requestBody.set(input);
+  if(streaming){
+   exchange.getResponseHeaders().set("Content-Type","application/x-ndjson");exchange.sendResponseHeaders(200,0);
+   try(var out=exchange.getResponseBody()){
+    out.write("{\"index\":0,\"text\":\"中文标题\"}\n{\"index\":1,\"text\":\"第一段\"}\n".getBytes(StandardCharsets.UTF_8));out.flush();entered.get().countDown();
+    try{block.get().await(5,java.util.concurrent.TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}
+    out.write("{\"index\":2,\"text\":null}\n{\"complete\":true,\"success\":false}\n".getBytes(StandardCharsets.UTF_8));
+   }return;
+  }
+  if(block.get()!=null){entered.get().countDown();try{block.get().await(5,java.util.concurrent.TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}}
+  assertThat(input).contains("paragraphs").doesNotContain("summary","api_key");
   byte[] bytes=response.get().getBytes(StandardCharsets.UTF_8);exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,bytes.length);try(var out=exchange.getResponseBody()){out.write(bytes);}
  });server.start();}catch(Exception e){throw new RuntimeException(e);}}
  @DynamicPropertySource static void properties(DynamicPropertyRegistry registry){registry.add("NEWS_TRANSLATOR_URL",()->"http://127.0.0.1:"+server.getAddress().getPort());}
  @MockBean NewsAiSettings ai;
+ @MockBean NewsCollectorSettings collector;
+ @Autowired NewsTranslation translation;
  @Autowired JdbcTemplate db;@Autowired DataSource ds;@Autowired NewsService news;
- @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql")).execute(ds);}
- @BeforeEach void setup(){db.update("DELETE FROM lens_articles");db.update("DELETE FROM lens_batches");db.update("DELETE FROM lens_translation_settings");db.update("DELETE FROM lens_ai_settings");
+ @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql")).execute(ds);}
+ @BeforeEach void setup(){streaming=false;block.set(null);entered.set(null);when(collector.ready()).thenReturn(true);db.update("DELETE FROM lens_refresh_runs");db.update("DELETE FROM lens_translation_cache");db.update("DELETE FROM lens_articles");db.update("DELETE FROM lens_batches");db.update("DELETE FROM lens_translation_settings");db.update("DELETE FROM lens_ai_settings");
   db.update("INSERT INTO lens_articles(url_hash,origin_url,source_id,source_name,category,title_en,content_en,published_at) VALUES('test','https://example.com/test',1,'Test source','科技','Original headline unchanged','First paragraph.\n\nSecond paragraph.',CURRENT_TIMESTAMP)");}
  @AfterAll void close(){server.stop(0);}
  @Test void defaultTranslationPublishesTranslatedTitleAndAlignedBodyWithoutSummary(){
@@ -56,4 +74,86 @@ class NewsTranslationWorkerIntegrationTest {
   var article=db.queryForMap("SELECT * FROM lens_articles");assertThat(article.get("status")).isEqualTo("pending");assertThat(article.get("attempts")).isEqualTo(1);assertThat(article.get("content_zh")).isNull();assertThat(article.get("content_en")).isEqualTo("First paragraph.\n\nSecond paragraph.");
   db.update("UPDATE lens_articles SET next_attempt_at=NULL");response.set("{\"paragraphs\":[\"中文新闻标题\",\"第一段\",\"\"]}");news.process();assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("pending");assertThat(db.queryForObject("SELECT attempts FROM lens_articles",Integer.class)).isEqualTo(2);
  }
+ @Test void blockedTranslationDoesNotBlockConcurrentRefreshOrBatchIngestion()throws Exception{
+  response.set("{\"paragraphs\":[\"中文标题\",\"第一段\",\"第二段\"]}");
+  var release=new java.util.concurrent.CountDownLatch(1);block.set(release);entered.set(new java.util.concurrent.CountDownLatch(1));
+  try(var pool=java.util.concurrent.Executors.newFixedThreadPool(10)){
+   var worker=pool.submit(()->news.translateNext());
+   try{
+    assertThat(entered.get().await(2,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    long started=System.nanoTime();var futures=new java.util.ArrayList<java.util.concurrent.Future<Map<String,Object>>>();
+    for(int n=0;n<8;n++)futures.add(pool.submit(()->news.refresh()));
+    var ids=new java.util.HashSet<Object>();for(var f:futures)ids.add(f.get(900,java.util.concurrent.TimeUnit.MILLISECONDS).get("run_id"));
+    assertThat(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started)).isLessThan(1000);
+    assertThat(ids).hasSize(1);assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_refresh_runs",Long.class)).isEqualTo(1);
+    verify(collector,never()).dispatch(anyLong());
+    news.accept("{\"batch_id\":\"parallel-ingest-test\",\"articles\":[],\"source_results\":[]}".getBytes(StandardCharsets.UTF_8));
+    news.ingestBatches();assertThat(db.queryForObject("SELECT status FROM lens_batches",String.class)).isEqualTo("done");
+   }finally{release.countDown();}
+   worker.get(3,java.util.concurrent.TimeUnit.SECONDS);
+  }
+  news.dispatchQueued();news.dispatchQueued();verify(collector,times(1)).dispatch(anyLong());
+  assertThat(db.queryForObject("SELECT status FROM lens_refresh_runs",String.class)).isEqualTo("dispatched");
+ }
+ @Test void completedParagraphsAreCachedAndOnlyMissingParagraphIsRetried()throws Exception{
+  response.set("{\"paragraphs\":[\"中文标题\",\"第一段\",null]}");news.process();
+  assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("pending");
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_translation_cache",Long.class)).isEqualTo(2);
+  db.update("UPDATE lens_articles SET next_attempt_at=NULL");
+  response.set("{\"paragraphs\":[\"第二段\"]}");news.process();
+  assertThat(requestBody.get()).doesNotContain("Original headline","First paragraph").contains("Second paragraph");
+  var article=db.queryForMap("SELECT * FROM lens_articles");
+  assertThat(article.get("status")).isEqualTo("ready");assertThat(article.get("title_zh")).isEqualTo("中文标题");
+  assertThat(article.get("content_zh")).isEqualTo("第一段\n\n第二段");
+  response.set("{\"paragraphs\":[\"新引擎译文\"]}");
+  assertThat(translation.translate(new NewsTranslation.Config("translators","alibaba"),List.of("First paragraph."))).containsExactly("新引擎译文");
+  assertThat(requestBody.get()).contains("alibaba","First paragraph.");
+ }
+ @Test void expiredAmbiguousDispatchIsNotRetried()throws Exception{
+  news.refresh();db.update("UPDATE lens_refresh_runs SET status='dispatching',lease_until=?",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)));
+  news.dispatchQueued();assertThat(db.queryForObject("SELECT status FROM lens_refresh_runs",String.class)).isEqualTo("uncertain");
+  verify(collector,never()).dispatch(anyLong());
+ }
+ @Test void failedDispatchIsRecordedWithoutLeakingUpstreamErrors()throws Exception{
+  news.refresh();doThrow(new RuntimeException("unsafe-provider-response")).when(collector).dispatch(anyLong());news.dispatchQueued();
+  var status=news.syncStatus(null);assertThat(status.get("phase")).isEqualTo("uncertain");assertThat(status.toString()).doesNotContain("unsafe-provider-response");
+ }
+ @Test void expiredBatchLeaseIsRecoveredAndOnlyTenBatchesAreClaimed()throws Exception{
+  for(int i=0;i<11;i++)news.accept(("{\"batch_id\":\"recovery-batch-"+i+"\",\"articles\":[],\"source_results\":[]}").getBytes(StandardCharsets.UTF_8));
+  db.update("UPDATE lens_batches SET status='processing',lease_until=?",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)));
+  news.ingestBatches();
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_batches WHERE status='done'",Long.class)).isEqualTo(10);
+  news.ingestBatches();assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_batches WHERE status='done'",Long.class)).isEqualTo(11);
+ }
+
+ @Test void firstBatchDoesNotFinishCollectionAndCompletionIsMonotonic()throws Exception{
+  db.update("DELETE FROM lens_articles");
+  long id=((Number)news.refresh().get("run_id")).longValue();news.dispatchQueued();
+  news.accept(("{\"batch_id\":\"first-run-batch\",\"run_id\":"+id+",\"articles\":[],\"source_results\":[]}").getBytes(StandardCharsets.UTF_8));
+  news.ingestBatches();assertThat(news.syncStatus(id).get("phase")).isEqualTo("crawling");
+  news.accept(("{\"batch_id\":\"final-run-batch\",\"run_id\":"+id+",\"collection_finished\":true,\"articles\":[],\"source_results\":[]}").getBytes(StandardCharsets.UTF_8));
+  news.ingestBatches();assertThat(news.syncStatus(id).get("phase")).isEqualTo("idle");
+  news.accept(("{\"batch_id\":\"late-run-batch\",\"run_id\":"+id+",\"articles\":[],\"source_results\":[]}").getBytes(StandardCharsets.UTF_8));
+  news.ingestBatches();assertThat(news.syncStatus(id).get("phase")).isEqualTo("idle");
+ }
+
+ @Test void streamingWritesSuccessfulParagraphsBeforeArticleFinishes()throws Exception{
+  streaming=true;var release=new java.util.concurrent.CountDownLatch(1);block.set(release);entered.set(new java.util.concurrent.CountDownLatch(1));
+  try(var pool=java.util.concurrent.Executors.newSingleThreadExecutor()){
+   var worker=pool.submit(()->news.translateNext());
+   try{
+    assertThat(entered.get().await(2,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    for(int n=0;n<100&&db.queryForObject("SELECT COUNT(*) FROM lens_translation_cache",Long.class)<2;n++)Thread.sleep(10);
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_translation_cache",Long.class)).isEqualTo(2);
+    assertThat(worker.isDone()).isFalse();
+   }finally{release.countDown();}
+   worker.get(3,java.util.concurrent.TimeUnit.SECONDS);
+  }
+  assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("pending");
+  streaming=false;block.set(null);db.update("UPDATE lens_articles SET next_attempt_at=NULL");
+  response.set("{\"paragraphs\":[\"第二段\"]}");news.translateNext();
+  assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("ready");
+  assertThat(requestBody.get()).doesNotContain("Original headline","First paragraph").contains("Second paragraph");
+ }
+
 }

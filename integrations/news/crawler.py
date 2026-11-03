@@ -3,12 +3,17 @@
 import os,json,time,hmac,hashlib,uuid,socket,ipaddress,datetime,urllib.parse
 from email.utils import parsedate_to_datetime
 import requests,feedparser,trafilatura
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 API=os.environ.get('NEWS_API_URL','https://codedog.online').rstrip('/')
 SECRET=os.environ['NEWS_WEBHOOK_SECRET']
-SESSION=requests.Session()
-SESSION.headers.update({'User-Agent':'LENS-NewsReader/1.0 (RSS aggregator; respects paywalls)'})
+_sessions=threading.local()
+def session():
+ if not hasattr(_sessions,'value'):
+  _sessions.value=requests.Session()
+  _sessions.value.headers.update({'User-Agent':'LENS-NewsReader/1.0 (RSS aggregator; respects paywalls)'})
+ return _sessions.value
 MAX_BYTES=5*1024*1024
 
 def public_url(url):
@@ -23,7 +28,7 @@ def download(url):
  # Validate redirects independently; cap download size and total redirects.
  for _ in range(5):
   public_url(url)
-  with SESSION.get(url,timeout=(10,25),allow_redirects=False,stream=True) as r:
+  with session().get(url,timeout=(10,25),allow_redirects=False,stream=True) as r:
    if r.status_code in (301,302,303,307,308):
     url=urllib.parse.urljoin(url,r.headers['Location']);continue
    r.raise_for_status()
@@ -55,37 +60,62 @@ def article(entry,source):
  except Exception:
   return None
 
-def send(articles,results):
+class WebhookError(RuntimeError):pass
+
+def send(articles,results,completed=False):
  batch={'batch_id':uuid.uuid4().hex,'articles':articles,'source_results':results}
+ run_id=os.environ.get('NEWS_RUN_ID','')
+ if run_id.isdigit():batch.update(run_id=int(run_id),collection_finished=completed)
  body=json.dumps(batch,ensure_ascii=False,separators=(',',':')).encode()
  if len(body)>2*1024*1024:
   if len(articles)<2:raise ValueError('Single article too large')
-  mid=len(articles)//2;send(articles[:mid],[]);send(articles[mid:],results);return
+  mid=len(articles)//2;send(articles[:mid],[]);send(articles[mid:],results,completed);return
  # Reuse the batch identifier for retries; the receiver persists it before acknowledging.
  for attempt in range(4):
   timestamp=str(int(time.time()))
   signature=hmac.new(SECRET.encode(),timestamp.encode()+b'.'+body,hashlib.sha256).hexdigest()
   try:
-   r=SESSION.post(API+'/api/crawler/ingest',data=body,headers={'Content-Type':'application/json','X-Webhook-Secret':SECRET,'X-Webhook-Timestamp':timestamp,'X-Webhook-Signature':signature},timeout=(10,30))
+   r=session().post(API+'/api/crawler/ingest',data=body,headers={'Content-Type':'application/json','X-Webhook-Secret':SECRET,'X-Webhook-Timestamp':timestamp,'X-Webhook-Signature':signature},timeout=(10,30))
    r.raise_for_status();return
   except Exception:
-   if attempt==3:raise RuntimeError('News webhook failed; check receiver status') from None
+   if attempt==3:raise WebhookError('News webhook failed; check receiver status') from None
    time.sleep(2**attempt)
+
+def collect_source(source):
+ pending=[]
+ accepted=0
+ success=False
+ try:
+  raw,_=download(source['rss_url']);feed=feedparser.parse(raw)
+  if not feed.entries:raise ValueError('Feed is empty or unreadable')
+  with ThreadPoolExecutor(max_workers=2) as pool:
+   futures=[pool.submit(article,e,source) for e in feed.entries[:15]]
+   for future in as_completed(futures):
+    value=future.result()
+    if value:
+     pending.append(value);accepted+=1
+     if len(pending)>=3:
+      send(pending,[]);pending=[]
+  success=True
+ except WebhookError:
+  raise
+ except Exception:
+  if pending:
+   send(pending,[]);pending=[]
+  send([], [{'source_id':source['id'],'success':False}])
+  print('source_id=%s feed_success=False'%source['id'],flush=True)
+  return
+ if pending:send(pending,[])
+ send([], [{'source_id':source['id'],'success':success}])
+ print('source_id=%s accepted_articles=%s feed_success=%s'%(source['id'],accepted,success),flush=True)
 
 def run():
  public_url(API)
- r=SESSION.get(API+'/api/crawler/tasks',params={'force_all':os.environ.get('FORCE_ALL','false')},headers={'X-Webhook-Secret':SECRET},timeout=(10,30))
+ r=session().get(API+'/api/crawler/tasks',params={'force_all':os.environ.get('FORCE_ALL','false')},headers={'X-Webhook-Secret':SECRET},timeout=(10,30))
  r.raise_for_status();sources=r.json()['sources']
- for source in sources:
-  articles=[]
-  try:
-   raw,_=download(source['rss_url']);feed=feedparser.parse(raw)
-   if not feed.entries:raise ValueError('Feed is empty or unreadable')
-   with ThreadPoolExecutor(max_workers=3) as pool:
-    articles=[a for a in pool.map(lambda e:article(e,source),feed.entries[:15]) if a]
-   success=True
-  except Exception:success=False
-  send(articles,[{'source_id':source['id'],'success':success}])
-  print('source_id=%s accepted_articles=%s feed_success=%s'%(source['id'],len(articles),success),flush=True)
+ with ThreadPoolExecutor(max_workers=2) as pool:
+  for future in as_completed([pool.submit(collect_source,source) for source in sources]):
+   future.result()
+ send([],[],completed=True)
 
 if __name__=='__main__':run()

@@ -32,10 +32,11 @@ class NewsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;
  @Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  static final String SECRET="test-news-secret-at-least-32-characters";
- @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql")).execute(ds);}
- @BeforeEach void clean(){db.update("DELETE FROM lens_translation_settings");db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM lens_articles");db.update("DELETE FROM lens_batches");db.update("UPDATE lens_sources SET lease_until=NULL,last_crawled_at=NULL");}
+ @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql")).execute(ds);}
+ @BeforeEach void clean(){db.update("DELETE FROM lens_translation_settings");db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM lens_translation_cache");db.update("DELETE FROM lens_articles");db.update("DELETE FROM lens_batches");db.update("UPDATE lens_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void publicReadOnlyAndMissingConfigurationAreHonest()throws Exception{
+  mvc.perform(get("/api/news/sync-status")).andExpect(status().isOk()).andExpect(jsonPath("$.pending_articles").value(0)).andExpect(jsonPath("$.phase").value("idle"));
   mvc.perform(get("/api/news")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
   mvc.perform(get("/api/admin/news")).andExpect(status().isUnauthorized());
   mvc.perform(post("/api/user/refresh")).andExpect(status().isServiceUnavailable());

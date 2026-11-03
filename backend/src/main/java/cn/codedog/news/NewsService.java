@@ -14,7 +14,7 @@ import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.scheduling.annotation.Scheduled;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 
 @Service
 public class NewsService {
+ private final AtomicBoolean stopping=new AtomicBoolean();
  private final JdbcTemplate db; private final ObjectMapper json; private final TransactionTemplate tx;
  private final NewsCollectorSettings collector;
  private final NewsAiSettings aiSettings; private final NewsTranslation translation;
@@ -104,31 +105,70 @@ public class NewsService {
   a.remove("url_hash");a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM lens_articles WHERE event_id=?",id));return a;
  }
  public void retry(long id){require(db.update("UPDATE lens_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
- public synchronized Map<String,Object> refresh(){
+ @jakarta.annotation.PreDestroy public void stop(){stopping.set(true);}
+ public Map<String,Object> refresh(){return refresh("anonymous","",UUID.randomUUID().toString());}
+ public Map<String,Object> refresh(String actor,String ip,String requestId){
   require(githubReady(),HttpStatus.SERVICE_UNAVAILABLE,"GitHub 调度和采集密钥尚未配置");
-  require(db.queryForObject("SELECT COUNT(*) FROM lens_refresh_runs WHERE created_at>?",Long.class,Timestamp.from(Instant.now().minusSeconds(120)))==0,HttpStatus.TOO_MANY_REQUESTS,"正在同步，请两分钟后再试");
-  db.update("INSERT INTO lens_refresh_runs(status) VALUES('dispatching')");
-  try{
-   collector.dispatch();
-   db.update("UPDATE lens_refresh_runs SET status='dispatched' WHERE status='dispatching'");return Map.of("status","dispatched","message","采集任务已提交；等待 GitHub 排队，完成后更新报道");
-  }catch(ResponseStatusException e){db.update("UPDATE lens_refresh_runs SET status='failed',last_error='GitHub 调度未被接受' WHERE status='dispatching'");throw e;}catch(Exception e){db.update("UPDATE lens_refresh_runs SET status='failed',last_error='GitHub 调度网络失败' WHERE status='dispatching'");throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"GitHub 调度暂时不可用");}
+  return tx.execute(status->{
+   db.queryForObject("SELECT id FROM lens_sync_gate WHERE id=1 FOR UPDATE",Integer.class);
+   var existing=db.queryForList("SELECT id,status FROM lens_refresh_runs WHERE status IN ('queued','dispatching') OR created_at>? ORDER BY id DESC LIMIT 1",Timestamp.from(Instant.now().minusSeconds(120)));
+   if(!existing.isEmpty())return Map.<String,Object>of("run_id",existing.getFirst().get("id"),"status",existing.getFirst().get("status"),"message","已有采集任务，请等待抓取和翻译完成");
+   var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
+   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO lens_refresh_runs(status,requested_by,request_id,request_ip) VALUES('queued',?,?,?)",new String[]{"id"});statement.setString(1,actor);statement.setString(2,requestId);statement.setString(3,ip.length()>100?ip.substring(0,100):ip);return statement;},keys);
+   return Map.<String,Object>of("run_id",keys.getKey().longValue(),"status","queued","message","采集任务已提交，等待 GitHub 抓取；全文翻译后自动发布");
+  });
  }
- @Scheduled(fixedDelay=15000,initialDelay=45000)
- public synchronized void process(){
-  try {
-   // Recover only expired processing leases; queued batches and original text survive restarts.
-   db.update("UPDATE lens_articles SET status='pending' WHERE status='processing' AND next_attempt_at<CURRENT_TIMESTAMP");
-   var batches=db.queryForList("SELECT batch_id,payload FROM lens_batches WHERE status='queued' ORDER BY created_at LIMIT 1");
-   for(var batch:batches){
-    try{tx.executeWithoutResult(status->{try{ingest(json.readTree((String)batch.get("payload")));db.update("UPDATE lens_batches SET status='done',payload='{}' WHERE batch_id=?",batch.get("batch_id"));}catch(Exception e){throw new IllegalArgumentException("采集包内容无效",e);}});}catch(Exception e){db.update("UPDATE lens_batches SET status='failed',last_error='采集包校验失败' WHERE batch_id=?",batch.get("batch_id"));}
-   }
-   if(!aiReady())return;
-   var pending=db.queryForList("SELECT * FROM lens_articles WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<CURRENT_TIMESTAMP) ORDER BY id LIMIT 2");
-   for(var a:pending){long id=((Number)a.get("id")).longValue();
-    if(db.update("UPDATE lens_articles SET status='processing',next_attempt_at=? WHERE id=? AND status='pending'",Timestamp.from(Instant.now().plusSeconds(1200)),id)!=1)continue;
-    try{translate(a);}catch(Exception e){int attempts=((Number)a.get("attempts")).intValue()+1;db.update("UPDATE lens_articles SET status=?,attempts=?,next_attempt_at=?,last_error=? WHERE id=?",attempts>=3?"failed":"pending",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),"标题或正文翻译服务、段落校验失败；可切换翻译方式后重试",id);}
-   }
-  }catch(Exception e){org.slf4j.LoggerFactory.getLogger(NewsService.class).warn("News worker temporarily unavailable: {}",e.getClass().getSimpleName());}
+ public Map<String,Object> syncStatus(Long runId){
+  var runs=runId==null?db.queryForList("SELECT id,status,last_error,collection_finished FROM lens_refresh_runs ORDER BY id DESC LIMIT 1"):db.queryForList("SELECT id,status,last_error,collection_finished FROM lens_refresh_runs WHERE id=?",runId);
+  var out=new LinkedHashMap<String,Object>();
+  long queued=db.queryForObject("SELECT COUNT(*) FROM lens_batches WHERE status IN ('queued','processing')",Long.class);
+  long pending=db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE status='pending'",Long.class);
+  long processing=db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE status='processing'",Long.class);
+  String state=runs.isEmpty()?"idle":(String)runs.getFirst().get("status");
+  String phase=Set.of("queued","dispatching","failed","uncertain").contains(state)?state:queued>0?"ingesting":pending+processing>0?"translating":!runs.isEmpty()&&!Boolean.TRUE.equals(runs.getFirst().get("collection_finished"))&&Set.of("dispatched","received").contains(state)?"crawling":"idle";
+  out.put("run_id",runs.isEmpty()?null:runs.getFirst().get("id"));out.put("status",state);out.put("phase",phase);
+  out.put("queued_batches",queued);out.put("pending_articles",pending);out.put("processing_articles",processing);
+  out.put("published_articles",db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE status='ready' AND event_id IS NULL",Long.class));
+  out.put("message",runs.isEmpty()?null:runs.getFirst().get("last_error"));return out;
+ }
+ public void dispatchQueued(){
+  if(stopping.get())return;
+  for(var old:db.queryForList("SELECT * FROM lens_refresh_runs WHERE status='dispatching' AND lease_until<CURRENT_TIMESTAMP")){
+   long id=((Number)old.get("id")).longValue();
+   tx.executeWithoutResult(status->{if(db.update("UPDATE lens_refresh_runs SET status='uncertain',last_error='调度结果未确认，请检查 GitHub 工作流记录',lease_until=NULL WHERE id=? AND status='dispatching' AND lease_until<CURRENT_TIMESTAMP",id)==1)dispatchAudit(old,"uncertain","调度结果未确认，请检查 GitHub 工作流记录");});
+  }
+  var rows=db.queryForList("SELECT * FROM lens_refresh_runs WHERE status='queued' ORDER BY id LIMIT 1");if(rows.isEmpty()||stopping.get())return;var row=rows.getFirst();long id=((Number)row.get("id")).longValue();
+  if(db.update("UPDATE lens_refresh_runs SET status='dispatching',lease_until=? WHERE id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(60)),id)!=1)return;
+  String result="dispatched",error=null;
+  try{collector.dispatch(id);}catch(ResponseStatusException e){result="failed";error=e.getReason();}catch(Exception e){result="uncertain";error="GitHub 调度结果未确认，请检查工作流记录；不会自动重复触发";}
+  final String completed=result,reason=error;
+  tx.executeWithoutResult(status->{db.update("UPDATE lens_refresh_runs SET status=?,last_error=?,lease_until=NULL WHERE id=? AND status='dispatching'",completed,reason,id);dispatchAudit(row,completed,reason);});
+ }
+ private void dispatchAudit(Map<String,Object> row,String result,String error){
+  String actor=Objects.toString(row.get("requested_by"),"anonymous");
+  String detail;
+  try{detail=json.writeValueAsString(Map.of("origin_request_id",Objects.toString(row.get("request_id"),""),"run_id",row.get("id"),"dispatch_status",result));}catch(Exception e){throw new IllegalStateException(e);}
+  db.update("INSERT INTO audit_log(action,owner_username,actor_type,actor_id,actor_name,request_id,http_method,request_path,status_code,duration_ms,module,event_type,event_code,result,target_type,target_id,detail_json,error_message,ip_address,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)","news_dispatch_completed",actor,"SYSTEM",actor,"新闻采集调度",UUID.randomUUID().toString(),"SYSTEM","scheduled://news-dispatch",result.equals("dispatched")?200:502,0,"news","management","news_dispatch_completed",result.equals("dispatched")?"success":"failed","NEWS_REFRESH_RUN",row.get("id").toString(),detail,error,row.get("request_ip"),Timestamp.from(Instant.now()));
+ }
+ // Kept as a synchronous entry point for integration checks, never used by the production scheduler.
+ public void process(){ingestBatches();translateNext();}
+ public void ingestBatches(){
+  if(stopping.get())return;
+  db.update("UPDATE lens_batches SET status='queued' WHERE status='processing' AND lease_until<CURRENT_TIMESTAMP");
+  for(var batch:db.queryForList("SELECT batch_id,payload FROM lens_batches WHERE status='queued' ORDER BY created_at LIMIT 10")){
+   if(stopping.get())return;Object id=batch.get("batch_id");
+   if(db.update("UPDATE lens_batches SET status='processing',lease_until=? WHERE batch_id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(120)),id)!=1)continue;
+   try{tx.executeWithoutResult(status->{try{ingest(json.readTree((String)batch.get("payload")));db.update("UPDATE lens_batches SET status='done',payload='{}',lease_until=NULL WHERE batch_id=?",id);}catch(Exception e){throw new IllegalArgumentException("采集包内容无效",e);}});}catch(Exception e){db.update("UPDATE lens_batches SET status='failed',last_error='采集包校验失败',lease_until=NULL WHERE batch_id=?",id);}
+  }
+ }
+ public synchronized void translateNext(){
+  if(stopping.get()||!aiReady())return;
+  db.update("UPDATE lens_articles SET status='pending' WHERE status='processing' AND next_attempt_at<CURRENT_TIMESTAMP");
+  var pending=db.queryForList("SELECT * FROM lens_articles WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<CURRENT_TIMESTAMP) ORDER BY id LIMIT 1");
+  for(var a:pending){if(stopping.get())return;long id=((Number)a.get("id")).longValue();
+   if(db.update("UPDATE lens_articles SET status='processing',next_attempt_at=? WHERE id=? AND status='pending'",Timestamp.from(Instant.now().plusSeconds(1200)),id)!=1)continue;
+   try{translate(a);}catch(Exception e){int attempts=((Number)a.get("attempts")).intValue()+1;db.update("UPDATE lens_articles SET status=?,attempts=?,next_attempt_at=?,last_error=? WHERE id=?",attempts>=3?"failed":"pending",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),"标题或正文翻译服务、段落校验失败；可切换翻译方式后重试",id);}
+  }
  }
  private void ingest(JsonNode batch)throws Exception{
   for(JsonNode a:batch.path("articles")){
@@ -146,7 +186,11 @@ public class NewsService {
    boolean ok=result.path("success").asBoolean();long id=result.path("source_id").asLong();
    db.update("UPDATE lens_sources SET last_crawled_at=CURRENT_TIMESTAMP,lease_until=NULL,last_error=?"+(ok?",last_success_at=CURRENT_TIMESTAMP":"")+" WHERE id=?",ok?null:"来源抓取失败，请检查 RSS 地址或访问限制",id);
   }
-  db.update("UPDATE lens_refresh_runs SET status='received' WHERE status='dispatched' AND created_at>?",Timestamp.from(Instant.now().minusSeconds(3600)));
+  long runId=batch.path("run_id").asLong(0);
+  if(runId>0){
+   db.update("UPDATE lens_refresh_runs SET status='received',collection_finished=(collection_finished OR ?) WHERE id=? AND status IN ('dispatching','dispatched','received')",batch.path("collection_finished").asBoolean(false),runId);
+  }else db.update("UPDATE lens_refresh_runs SET status='received' WHERE status IN ('dispatched','dispatching') AND created_at>?",Timestamp.from(Instant.now().minusSeconds(3600)));
+
  }
  private JsonNode ai(NewsAiSettings.RuntimeConfig config,String instruction,Object input)throws Exception{
   String response=aiSettings.complete(config,List.of(Map.of("role","system","content",instruction),Map.of("role","user","content",json.writeValueAsString(input))),null);

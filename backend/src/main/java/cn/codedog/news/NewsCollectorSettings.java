@@ -65,8 +65,10 @@ public class NewsCollectorSettings {
   var req=HttpRequest.newBuilder(URI.create(sealUrl+"/seal")).timeout(Duration.ofSeconds(10)).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("public_key",publicKey,"secret",secret)))).build();
   var response=http.send(req,HttpResponse.BodyHandlers.ofString());if(response.statusCode()!=200)throw new IllegalArgumentException("sealed box unavailable");String value=json.readTree(response.body()).path("encrypted_value").asText();if(value.isBlank()||value.length()>2000)throw new IllegalArgumentException("sealed box response");return value;
  }
- public void dispatch()throws Exception{dispatch(runtime());}
- private void dispatch(RuntimeConfig c)throws Exception{accepted(github(c,"POST","/repos/"+c.repository()+"/actions/workflows/"+c.workflow()+"/dispatches",Map.of("ref","main","inputs",Map.of("force_all","true"))),204);}
+ public void dispatch()throws Exception{dispatch(runtime(),null);}
+ public void dispatch(long runId)throws Exception{dispatch(runtime(),runId);}
+ private void dispatch(RuntimeConfig c)throws Exception{dispatch(c,null);}
+ private void dispatch(RuntimeConfig c,Long runId)throws Exception{accepted(github(c,"POST","/repos/"+c.repository()+"/actions/workflows/"+c.workflow()+"/dispatches",Map.of("ref","main","inputs",Map.of("force_all","true","run_id",runId==null?"":runId.toString()))),204);}
  @Scheduled(fixedDelay=5000,initialDelay=20000)
  public synchronized void processProvision(){
   var row=row();if(row==null)return;String state=(String)row.get("setup_state");Timestamp lease=(Timestamp)row.get("lease_until");if(!state.equals("queued")&&!(state.equals("processing")&&lease!=null&&lease.toInstant().isBefore(Instant.now())))return;
