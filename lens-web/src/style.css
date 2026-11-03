@@ -98,3 +98,6 @@
 .brand strong { font-family:Georgia,'Times New Roman',serif; font-size:23px; letter-spacing:-.035em; font-weight:700; }
 .brand small { font-size:8px; letter-spacing:.07em; }
 @media(max-width:760px) { .brand small { font-size:7px; letter-spacing:0; } }
+
+.body-translation-status { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 14px; margin:0 0 18px; background:#e9eff0; border-radius:6px; color:#36566a; font-size:13px; line-height:1.65; }
+.body-translation-status button { background:#fff; border:1px solid #b8c8cf; border-radius:4px; padding:6px 10px; color:#36566a; }

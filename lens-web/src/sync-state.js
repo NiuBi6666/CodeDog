@@ -6,8 +6,8 @@ export function syncMessage(s, added=0) {
  if(s.phase==='queued')return prefix+'任务已提交，等待调度';
  if(s.phase==='dispatching')return prefix+'正在通知 GitHub 采集节点';
  if(s.phase==='crawling')return prefix+'已通知 GitHub，等待排队和抓取';
- if(s.phase==='ingesting')return prefix+'已收到采集数据，'+s.queued_batches+' 个批次等待入库；待翻译 '+pending+' 篇';
- if(s.phase==='translating')return prefix+'正在翻译 '+processing+' 篇，另有 '+pending+' 篇排队；全文完成后发布';
+ if(s.phase==='ingesting')return prefix+'已收到采集数据，'+s.queued_batches+' 个批次等待入库；标题待翻译 '+pending+' 篇';
+ if(s.phase==='translating')return prefix+'正在翻译标题 '+processing+' 篇，另有 '+pending+' 篇排队；打开报道后翻译全文';
  return prefix+(added?'同步完成':'本轮已处理，暂未发现新的可读报道');
 }
 

@@ -17,6 +17,7 @@ public class NewsController {
  @GetMapping("/news") public Object list(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String category,@RequestParam(defaultValue="")String source,@RequestParam(defaultValue="0")int page){return news.list(q,category,source,page);}
  @GetMapping("/news/sync-status") public Object syncStatus(@RequestParam(name="run_id",required=false)Long runId){return news.syncStatus(runId);}
  @GetMapping("/news/{id}") public Object article(@PathVariable long id){return news.article(id,false);}
+ @PostMapping("/news/{id}/translation") public Object requestTranslation(@PathVariable long id){audit.event("news","public","body_translation_request");audit.target("NEWS_ARTICLE",id);return news.requestBodyTranslation(id);}
  @GetMapping("/admin/news")public Object overview(){event("overview",null);return news.overview();}
  @GetMapping("/admin/sources")public Object sources(){event("sources_read",null);return Map.of("sources",news.sources());}
  @PostMapping("/admin/sources")public Object create(@RequestBody JsonNode body){var result=news.save(null,body);event("source_create",result.get("id"));audit.change("NEWS_SOURCE",result.get("id"),Map.of(),result);return result;}

@@ -43,7 +43,7 @@ public class NewsSelectionController {
   if(raw.length()>1000)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"每次最多翻译 1000 个字符，请缩小选区");
   String text=normalize(raw);
   if(text.isBlank()||!text.matches("(?s).*[A-Za-z].*"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请选择英文单词、短语或句子");
-  var rows=db.queryForList("SELECT title_en,content_en,category FROM lens_articles WHERE id=? AND status='ready'",id);
+  var rows=db.queryForList("SELECT title_en,content_en,category FROM lens_articles WHERE id=? AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))",id);
   if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"文章不可用");
   var article=rows.getFirst();
   if(!normalize(Objects.toString(article.get("content_en"),"")).contains(text)&&!normalize(Objects.toString(article.get("title_en"),"")).contains(text))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请从当前文章的英文原文中选择内容");

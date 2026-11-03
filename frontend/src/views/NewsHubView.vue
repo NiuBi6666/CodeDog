@@ -75,7 +75,7 @@ onMounted(()=>{load();loadAi();});
         </div>
 
         <section v-if="auth.user?.admin" v-show="activeTab==='translation'" id="news-panel-translation" role="tabpanel" aria-labelledby="news-tab-translation" tabindex="0" class="admin-panel news-section">
-          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">翻译新闻标题与正文，保留英文原题，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
+          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">采集后翻译标题，打开新闻详情时按需翻译全文；保留英文原文，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
           <div class="news-panel-body">
             <div v-if="aiError" class="notice notice-error" role="alert">{{aiError}}</div>
             <div v-if="aiTest" class="notice notice-success" role="status">{{aiTest}}</div>
