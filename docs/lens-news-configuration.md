@@ -1,7 +1,15 @@
 
 # LENS 新闻部署与配置
 
-## 必须的受保护配置
+## 后台配置大模型（推荐）
+
+系统管理员登录 /news，在“大模型配置”填写兼容 OpenAI Chat Completions 的接口根地址、模型 ID 和 API Key，点击保存，再点击“测试已保存配置”。根地址不要追加 /chat/completions，模型 ID 以服务商控制台为准。
+
+密钥使用服务器现有 AES-GCM 加密机制存入数据库，不向浏览器回传。输入框留空保留已有密钥；更换服务商地址时必须重新输入密钥。保存后立即生效，无需重启。测试发送一次小请求，可能消耗少量服务商额度。
+
+该配置仅系统管理员可访问。数据库配置优先于环境变量；首次后台保存前兼容环境变量。服务器必须保留 CODEDOG_PASSWORD_RECOVERY_KEY，否则不能解密已保存密钥。
+
+## 其他受保护配置与环境变量兼容
 
 在生产 `/opt/codedog-ranking/.env` 中配置（不得提交 Git）：
 
@@ -21,8 +29,8 @@ GitHub Actions 仓库变量 `NEWS_API_URL=https://codedog.online`。
 完成模型、服务器与 Secrets 配置后，设置仓库变量 `NEWS_ENABLED=true` 启用采集。未设置时工作流跳过，不产生失败通知。
 不要使用第三方免费的未授权 API；定价、免费额度与限流以提供商为准。
 
-配置后在服务器运行 `docker compose up -d --no-deps --force-recreate backend`。
-在 CodeDog `/news` 查看“服务配置”，不要把真实密钥贴入聊天或提交 Git。
+仅修改服务器环境变量后在服务器运行 `docker compose up -d --no-deps --force-recreate backend`。
+后台保存模型配置无需重启。在 CodeDog `/news` 查看“服务配置”，不要把真实密钥贴入聊天或提交 Git。
 
 ## 数据闭环
 

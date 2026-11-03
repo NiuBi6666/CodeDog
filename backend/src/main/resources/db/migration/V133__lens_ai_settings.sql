@@ -1,0 +1,8 @@
+
+CREATE TABLE lens_ai_settings (
+ id INT NOT NULL PRIMARY KEY,
+ base_url VARCHAR(500) NOT NULL,
+ model VARCHAR(200) NOT NULL,
+ api_key_ciphertext TEXT NOT NULL,
+ updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+);
