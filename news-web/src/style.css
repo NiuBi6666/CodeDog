@@ -103,7 +103,8 @@
 .body-translation-status button { background:#fff; border:1px solid #b8c8cf; border-radius:4px; padding:6px 10px; color:#36566a; }
 
 
-/* Mobile masthead: one task per row, with stable alignment at narrow widths. */
+/* Compact mobile tools: small visual surfaces, generous touch height. */
+.search-icon { flex-shrink:0; color:#647b88; }
 @media(max-width:760px) {
   .topbar {
     display:grid;
@@ -111,8 +112,8 @@
     grid-template-areas:"brand modes" "actions actions" "categories categories";
     height:auto;
     min-height:0;
-    gap:8px 12px;
-    padding:12px 16px 0;
+    gap:4px 12px;
+    padding:10px 16px 0;
   }
   .topbar .brand { grid-area:brand; min-width:0; gap:8px; }
   .topbar .brand-mark { width:32px; height:32px; }
@@ -123,14 +124,30 @@
     grid-area:modes;
     justify-self:end;
     display:flex;
-    gap:2px;
-    padding:2px;
-    border:1px solid var(--line);
-    border-radius:6px;
-    background:#f1f0eb;
+    gap:0;
+    padding:0;
+    border:0;
+    background:transparent;
   }
-  .topbar .global-modes button { min-width:36px; min-height:34px; padding:6px; font-size:12px; border-radius:4px; }
-  .topbar .global-modes button.active { background:#fffdf8; color:#294956; box-shadow:0 1px 3px #28333d14; }
+  .topbar .global-modes button {
+    position:relative;
+    isolation:isolate;
+    min-width:34px;
+    min-height:44px;
+    padding:0 6px;
+    border-radius:4px;
+    font-size:11px;
+    color:#75828a;
+  }
+  .topbar .global-modes button.active { background:transparent; color:#294956; font-weight:600; box-shadow:none; }
+  .topbar .global-modes button.active::before {
+    content:"";
+    position:absolute;
+    inset:8px 1px;
+    z-index:-1;
+    border-radius:4px;
+    background:#e8eeed;
+  }
   .topbar .top-actions {
     grid-area:actions;
     display:grid;
@@ -141,29 +158,59 @@
     margin:0;
   }
   .topbar .search {
+    position:relative;
+    isolation:isolate;
     width:auto;
     min-width:0;
-    height:42px;
-    padding:0 12px;
-    gap:8px;
-    border:1px solid #d2d7d8;
-    border-radius:6px;
-    background:var(--paper);
+    height:44px;
+    padding:0 10px;
+    gap:7px;
+    border:0;
+    border-radius:5px;
+    background:transparent;
   }
-  .topbar .search:focus-within { border-color:var(--blue); box-shadow:0 0 0 2px #4c718714; }
+  .topbar .search::before {
+    content:"";
+    position:absolute;
+    inset:6px 0;
+    z-index:-1;
+    border:1px solid #e0e4e2;
+    border-radius:5px;
+    background:#f2f3ef;
+    pointer-events:none;
+  }
+  .topbar .search:focus-within { box-shadow:none; }
+  .topbar .search:focus-within::before { border-color:var(--blue); box-shadow:0 0 0 2px #4c718714; }
   .topbar .search input { display:block; min-width:0; font-size:16px; }
-  .topbar .search span { font-size:21px; flex-shrink:0; }
+  .topbar .search input::placeholder { font-size:13px; color:#849097; }
+  .topbar .search-icon { width:14px; height:14px; }
   .topbar .sync-button {
+    position:relative;
+    isolation:isolate;
     justify-content:center;
-    height:42px;
-    min-width:104px;
-    padding:0 12px;
-    gap:6px;
-    border-radius:6px;
-    font-size:13px;
+    height:44px;
+    min-width:88px;
+    padding:0 8px;
+    gap:5px;
+    border:0;
+    border-radius:5px;
+    background:transparent;
+    color:#3d5968;
+    font-size:12px;
+    font-weight:500;
     white-space:nowrap;
   }
-  .topbar .sync-button span { font-size:18px; line-height:1; }
+  .topbar .sync-button::before {
+    content:"";
+    position:absolute;
+    inset:6px 0;
+    z-index:-1;
+    border:1px solid #cfd9dc;
+    border-radius:5px;
+    background:#edf2f1;
+    pointer-events:none;
+  }
+  .topbar .sync-button span { font-size:15px; line-height:1; }
   .topbar .category-nav {
     grid-area:categories;
     display:flex;
@@ -175,10 +222,9 @@
     margin:0;
     overflow-x:auto;
   }
-  .topbar .category-nav button { flex:1 0 auto; min-height:40px; padding:9px 6px; font-size:14px; text-align:center; }
+  .topbar .category-nav button { flex:1 0 auto; min-height:36px; padding:7px 6px; font-size:13px; text-align:center; }
   .notice { top:auto; bottom:calc(16px + env(safe-area-inset-bottom)); left:12px; right:12px; transform:none; max-width:none; width:auto; }
 }
-
 
 /* Consistent single-select affordance; preserve native option menus and listboxes. */
 :root {
