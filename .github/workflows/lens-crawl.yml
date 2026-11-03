@@ -1,0 +1,34 @@
+
+name: LENS overseas news collection
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: Ignore per-source refresh interval
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: lens-news-collector
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: ${{ vars.NEWS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install collector libraries
+        run: pip install -r integrations/news/requirements.txt
+      - name: Collect, clean and push news
+        env:
+          NEWS_API_URL: ${{ vars.NEWS_API_URL || 'https://codedog.online' }}
+          NEWS_WEBHOOK_SECRET: ${{ secrets.NEWS_WEBHOOK_SECRET }}
+          FORCE_ALL: ${{ inputs.force_all && 'true' || 'false' }}
+        run: python integrations/news/crawler.py
