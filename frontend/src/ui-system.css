@@ -152,3 +152,29 @@ body.admin-layout .permission-options .permission-kind-action { background: #f2e
   body.admin-layout .permission-group { padding: 12px; }
   body.admin-layout .permission-options label > span { flex-wrap: wrap; gap: 4px; }
 }
+
+
+/* Consistent single-select affordance; preserve native option menus and listboxes. */
+:root {
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%235d737d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+:root body select:not([multiple]):is(:not([size]),[size="0"],[size="1"]) {
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  appearance:none;
+  background-image:var(--select-chevron);
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:14px 14px;
+  padding-right:38px;
+  text-overflow:ellipsis;
+}
+@media(forced-colors:active) {
+  :root body select:not([multiple]):is(:not([size]),[size="0"],[size="1"]) {
+    -webkit-appearance:auto;
+    -moz-appearance:auto;
+    appearance:auto;
+    background-image:none;
+    padding-right:10px;
+  }
+}
