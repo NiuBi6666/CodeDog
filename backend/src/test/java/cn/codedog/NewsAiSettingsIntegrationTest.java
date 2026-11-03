@@ -34,8 +34,8 @@ class NewsAiSettingsIntegrationTest {
  static final String URL="/api/admin/news/ai-settings";
  static final String KEY="test-only-model-secret-never-a-real-key";
  MockHttpSession admin;
- @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql")).execute(ds);}
- @BeforeEach void setup()throws Exception{db.update("DELETE FROM lens_ai_settings");admin=login("Liam","test-only-password");}
+ @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql")).execute(ds);}
+ @BeforeEach void setup()throws Exception{db.update("DELETE FROM lens_translation_settings");db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM lens_ai_settings");admin=login("Liam","test-only-password");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  String body(String base,String model,String key)throws Exception{return json.writeValueAsString(Map.of("base_url",base,"model",model,"api_key",key));}
  @Test void onlyRealSystemAdministratorCanReadWriteOrTestCredentials()throws Exception{
@@ -71,6 +71,21 @@ class NewsAiSettingsIntegrationTest {
   for(String base:List.of("http://api.example.com/v1","https://127.0.0.1/v1","https://api.example.com/v1?key=secret","https://user:password@api.example.com/v1","https://api.example.com/v1/chat/completions","https://localhost/v1"))
    mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body(base,"model",KEY))).andExpect(status().isBadRequest());
   assertThat(settings.runtime().baseUrl()).isEqualTo("https://api.siliconflow.cn/v1");
+ }
+ @Test void defaultModeNeedsNoKeyAndSwitchingRetainsEncryptedApiSettings()throws Exception{
+  db.update("DELETE FROM lens_translation_settings");
+  mvc.perform(get(URL).session(admin)).andExpect(status().isOk()).andExpect(jsonPath("$.mode").value("translators")).andExpect(jsonPath("$.configured").value(true)).andExpect(jsonPath("$.api_key_configured").value(false));
+  mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"mode\":\"translators\",\"engine\":\"alibaba\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.engine").value("alibaba"));
+  assertThat(news.aiReady()).isTrue();
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_ai_settings",Long.class)).isZero();
+  mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body("https://api.siliconflow.cn/v1","model",KEY))).andExpect(status().isOk()).andExpect(jsonPath("$.mode").value("api"));
+  String encrypted=db.queryForObject("SELECT api_key_ciphertext FROM lens_ai_settings WHERE id=1",String.class);
+  mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"mode\":\"translators\",\"engine\":\"bing\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.mode").value("translators"));
+  assertThat(db.queryForObject("SELECT api_key_ciphertext FROM lens_ai_settings WHERE id=1",String.class)).isEqualTo(encrypted);
+  assertThat(settings.runtime().apiKey()).isEqualTo(KEY);
+  mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"mode\":\"invalid\"}")).andExpect(status().isBadRequest());
+  mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content("{\"mode\":\"translators\",\"engine\":\"arbitrary\"}")).andExpect(status().isBadRequest());
+  assertThat(db.queryForList("SELECT changes_json FROM audit_log WHERE module='news' AND event_code='ai_settings_update'").toString()).contains("translators").doesNotContain(KEY);
  }
  @Test void missingConfigAndMissingEncryptionFailClosed()throws Exception{
   mvc.perform(post(URL+"/test").session(admin).with(csrf())).andExpect(status().isServiceUnavailable());

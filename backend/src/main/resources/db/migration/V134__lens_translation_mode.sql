@@ -1,0 +1,6 @@
+CREATE TABLE lens_translation_settings (
+ id INT NOT NULL PRIMARY KEY,
+ mode VARCHAR(30) NOT NULL,
+ engine VARCHAR(30) NOT NULL DEFAULT 'bing',
+ updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+);

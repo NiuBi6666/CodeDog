@@ -26,6 +26,9 @@ services:
 
   backend:
     build: ./backend
+    networks:
+      - default
+      - lens-translation
     container_name: codedog-backend
     restart: unless-stopped
     env_file: .env
@@ -49,6 +52,21 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  lens-translator:
+    build: ./integrations/translation
+    container_name: codedog-lens-translator
+    restart: unless-stopped
+    networks:
+      - lens-translation
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 384m
+    pids_limit: 64
 
   lens-web:
     build: ./lens-web
@@ -80,6 +98,7 @@ services:
       start_period: 10s
 
 networks:
+  lens-translation:
   questionnaire:
     external: true
     name: codedog_questionnaire
