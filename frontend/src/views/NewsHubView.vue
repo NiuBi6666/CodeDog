@@ -6,7 +6,7 @@ import NewsCollectorSettings from '../components/NewsCollectorSettings.vue';
 import AdminLayout from '../components/AdminLayout.vue';
 import { api,jsonBody,notify } from '../api';
 import { auth,hasPermission } from '../auth';
-const data=ref(null),error=ref(''),busy=ref(false),editing=ref(null),review=ref(null);
+const data=ref(null),error=ref(''),busy=ref(false),editing=ref(null);
 const aiSettings=ref(null),aiError=ref(''),aiBusy=ref(false),aiTest=ref('');
 const aiForm=ref({mode:'translators',engine:'bing',base_url:'https://api.siliconflow.cn/v1',model:'',api_key:''});
 const providers=[{label:'硅基流动',url:'https://api.siliconflow.cn/v1'},{label:'DeepSeek',url:'https://api.deepseek.com/v1'},{label:'智谱',url:'https://open.bigmodel.cn/api/paas/v4'}];
@@ -22,8 +22,6 @@ async function save(){busy.value=true;try{await api('/admin/sources'+(editing.va
 async function toggle(s){try{await api('/admin/sources/'+s.id,{method:'PATCH',body:jsonBody({is_active:!s.is_active})});await load();}catch(e){error.value=e.message;}}
 async function remove(s){if(!window.confirm('删除订阅源“'+s.source_name+'”？已入库文章将保留。'))return;try{await api('/admin/sources/'+s.id,{method:'DELETE'});await load();}catch(e){error.value=e.message;}}
 async function refresh(){busy.value=true;try{const r=await api('/admin/news/refresh',{method:'POST'});notify(r.message);await load();}catch(e){error.value=e.message;}finally{busy.value=false;}}
-async function retry(a){try{await api('/admin/news/articles/'+a.id+'/retry',{method:'POST'});await load();}catch(e){error.value=e.message;}}
-async function inspect(a){try{review.value=await api('/admin/news/articles/'+a.id);}catch(e){error.value=e.message;}}
 function date(s){return s?new Date(s).toLocaleString('zh-CN'):'尚无记录';}
 const labels={pending:'待编译',processing:'编译中',ready:'已发布',failed:'失败',queued:'待接收',done:'已处理',dispatched:'已调度',received:'已接收'};
 onMounted(()=>{load();loadAi();});
@@ -91,19 +89,12 @@ onMounted(()=>{load();loadAi();});
         </section>
 
         <section class="admin-panel news-section">
-          <div class="panel-heading"><h2>新闻编译与审核</h2></div>
-          <div v-if="!data.articles.length" class="panel-empty">尚未收到采集数据，完成采集配置后会显示文章与翻译状态。</div>
-          <div v-else class="document-table-wrap news-table-wrap"><table class="document-table"><thead><tr><th>文章</th><th>来源</th><th>状态</th><th>失败次数</th><th>操作</th></tr></thead><tbody><tr v-for="a in data.articles" :key="a.id"><td class="news-title-cell">{{a.title_en}}<span v-if="a.last_error" class="news-row-error">{{a.last_error}}</span></td><td>{{a.source_name}}</td><td><span class="status-badge" :class="a.status==='ready'?'status-normal':a.status==='failed'?'status-failed':'status-warning'">{{labels[a.status]||a.status}}</span></td><td>{{a.attempts}}</td><td><div class="button-row news-table-actions"><button class="button button-quiet button-small" type="button" @click="inspect(a)">核对正文</button><button v-if="hasPermission('news.retry')" class="button button-quiet button-small" type="button" :disabled="a.status==='processing'" @click="retry(a)">重新编译</button></div></td></tr></tbody></table></div>
-        </section>
-
-        <section class="admin-panel news-section">
           <div class="panel-heading"><h2>采集记录</h2></div>
           <div v-if="!data.runs.length&&!data.batches.length" class="panel-empty">尚无采集记录</div>
           <div v-else class="news-panel-body news-run-list"><div v-for="r in data.runs" :key="'run-'+r.id"><time>{{date(r.created_at)}}</time><span class="status-badge" :class="r.status==='failed'?'status-failed':'status-offline'">{{labels[r.status]||r.status}}</span></div><div v-for="b in data.batches" :key="b.batch_id"><time>{{date(b.created_at)}}</time><span class="status-badge" :class="b.status==='done'?'status-normal':b.status==='failed'?'status-failed':'status-warning'">{{labels[b.status]||b.status}}</span><small>批次 {{b.batch_id}}</small><span v-if="b.last_error" class="news-row-error">{{b.last_error}}</span></div></div>
         </section>
       </template>
 
-      <div v-if="review" class="ui-dialog-backdrop" @keydown.esc="review=null"><section class="ui-modal news-review" role="dialog" aria-modal="true" aria-labelledby="news-review-title"><header><div><h2 id="news-review-title">正文核对</h2><p>{{review.title_en}}</p></div><button class="button button-quiet button-small" type="button" @click="review=null">关闭</button></header><div class="ui-modal-body"><p class="news-description">英文 {{(review.content_en||'').split('\n\n').length}} 段 / 中文 {{review.content_zh?(review.content_zh||'').split('\n\n').length:0}} 段</p><h3>英文原文</h3><pre>{{review.content_en}}</pre><h3>中文译文</h3><pre>{{review.content_zh||'尚未完成翻译'}}</pre></div><footer><a class="button button-quiet" :href="review.origin_url" target="_blank" rel="noopener">查看原文 ↗</a><button class="button button-primary" type="button" @click="review=null">完成核对</button></footer></section></div>
     </div>
   </AdminLayout>
 </template>

@@ -42,9 +42,6 @@
 .news-admin .news-run-list { display: grid; gap: 14px; }
 .news-admin .news-run-list > div { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; }
 .news-admin .news-run-list :is(time, small) { color: var(--ui-muted); overflow-wrap: anywhere; }
-.news-admin .news-review { width: min(900px, 100%); }
-.news-admin .news-review h3 { font-size: 14px; }
-.news-admin .news-review pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.9 var(--ui-font); }
 @media (max-width: 1100px) {
   .news-admin .news-source-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .news-admin .news-service-detail { width: 100%; margin-left: 0; }
