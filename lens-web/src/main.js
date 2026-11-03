@@ -1,0 +1,11 @@
+import { createApp } from "vue";
+import { createRouter, createWebHistory } from "vue-router";
+import App from "./App.vue";
+import "./style.css";
+
+const router = createRouter({
+  history: createWebHistory("/lens/"),
+  routes: [{ path: "/", component: App }, { path: "/article/:id", component: App }],
+  scrollBehavior: () => ({ top: 0 }),
+});
+createApp(App).use(router).mount("#app");

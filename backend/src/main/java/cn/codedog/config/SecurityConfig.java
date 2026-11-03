@@ -37,11 +37,19 @@ public class SecurityConfig {
         csrf.setCookiePath("/");
         http
             .csrf(configurer -> configurer.csrfTokenRepository(csrf)
-                .ignoringRequestMatchers("/api/public/rankings/extension/connect",
+                .ignoringRequestMatchers("/api/crawler/ingest", "/api/user/refresh", "/api/public/rankings/extension/connect",
                     "/api/public/rankings/extension/import", "/api/public/rankings/extension/contacts"))
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(requests -> requests
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
+                .requestMatchers(HttpMethod.GET,"/api/news","/api/news/*","/api/crawler/tasks").permitAll()
+                .requestMatchers(HttpMethod.POST,"/api/crawler/ingest","/api/user/refresh").permitAll()
+                .requestMatchers(HttpMethod.GET,"/api/admin/news","/api/admin/sources","/api/admin/news/articles/*").access(permission(permissions,PermissionCatalog.NEWS_READ))
+                .requestMatchers(HttpMethod.POST,"/api/admin/sources").access(permission(permissions,PermissionCatalog.NEWS_SOURCES_CREATE))
+                .requestMatchers(HttpMethod.PATCH,"/api/admin/sources/*").access(permission(permissions,PermissionCatalog.NEWS_SOURCES_UPDATE))
+                .requestMatchers(HttpMethod.DELETE,"/api/admin/sources/*").access(permission(permissions,PermissionCatalog.NEWS_SOURCES_DELETE))
+                .requestMatchers(HttpMethod.POST,"/api/admin/news/refresh").access(permission(permissions,PermissionCatalog.NEWS_REFRESH))
+                .requestMatchers(HttpMethod.POST,"/api/admin/news/articles/*/retry").access(permission(permissions,PermissionCatalog.NEWS_RETRY))
                 .requestMatchers(HttpMethod.POST, "/api/public/rankings/extension/bootstrap")
                     .access(permission(permissions, PermissionCatalog.RANKINGS_DEVICES_PAIR))
                 .requestMatchers("/api/public/**", "/api/auth/csrf", "/api/auth/login",

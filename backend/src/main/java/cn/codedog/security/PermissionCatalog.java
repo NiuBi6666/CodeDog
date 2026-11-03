@@ -5,6 +5,14 @@ import java.util.List;
 import java.util.Set;
 
 public final class PermissionCatalog {
+    public static final String NEWS_VIEW = "news.view";
+    public static final String NEWS_READ = "news.read";
+    public static final String NEWS_SOURCES_CREATE = "news.sources.create";
+    public static final String NEWS_SOURCES_UPDATE = "news.sources.update";
+    public static final String NEWS_SOURCES_DELETE = "news.sources.delete";
+    public static final String NEWS_REFRESH = "news.refresh";
+    public static final String NEWS_RETRY = "news.retry";
+
     public static final String DASHBOARD_VIEW = "dashboard.view";
     public static final String DASHBOARD_DOCUMENT_STATS = "dashboard.document_stats";
     public static final String DASHBOARD_STUDENT_STATS = "dashboard.student_stats";
@@ -154,7 +162,8 @@ public final class PermissionCatalog {
             action(USERS_DELETE, "删除普通用户"),
             action(USERS_PERMISSIONS_MANAGE, "配置普通用户权限"),
             action(USERS_CRM_MANAGE, "配置 CRM 教师绑定")
-        ))
+        )),
+        new Group("news", "新闻聚合", List.of(page(NEWS_VIEW,"访问新闻管理"),data(NEWS_READ,"查看新闻和来源"),action(NEWS_SOURCES_CREATE,"添加订阅源"),action(NEWS_SOURCES_UPDATE,"修改订阅源"),action(NEWS_SOURCES_DELETE,"删除订阅源"),action(NEWS_REFRESH,"触发海外采集"),action(NEWS_RETRY,"重新编译文章")))
     );
 
     private static final Set<String> ALL_CODES;

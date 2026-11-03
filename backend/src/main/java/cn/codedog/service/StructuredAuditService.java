@@ -48,7 +48,7 @@ public class StructuredAuditService {
     private static final Set<String> RESULTS=Set.of("success","failed","rejected");
     private static final Set<String> ACTORS=Set.of("TEACHER","STUDENT","EXTENSION_DEVICE","ANONYMOUS","SYSTEM","UNKNOWN");
     private static final Set<String> MODULES=Set.of("auth","account","documents","students","classes","rankings",
-        "exams","questionnaire","dashboard","logs","system");
+        "news","exams","questionnaire","dashboard","logs","system");
     private static final Pattern SENSITIVE_KEY=Pattern.compile(
         "(?i).*(password|passwd|secret|token|cookie|authorization|csrf|cipher|hash|connection.?code|pairing.?code|recovery.?key).*"
     );
