@@ -53,7 +53,7 @@ onMounted(()=>{load();loadAi();});
         <NewsCollectorSettings v-if="auth.user?.admin" @updated="load" />
 
         <section v-if="auth.user?.admin" class="admin-panel news-section">
-          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">仅翻译正文，保留原新闻标题，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
+          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">翻译新闻标题与正文，保留英文原题，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
           <div class="news-panel-body">
             <div v-if="aiError" class="notice notice-error" role="alert">{{aiError}}</div>
             <div v-if="aiTest" class="notice notice-success" role="status">{{aiTest}}</div>

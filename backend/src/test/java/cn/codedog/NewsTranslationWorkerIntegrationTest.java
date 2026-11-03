@@ -27,7 +27,7 @@ class NewsTranslationWorkerIntegrationTest {
  static HttpServer server;
  static {try{server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);server.createContext("/translate",exchange->{
   String input=new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8);
-  assertThat(input).contains("paragraphs").doesNotContain("summary","api_key");
+  assertThat(input).contains("paragraphs","Original headline unchanged").doesNotContain("summary","api_key");
   byte[] bytes=response.get().getBytes(StandardCharsets.UTF_8);exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,bytes.length);try(var out=exchange.getResponseBody()){out.write(bytes);}
  });server.start();}catch(Exception e){throw new RuntimeException(e);}}
  @DynamicPropertySource static void properties(DynamicPropertyRegistry registry){registry.add("NEWS_TRANSLATOR_URL",()->"http://127.0.0.1:"+server.getAddress().getPort());}
@@ -37,23 +37,23 @@ class NewsTranslationWorkerIntegrationTest {
  @BeforeEach void setup(){db.update("DELETE FROM lens_articles");db.update("DELETE FROM lens_batches");db.update("DELETE FROM lens_translation_settings");db.update("DELETE FROM lens_ai_settings");
   db.update("INSERT INTO lens_articles(url_hash,origin_url,source_id,source_name,category,title_en,content_en,published_at) VALUES('test','https://example.com/test',1,'Test source','科技','Original headline unchanged','First paragraph.\n\nSecond paragraph.',CURRENT_TIMESTAMP)");}
  @AfterAll void close(){server.stop(0);}
- @Test void defaultTranslationPublishesOriginalTitleAndAlignedBodyWithoutSummary(){
-  response.set("{\"paragraphs\":[\"第一段。\",\"第二段。\"]}");news.process();
-  var article=db.queryForMap("SELECT * FROM lens_articles");assertThat(article.get("status")).isEqualTo("ready");assertThat(article.get("title_zh")).isEqualTo(article.get("title_en"));assertThat(article.get("summary_zh")).isEqualTo("");assertThat(article.get("content_zh")).isEqualTo("第一段。\n\n第二段。");
+ @Test void defaultTranslationPublishesTranslatedTitleAndAlignedBodyWithoutSummary(){
+  response.set("{\"paragraphs\":[\"中文新闻标题\",\"第一段。\",\"第二段。\"]}");news.process();
+  var article=db.queryForMap("SELECT * FROM lens_articles");assertThat(article.get("status")).isEqualTo("ready");assertThat(article.get("title_zh")).isEqualTo("中文新闻标题");assertThat(article.get("title_en")).isEqualTo("Original headline unchanged");assertThat(article.get("summary_zh")).isEqualTo("");assertThat(article.get("content_zh")).isEqualTo("第一段。\n\n第二段。");
  }
- @Test void apiModeOnlyTranslatesBodyAndMakesNoSummaryOrTitleRequest()throws Exception{
+ @Test void apiModeTranslatesTitleAndBodyWithoutSummary()throws Exception{
   db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");
   when(ai.configured()).thenReturn(true);
   var config=new NewsAiSettings.RuntimeConfig("https://api.example.com/v1","test","test-only");
   when(ai.runtime()).thenReturn(config);
-  when(ai.complete(eq(config),anyList(),isNull())).thenReturn("{\"choices\":[{\"message\":{\"content\":\"{\\\"paragraphs\\\":[{\\\"id\\\":0,\\\"text\\\":\\\"第一段\\\"},{\\\"id\\\":1,\\\"text\\\":\\\"第二段\\\"}]}\"}}]}");
+  when(ai.complete(eq(config),anyList(),isNull())).thenReturn("{\"choices\":[{\"message\":{\"content\":\"{\\\"paragraphs\\\":[{\\\"id\\\":0,\\\"text\\\":\\\"中文新闻标题\\\"},{\\\"id\\\":1,\\\"text\\\":\\\"第一段\\\"},{\\\"id\\\":2,\\\"text\\\":\\\"第二段\\\"}]}\"}}]}");
   news.process();
-  var article=db.queryForMap("SELECT * FROM lens_articles");assertThat(article.get("status")).isEqualTo("ready");assertThat(article.get("summary_zh")).isEqualTo("");assertThat(article.get("title_zh")).isEqualTo(article.get("title_en"));
-  verify(ai,times(1)).complete(eq(config),argThat(messages->messages.get(1).get("content").contains("First paragraph.")&&!messages.get(1).get("content").contains("Original headline")),isNull());
+  var article=db.queryForMap("SELECT * FROM lens_articles");assertThat(article.get("status")).isEqualTo("ready");assertThat(article.get("summary_zh")).isEqualTo("");assertThat(article.get("title_zh")).isEqualTo("中文新闻标题");assertThat(article.get("title_en")).isEqualTo("Original headline unchanged");
+  verify(ai,times(1)).complete(eq(config),argThat(messages->messages.get(1).get("content").contains("First paragraph.")&&messages.get(1).get("content").contains("Original headline")),isNull());
  }
  @Test void misalignedOrEmptyResponseNeverPublishesAndKeepsOriginalForRetry(){
   response.set("{\"paragraphs\":[\"合并的一段\"]}");news.process();
   var article=db.queryForMap("SELECT * FROM lens_articles");assertThat(article.get("status")).isEqualTo("pending");assertThat(article.get("attempts")).isEqualTo(1);assertThat(article.get("content_zh")).isNull();assertThat(article.get("content_en")).isEqualTo("First paragraph.\n\nSecond paragraph.");
-  db.update("UPDATE lens_articles SET next_attempt_at=NULL");response.set("{\"paragraphs\":[\"第一段\",\"\"]}");news.process();assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("pending");assertThat(db.queryForObject("SELECT attempts FROM lens_articles",Integer.class)).isEqualTo(2);
+  db.update("UPDATE lens_articles SET next_attempt_at=NULL");response.set("{\"paragraphs\":[\"中文新闻标题\",\"第一段\",\"\"]}");news.process();assertThat(db.queryForObject("SELECT status FROM lens_articles",String.class)).isEqualTo("pending");assertThat(db.queryForObject("SELECT attempts FROM lens_articles",Integer.class)).isEqualTo(2);
  }
 }
