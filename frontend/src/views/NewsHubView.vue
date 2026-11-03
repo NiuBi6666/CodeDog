@@ -1,11 +1,26 @@
 
 <script setup>
-import { ref,onMounted } from 'vue';
+import { ref,computed,onMounted } from 'vue';
+import { Settings,Languages,Rss,History } from '@lucide/vue';
 import '../news-admin.css';
 import NewsCollectorSettings from '../components/NewsCollectorSettings.vue';
 import AdminLayout from '../components/AdminLayout.vue';
 import { api,jsonBody,notify } from '../api';
 import { auth,hasPermission } from '../auth';
+const selectedTab=ref('collector');
+const tabs=computed(()=>[
+  ...(auth.user?.admin?[{id:'collector',label:'采集配置',icon:Settings},{id:'translation',label:'翻译配置',icon:Languages}]:[]),
+  {id:'sources',label:'订阅源',icon:Rss},{id:'history',label:'采集记录',icon:History}
+]);
+const activeTab=computed(()=>tabs.value.some(tab=>tab.id===selectedTab.value)?selectedTab.value:'sources');
+function moveTab(event,index){
+  const keys={ArrowRight:1,ArrowLeft:-1,Home:0,End:0};
+  if(!(event.key in keys))return;
+  event.preventDefault();
+  const next=event.key==='Home'?0:event.key==='End'?tabs.value.length-1:(index+keys[event.key]+tabs.value.length)%tabs.value.length;
+  selectedTab.value=tabs.value[next].id;
+  event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next].focus();
+}
 const data=ref(null),error=ref(''),busy=ref(false),editing=ref(null);
 const aiSettings=ref(null),aiError=ref(''),aiBusy=ref(false),aiTest=ref('');
 const aiForm=ref({mode:'translators',engine:'bing',base_url:'https://api.siliconflow.cn/v1',model:'',api_key:''});
@@ -40,6 +55,13 @@ onMounted(()=>{load();loadAi();});
       <div v-if="error" class="notice notice-error" role="alert">{{error}}</div>
       <div v-if="!data&&!error" class="admin-panel panel-empty" role="status">正在读取新闻状态…</div>
       <template v-if="data">
+        <nav class="ranking-workspace-tabs news-workspace-tabs" role="tablist" aria-label="新闻聚合功能">
+          <button v-for="(tab,index) in tabs" :id="'news-tab-'+tab.id" :key="tab.id" type="button" role="tab"
+            :class="{active:activeTab===tab.id}" :aria-selected="activeTab===tab.id" :aria-controls="'news-panel-'+tab.id"
+            :tabindex="activeTab===tab.id?0:-1" @click="selectedTab=tab.id" @keydown="moveTab($event,index)">
+            <component :is="tab.icon" :size="17" aria-hidden="true" />{{tab.label}}
+          </button>
+        </nav>
         <section class="admin-panel news-section news-service-status" aria-label="服务配置状态">
           <strong>服务配置</strong>
           <span class="status-badge" :class="data.configuration.ai_configured?'status-normal':'status-warning'">正文翻译 · {{data.configuration.ai_configured?'已配置':'未配置'}}</span>
@@ -48,9 +70,11 @@ onMounted(()=>{load();loadAi();});
           <span v-if="data.configuration.model" class="news-service-detail">当前服务：{{data.configuration.model}}</span>
         </section>
 
-        <NewsCollectorSettings v-if="auth.user?.admin" @updated="load" />
+        <div v-if="auth.user?.admin" v-show="activeTab==='collector'" id="news-panel-collector" role="tabpanel" aria-labelledby="news-tab-collector" tabindex="0">
+          <NewsCollectorSettings @updated="load" />
+        </div>
 
-        <section v-if="auth.user?.admin" class="admin-panel news-section">
+        <section v-if="auth.user?.admin" v-show="activeTab==='translation'" id="news-panel-translation" role="tabpanel" aria-labelledby="news-tab-translation" tabindex="0" class="admin-panel news-section">
           <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">翻译新闻标题与正文，保留英文原题，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
           <div class="news-panel-body">
             <div v-if="aiError" class="notice notice-error" role="alert">{{aiError}}</div>
@@ -76,7 +100,7 @@ onMounted(()=>{load();loadAi();});
           </div>
         </section>
 
-        <section class="admin-panel news-section">
+        <section v-show="activeTab==='sources'" id="news-panel-sources" role="tabpanel" aria-labelledby="news-tab-sources" tabindex="0" class="admin-panel news-section">
           <div class="panel-heading news-panel-heading"><div><h2>订阅源</h2><p class="news-description">每 30 分钟检查一次，按各来源的刷新间隔采集。</p></div><span class="status-badge status-offline">{{data.sources.length}} 个来源</span></div>
           <div class="document-table-wrap news-table-wrap"><table class="document-table"><thead><tr><th>媒体 / RSS</th><th>分类</th><th>频率 / 权重</th><th>最近抓取</th><th>最近成功</th><th>状态</th><th>操作</th></tr></thead><tbody>
             <tr v-for="s in data.sources" :key="s.id"><td class="news-title-cell"><strong>{{s.source_name}}</strong><small>{{s.rss_url}}</small><span v-if="s.last_error" class="news-row-error">{{s.last_error}}</span></td><td>{{s.category}}</td><td>{{s.refresh_interval_min}} 分钟 / {{s.priority}}</td><td>{{date(s.last_crawled_at)}}</td><td>{{date(s.last_success_at)}}</td><td><span class="status-badge" :class="s.is_active?'status-normal':'status-offline'">{{s.is_active?'已启用':'已暂停'}}</span></td><td><div class="button-row news-table-actions"><button v-if="hasPermission('news.sources.update')" class="button button-quiet button-small" type="button" @click="edit(s)">编辑</button><button v-if="hasPermission('news.sources.update')" class="button button-quiet button-small" type="button" @click="toggle(s)">{{s.is_active?'停用':'启用'}}</button><button v-if="hasPermission('news.sources.delete')" class="button button-quiet button-small news-danger" type="button" @click="remove(s)">删除</button></div></td></tr>
@@ -88,7 +112,7 @@ onMounted(()=>{load();loadAi();});
           </form>
         </section>
 
-        <section class="admin-panel news-section">
+        <section v-show="activeTab==='history'" id="news-panel-history" role="tabpanel" aria-labelledby="news-tab-history" tabindex="0" class="admin-panel news-section">
           <div class="panel-heading"><h2>采集记录</h2></div>
           <div v-if="!data.runs.length&&!data.batches.length" class="panel-empty">尚无采集记录</div>
           <div v-else class="news-panel-body news-run-list"><div v-for="r in data.runs" :key="'run-'+r.id"><time>{{date(r.created_at)}}</time><span class="status-badge" :class="r.status==='failed'?'status-failed':'status-offline'">{{labels[r.status]||r.status}}</span></div><div v-for="b in data.batches" :key="b.batch_id"><time>{{date(b.created_at)}}</time><span class="status-badge" :class="b.status==='done'?'status-normal':b.status==='failed'?'status-failed':'status-warning'">{{labels[b.status]||b.status}}</span><small>批次 {{b.batch_id}}</small><span v-if="b.last_error" class="news-row-error">{{b.last_error}}</span></div></div>

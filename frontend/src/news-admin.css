@@ -54,3 +54,8 @@
   .news-admin .news-form-footer > .button-row > .button { flex: 1 1 auto; }
   .news-admin .admin-page-heading > .button-row { width: 100%; }
 }
+
+.news-admin .news-workspace-tabs { max-width: 100%; overflow-x: auto; }
+.news-admin .news-workspace-tabs button { flex: 0 0 auto; white-space: nowrap; }
+.news-admin .news-workspace-tabs button:focus-visible,
+.news-admin [role="tabpanel"]:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
