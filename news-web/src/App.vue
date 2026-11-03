@@ -76,8 +76,8 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);}
 <template>
   <div class="site-shell" :class="{'article-open':route.params.id}">
     <header class="topbar">
-      <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻 · GLOBAL EDITION</small></div></div>
-      <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="category = item">{{ item }}</button></nav>
+      <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻<span class="brand-edition"> · GLOBAL EDITION</span></small></div></div>
+      <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="category = item">{{ item }}</button></nav>
       <div class="top-actions"><label class="search"><span>⌕</span><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="sync-button" :disabled="syncing" @click="sync"><span :class="{ spin: syncing }">↻</span>{{ syncing ? "同步中" : "立即同步" }}</button><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
     </header>
     <div v-if="notice" class="notice" role="status">{{ notice }}</div>
