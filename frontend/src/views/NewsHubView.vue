@@ -1,6 +1,7 @@
 
 <script setup>
 import { ref,onMounted } from 'vue';
+import '../news-admin.css';
 import NewsCollectorSettings from '../components/NewsCollectorSettings.vue';
 import AdminLayout from '../components/AdminLayout.vue';
 import { api,jsonBody,notify } from '../api';
@@ -27,19 +28,82 @@ function date(s){return s?new Date(s).toLocaleString('zh-CN'):'尚无记录';}
 const labels={pending:'待编译',processing:'编译中',ready:'已发布',failed:'失败',queued:'待接收',done:'已处理',dispatched:'已调度',received:'已接收'};
 onMounted(()=>{load();loadAi();});
 </script>
-<template><AdminLayout page-title="新闻聚合" active-page="news"><div class="lens-admin">
- <header><div><small>LENS · NEWSROOM</small><h1>新闻聚合</h1><p>真实采集、编译与发布状态</p></div><div><a href="/lens/" target="_blank" rel="noopener">打开新闻站 ↗</a><button @click="load">刷新状态</button><button v-if="hasPermission('news.refresh')" :disabled="busy" @click="refresh">立即采集</button></div></header>
- <p v-if="error" class="lens-error" role="alert">{{error}}</p><p v-if="!data&&!error">正在读取新闻状态…</p>
- <template v-if="data"><section class="lens-config"><strong>服务配置</strong><span :class="{ok:data.configuration.ai_configured}">正文翻译：{{data.configuration.ai_configured?'已配置':'未配置'}}</span><span :class="{ok:data.configuration.github_configured}">GitHub 调度：{{data.configuration.github_configured?'已配置':'未配置'}}</span><span :class="{ok:data.configuration.webhook_configured}">采集鉴权：{{data.configuration.webhook_configured?'已配置':'未配置'}}</span><small v-if="data.configuration.model">当前服务：{{data.configuration.model}}</small></section>
- <NewsCollectorSettings v-if="auth.user?.admin" @updated="load" />
- <section v-if="auth.user?.admin" class="lens-box lens-ai-panel"><h2>正文翻译配置</h2><p>仅系统管理员可设置。仅翻译正文，标题使用原文，不生成摘要。API Key 加密保存、不回显；配置立即生效。</p><p v-if="aiError" class="lens-error" role="alert">{{aiError}}</p><p v-if="aiTest" class="lens-ai-success" role="status">{{aiTest}}</p><p v-if="!aiSettings&&!aiError">正在读取模型配置…</p><form v-if="aiSettings" @submit.prevent="saveAi"><div class="lens-fields"><label>翻译方式<select v-model="aiForm.mode"><option value="translators">默认翻译（translators，无需 API Key）</option><option value="api">大模型 API</option></select></label><label v-if="aiForm.mode==='translators'">翻译引擎<select v-model="aiForm.engine"><option value="bing">Bing</option><option value="alibaba">Alibaba</option><option value="baidu">Baidu</option></select></label></div><p v-if="aiForm.mode==='translators'">原新闻标题直接展示，仅翻译正文，不生成摘要。默认翻译依赖第三方在线服务，可能遇到限流或不可用，可切换引擎。已保存的 API Key 会保留。</p><template v-if="aiForm.mode==='api'"><div class="lens-ai-presets"><span>常用服务：</span><button v-for="provider in providers" :key="provider.url" type="button" @click="aiForm.base_url=provider.url;aiForm.api_key='';aiTest=''">{{provider.label}}</button></div><div class="lens-ai-fields"><label>API Base URL<input v-model.trim="aiForm.base_url" type="url" placeholder="https://api.example.com/v1" maxlength="500" required autocomplete="off"><small>填写接口根地址，无需追加 /chat/completions。</small></label><label>模型名称<input v-model.trim="aiForm.model" placeholder="复制服务商控制台中的完整模型名称" maxlength="200" required autocomplete="off"></label><label>API Key<input v-model="aiForm.api_key" type="password" :required="!aiSettings.api_key_configured" :placeholder="aiSettings.api_key_configured?'已保存；留空保留原密钥':'粘贴服务商 API Key'" maxlength="4096" autocomplete="new-password" :spellcheck="false"><small>{{aiSettings.api_key_configured?'密钥已配置 ••••••••；更换服务地址时须填写对应服务商的新密钥。':'密钥尚未配置。'}}</small></label></div></template><p v-if="aiForm.mode==='api'&&!aiSettings.encryption_available" class="lens-error">服务器加密存储暂不可用，请联系管理员。</p><div class="lens-ai-actions"><button type="submit" :disabled="aiBusy||(aiForm.mode==='api'&&!aiSettings.encryption_available)">{{aiBusy?'处理中…':'保存翻译配置'}}</button><button type="button" :disabled="aiBusy||!aiSettings.configured" @click="testAi">测试已保存配置</button><small>测试使用已保存的方式；大模型测试可能消耗少量额度。切换方式不会自动重新翻译已发布的文章。</small></div></form></section>
- <section class="lens-box"><h2>订阅源</h2><p>GitHub 每 30 分钟启动一次，按各来源间隔领取任务。失败原因显示在来源下方。</p><div class="lens-table"><table><thead><tr><th>媒体 / RSS</th><th>分类</th><th>频率 / 权重</th><th>最近抓取</th><th>最近成功</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="s in data.sources" :key="s.id"><td><b>{{s.source_name}}</b><small>{{s.rss_url}}</small><em v-if="s.last_error">{{s.last_error}}</em></td><td>{{s.category}}</td><td>{{s.refresh_interval_min}} 分钟 / {{s.priority}}</td><td>{{date(s.last_crawled_at)}}</td><td>{{date(s.last_success_at)}}</td><td>{{s.is_active?'已启用':'已暂停'}}</td><td><button v-if="hasPermission('news.sources.update')" @click="edit(s)">编辑</button><button v-if="hasPermission('news.sources.update')" @click="toggle(s)">{{s.is_active?'停用':'启用'}}</button><button v-if="hasPermission('news.sources.delete')" @click="remove(s)">删除</button></td></tr></tbody></table></div>
- <form v-if="hasPermission(editing?'news.sources.update':'news.sources.create')" @submit.prevent="save"><h3>{{editing?'编辑订阅源':'添加订阅源'}}</h3><div class="lens-fields"><label>媒体名称<input v-model="form.source_name" maxlength="80" required></label><label>HTTPS RSS 地址<input v-model="form.rss_url" type="url" required></label><label>领域<select v-model="form.category"><option>科技</option><option>国际</option><option>财经</option><option>教育</option></select></label><label>刷新间隔（分钟）<input v-model.number="form.refresh_interval_min" type="number" min="30" max="1440" required></label><label>权重<input v-model.number="form.priority" type="number" min="0" max="100" required></label></div><button :disabled="busy">保存来源</button><button v-if="editing" type="button" @click="cancel">取消</button></form></section>
- <section class="lens-box"><h2>新闻编译与审核</h2><p v-if="!data.articles.length">尚未收到采集数据。配置完成后，海外节点会推送真实新闻。</p><div v-else class="lens-table"><table><thead><tr><th>文章</th><th>来源</th><th>状态</th><th>失败次数</th><th>操作</th></tr></thead><tbody><tr v-for="a in data.articles" :key="a.id"><td>{{a.title_en}}<em v-if="a.last_error">{{a.last_error}}</em></td><td>{{a.source_name}}</td><td>{{labels[a.status]||a.status}}</td><td>{{a.attempts}}</td><td><button @click="inspect(a)">核对正文</button><button v-if="hasPermission('news.retry')" :disabled="a.status==='processing'" @click="retry(a)">重新编译</button></td></tr></tbody></table></div></section>
- <section class="lens-box"><h2>采集记录</h2><p v-if="!data.runs.length&&!data.batches.length">尚无采集记录。</p><p v-for="r in data.runs" :key="r.id">{{date(r.created_at)}} · {{labels[r.status]||r.status}}</p><p v-for="b in data.batches" :key="b.batch_id">{{date(b.created_at)}} · 批次 {{b.batch_id}} · {{labels[b.status]||b.status}} {{b.last_error}}</p></section></template>
- <div v-if="review" class="lens-review" role="dialog" aria-modal="true" aria-label="正文核对"><section><button @click="review=null">关闭</button><h2>{{review.title_en}}</h2><p>英文 {{(review.content_en||'').split('\n\n').length}} 段 / 中文 {{review.content_zh?(review.content_zh||'').split('\n\n').length:0}} 段</p><a :href="review.origin_url" target="_blank" rel="noopener">原文 ↗</a><pre>{{review.content_en}}</pre><pre>{{review.content_zh||'尚未完成翻译'}}</pre></section></div>
-</div></AdminLayout></template>
-<style scoped>
-.lens-admin{color:#26343d}.lens-admin header{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}.lens-admin h1{margin:5px 0}.lens-admin small{color:#657b84}.lens-admin header small{letter-spacing:.15em}.lens-admin p{color:#6a7b83;font-size:13px}.lens-admin button,.lens-admin a{padding:8px 12px;border:1px solid #c7d2d4;background:#fff;border-radius:4px;color:#314d5b;text-decoration:none;font-size:12px;margin:3px;cursor:pointer}.lens-admin button:disabled{opacity:.5;cursor:wait}.lens-error{padding:12px;background:#fff0eb;color:#963622!important}.lens-config{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:18px;margin:22px 0;background:#f8f6ef;border:1px solid #dedbd0}.lens-config span{color:#9b6b2f;font-size:12px}.lens-config .ok{color:#2b7962}.lens-box{padding:22px;background:#fff;border:1px solid #dde4e4;margin:18px 0}.lens-box h2{margin:0;font-size:20px}.lens-table{overflow:auto}.lens-table table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}.lens-table th,.lens-table td{padding:12px 9px;border-bottom:1px solid #e7ecea;vertical-align:top}.lens-table td:first-child{min-width:220px;max-width:500px}.lens-table small,.lens-table em{display:block;font-size:11px;overflow-wrap:anywhere;margin-top:5px}.lens-table em{color:#a04735;font-style:normal}.lens-fields{display:grid;grid-template-columns:1fr 2fr 1fr 1fr 1fr;gap:12px}.lens-fields label{font-size:12px;color:#526b77}.lens-fields input,.lens-fields select{width:100%;padding:9px;border:1px solid #cedbde;margin-top:6px;border-radius:3px}.lens-review{position:fixed;inset:0;z-index:1000;background:#20344099;display:flex;justify-content:flex-end}.lens-review section{background:#fff;width:min(900px,100%);padding:25px;overflow:auto}.lens-review pre{white-space:pre-wrap;font:15px/1.9 sans-serif;border-top:1px solid #ddd;padding-top:20px}@media(max-width:800px){.lens-fields{grid-template-columns:1fr}.lens-box{padding:14px}.lens-review section{padding:18px}}
-.lens-ai-fields{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:16px;margin:14px 0}.lens-ai-fields label{font-size:12px;color:#526b77}.lens-ai-fields input{display:block;width:100%;padding:10px;border:1px solid #cedbde;margin:7px 0;border-radius:3px;box-sizing:border-box}.lens-ai-fields small{display:block;line-height:1.7}.lens-ai-presets,.lens-ai-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}.lens-ai-success{padding:12px;color:#276e52!important;background:#edf8f1}.lens-ai-panel button:focus-visible,.lens-ai-panel input:focus-visible{outline:2px solid #537b8d;outline-offset:2px}@media(max-width:1000px){.lens-ai-fields{grid-template-columns:1fr}}
-</style>
+<template>
+  <AdminLayout page-title="新闻聚合" active-page="news">
+    <div class="news-admin">
+      <div class="admin-page-heading">
+        <div><h1>新闻聚合</h1><p>管理新闻来源、采集配置与正文翻译</p></div>
+        <div class="button-row">
+          <a class="button button-quiet" href="/lens/" target="_blank" rel="noopener">打开新闻站 ↗</a>
+          <button class="button button-quiet" type="button" @click="load">刷新状态</button>
+          <button v-if="hasPermission('news.refresh')" class="button button-primary" type="button" :disabled="busy" @click="refresh">{{busy?'提交中…':'立即采集'}}</button>
+        </div>
+      </div>
+      <div v-if="error" class="notice notice-error" role="alert">{{error}}</div>
+      <div v-if="!data&&!error" class="admin-panel panel-empty" role="status">正在读取新闻状态…</div>
+      <template v-if="data">
+        <section class="admin-panel news-section news-service-status" aria-label="服务配置状态">
+          <strong>服务配置</strong>
+          <span class="status-badge" :class="data.configuration.ai_configured?'status-normal':'status-warning'">正文翻译 · {{data.configuration.ai_configured?'已配置':'未配置'}}</span>
+          <span class="status-badge" :class="data.configuration.github_configured?'status-normal':'status-warning'">GitHub 调度 · {{data.configuration.github_configured?'已配置':'未配置'}}</span>
+          <span class="status-badge" :class="data.configuration.webhook_configured?'status-normal':'status-warning'">采集鉴权 · {{data.configuration.webhook_configured?'已配置':'未配置'}}</span>
+          <span v-if="data.configuration.model" class="news-service-detail">当前服务：{{data.configuration.model}}</span>
+        </section>
+
+        <NewsCollectorSettings v-if="auth.user?.admin" @updated="load" />
+
+        <section v-if="auth.user?.admin" class="admin-panel news-section">
+          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">仅翻译正文，保留原新闻标题，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
+          <div class="news-panel-body">
+            <div v-if="aiError" class="notice notice-error" role="alert">{{aiError}}</div>
+            <div v-if="aiTest" class="notice notice-success" role="status">{{aiTest}}</div>
+            <p v-if="!aiSettings&&!aiError" class="news-description">正在读取翻译配置…</p>
+            <form v-if="aiSettings" class="form-stack news-form" @submit.prevent="saveAi">
+              <div class="news-form-grid">
+                <label>翻译方式<select v-model="aiForm.mode"><option value="translators">默认翻译（无需 API Key）</option><option value="api">大模型 API</option></select></label>
+                <label v-if="aiForm.mode==='translators'">翻译引擎<select v-model="aiForm.engine"><option value="bing">Bing</option><option value="alibaba">Alibaba</option><option value="baidu">Baidu</option></select></label>
+              </div>
+              <p v-if="aiForm.mode==='translators'" class="news-hint">默认翻译依赖第三方在线服务，遇到限流或不可用时可切换引擎。切换方式会保留已保存的 API Key。</p>
+              <template v-if="aiForm.mode==='api'">
+                <div class="button-row news-presets"><span>常用服务</span><button v-for="provider in providers" :key="provider.url" class="button button-quiet button-small" type="button" @click="aiForm.base_url=provider.url;aiForm.api_key='';aiTest=''">{{provider.label}}</button></div>
+                <div class="news-form-grid">
+                  <label>API Base URL<input v-model.trim="aiForm.base_url" type="url" placeholder="https://api.example.com/v1" maxlength="500" required autocomplete="off"><small>填写接口根地址，不含 /chat/completions。</small></label>
+                  <label>模型名称<input v-model.trim="aiForm.model" placeholder="服务商控制台中的完整模型名称" maxlength="200" required autocomplete="off"></label>
+                  <label class="news-field-wide">API Key<input v-model="aiForm.api_key" type="password" :required="!aiSettings.api_key_configured" :placeholder="aiSettings.api_key_configured?'已保存；留空保留原密钥':'粘贴服务商 API Key'" maxlength="4096" autocomplete="new-password" :spellcheck="false"><small>{{aiSettings.api_key_configured?'密钥已配置；更换服务地址时须填写对应服务商的新密钥。':'密钥加密保存，不回显。'}}</small></label>
+                </div>
+              </template>
+              <div v-if="aiForm.mode==='api'&&!aiSettings.encryption_available" class="notice notice-error">服务器加密存储暂不可用，请联系管理员。</div>
+              <div class="news-form-footer"><span class="news-description">保存后立即生效。测试使用已保存配置，大模型测试可能消耗少量额度。</span><div class="button-row"><button class="button button-quiet" type="button" :disabled="aiBusy||!aiSettings.configured" @click="testAi">测试已保存配置</button><button class="button button-primary" type="submit" :disabled="aiBusy||(aiForm.mode==='api'&&!aiSettings.encryption_available)">{{aiBusy?'处理中…':'保存翻译配置'}}</button></div></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="admin-panel news-section">
+          <div class="panel-heading news-panel-heading"><div><h2>订阅源</h2><p class="news-description">每 30 分钟检查一次，按各来源的刷新间隔采集。</p></div><span class="status-badge status-offline">{{data.sources.length}} 个来源</span></div>
+          <div class="document-table-wrap news-table-wrap"><table class="document-table"><thead><tr><th>媒体 / RSS</th><th>分类</th><th>频率 / 权重</th><th>最近抓取</th><th>最近成功</th><th>状态</th><th>操作</th></tr></thead><tbody>
+            <tr v-for="s in data.sources" :key="s.id"><td class="news-title-cell"><strong>{{s.source_name}}</strong><small>{{s.rss_url}}</small><span v-if="s.last_error" class="news-row-error">{{s.last_error}}</span></td><td>{{s.category}}</td><td>{{s.refresh_interval_min}} 分钟 / {{s.priority}}</td><td>{{date(s.last_crawled_at)}}</td><td>{{date(s.last_success_at)}}</td><td><span class="status-badge" :class="s.is_active?'status-normal':'status-offline'">{{s.is_active?'已启用':'已暂停'}}</span></td><td><div class="button-row news-table-actions"><button v-if="hasPermission('news.sources.update')" class="button button-quiet button-small" type="button" @click="edit(s)">编辑</button><button v-if="hasPermission('news.sources.update')" class="button button-quiet button-small" type="button" @click="toggle(s)">{{s.is_active?'停用':'启用'}}</button><button v-if="hasPermission('news.sources.delete')" class="button button-quiet button-small news-danger" type="button" @click="remove(s)">删除</button></div></td></tr>
+          </tbody></table></div>
+          <form v-if="hasPermission(editing?'news.sources.update':'news.sources.create')" class="form-stack news-form news-panel-body news-source-form" @submit.prevent="save">
+            <h3>{{editing?'编辑订阅源':'添加订阅源'}}</h3>
+            <div class="news-source-fields"><label>媒体名称<input v-model="form.source_name" maxlength="80" required></label><label>HTTPS RSS 地址<input v-model="form.rss_url" type="url" required placeholder="https://example.com/feed"></label><label>领域<select v-model="form.category"><option>科技</option><option>国际</option><option>财经</option><option>教育</option></select></label><label>刷新间隔（分钟）<input v-model.number="form.refresh_interval_min" type="number" min="30" max="1440" required></label><label>媒体权重<input v-model.number="form.priority" type="number" min="0" max="100" required></label></div>
+            <div class="news-form-footer"><span class="news-description">刷新间隔为 30–1440 分钟，权重为 0–100。</span><div class="button-row"><button v-if="editing" class="button button-quiet" type="button" @click="cancel">取消</button><button class="button button-primary" type="submit" :disabled="busy">保存来源</button></div></div>
+          </form>
+        </section>
+
+        <section class="admin-panel news-section">
+          <div class="panel-heading"><h2>新闻编译与审核</h2></div>
+          <div v-if="!data.articles.length" class="panel-empty">尚未收到采集数据，完成采集配置后会显示文章与翻译状态。</div>
+          <div v-else class="document-table-wrap news-table-wrap"><table class="document-table"><thead><tr><th>文章</th><th>来源</th><th>状态</th><th>失败次数</th><th>操作</th></tr></thead><tbody><tr v-for="a in data.articles" :key="a.id"><td class="news-title-cell">{{a.title_en}}<span v-if="a.last_error" class="news-row-error">{{a.last_error}}</span></td><td>{{a.source_name}}</td><td><span class="status-badge" :class="a.status==='ready'?'status-normal':a.status==='failed'?'status-failed':'status-warning'">{{labels[a.status]||a.status}}</span></td><td>{{a.attempts}}</td><td><div class="button-row news-table-actions"><button class="button button-quiet button-small" type="button" @click="inspect(a)">核对正文</button><button v-if="hasPermission('news.retry')" class="button button-quiet button-small" type="button" :disabled="a.status==='processing'" @click="retry(a)">重新编译</button></div></td></tr></tbody></table></div>
+        </section>
+
+        <section class="admin-panel news-section">
+          <div class="panel-heading"><h2>采集记录</h2></div>
+          <div v-if="!data.runs.length&&!data.batches.length" class="panel-empty">尚无采集记录</div>
+          <div v-else class="news-panel-body news-run-list"><div v-for="r in data.runs" :key="'run-'+r.id"><time>{{date(r.created_at)}}</time><span class="status-badge" :class="r.status==='failed'?'status-failed':'status-offline'">{{labels[r.status]||r.status}}</span></div><div v-for="b in data.batches" :key="b.batch_id"><time>{{date(b.created_at)}}</time><span class="status-badge" :class="b.status==='done'?'status-normal':b.status==='failed'?'status-failed':'status-warning'">{{labels[b.status]||b.status}}</span><small>批次 {{b.batch_id}}</small><span v-if="b.last_error" class="news-row-error">{{b.last_error}}</span></div></div>
+        </section>
+      </template>
+
+      <div v-if="review" class="ui-dialog-backdrop" @keydown.esc="review=null"><section class="ui-modal news-review" role="dialog" aria-modal="true" aria-labelledby="news-review-title"><header><div><h2 id="news-review-title">正文核对</h2><p>{{review.title_en}}</p></div><button class="button button-quiet button-small" type="button" @click="review=null">关闭</button></header><div class="ui-modal-body"><p class="news-description">英文 {{(review.content_en||'').split('\n\n').length}} 段 / 中文 {{review.content_zh?(review.content_zh||'').split('\n\n').length:0}} 段</p><h3>英文原文</h3><pre>{{review.content_en}}</pre><h3>中文译文</h3><pre>{{review.content_zh||'尚未完成翻译'}}</pre></div><footer><a class="button button-quiet" :href="review.origin_url" target="_blank" rel="noopener">查看原文 ↗</a><button class="button button-primary" type="button" @click="review=null">完成核对</button></footer></section></div>
+    </div>
+  </AdminLayout>
+</template>
