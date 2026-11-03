@@ -59,8 +59,8 @@ public class NewsService {
    JsonNode batch=json.readTree(body);String id=batch.path("batch_id").asText();
    require(id.matches("[A-Za-z0-9_-]{8,80}"),HttpStatus.BAD_REQUEST,"批次编号无效");
    require(batch.path("articles").isArray()&&batch.path("articles").size()<=100,HttpStatus.BAD_REQUEST,"批次文章无效");
-   boolean exists=!db.queryForList("SELECT batch_id FROM lens_batches WHERE batch_id=?",id).isEmpty();
-   if(!exists){try{db.update("INSERT INTO lens_batches(batch_id,payload) VALUES(?,?)",id,new String(body,StandardCharsets.UTF_8));}catch(org.springframework.dao.DuplicateKeyException ignored){}}
+   boolean exists=!db.queryForList("SELECT batch_id FROM news_batches WHERE batch_id=?",id).isEmpty();
+   if(!exists){try{db.update("INSERT INTO news_batches(batch_id,payload) VALUES(?,?)",id,new String(body,StandardCharsets.UTF_8));}catch(org.springframework.dao.DuplicateKeyException ignored){}}
    return Map.of("status",exists?"already_accepted":"accepted","batch_id",id);
   }catch(ResponseStatusException e){throw e;}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"JSON 无效");}
  }
@@ -71,22 +71,22 @@ public class NewsService {
    try{values.putIfAbsent(canonical(url.asText()),url.asText());}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"URL 无效");}}
   if(values.isEmpty())return List.of();
   var hashes=values.keySet().stream().map(NewsService::digest).toList();
-  var existing=new HashSet<>(db.queryForList("SELECT url_hash FROM lens_articles WHERE url_hash IN ("+String.join(",",Collections.nCopies(hashes.size(),"?"))+")",String.class,hashes.toArray()));
+  var existing=new HashSet<>(db.queryForList("SELECT url_hash FROM news_articles WHERE url_hash IN ("+String.join(",",Collections.nCopies(hashes.size(),"?"))+")",String.class,hashes.toArray()));
   return values.entrySet().stream().filter(e->!existing.contains(digest(e.getKey()))).map(Map.Entry::getValue).toList();
  }
  public boolean parallelTitles(){return translation.config().mode().equals("api");}
- public List<Map<String,Object>> fastSources(){return db.queryForList("SELECT id,rss_url FROM lens_sources WHERE is_active=TRUE ORDER BY priority DESC LIMIT 30");}
+ public List<Map<String,Object>> fastSources(){return db.queryForList("SELECT id,rss_url FROM news_sources WHERE is_active=TRUE ORDER BY priority DESC LIMIT 30");}
  public List<Map<String,Object>> tasks(boolean force){return tx.execute(status->{
-  var list=db.queryForList("SELECT * FROM lens_sources WHERE is_active=TRUE AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP) ORDER BY priority DESC FOR UPDATE");
+  var list=db.queryForList("SELECT * FROM news_sources WHERE is_active=TRUE AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP) ORDER BY priority DESC FOR UPDATE");
   var due=new ArrayList<Map<String,Object>>();Instant now=Instant.now();
   for(var row:list){Timestamp last=(Timestamp)row.get("last_crawled_at");
    if(force||last==null||last.toInstant().plusSeconds(((Number)row.get("refresh_interval_min")).longValue()*60).isBefore(now)){
-    db.update("UPDATE lens_sources SET lease_until=? WHERE id=?",Timestamp.from(now.plusSeconds(900)),row.get("id"));due.add(row);
+    db.update("UPDATE news_sources SET lease_until=? WHERE id=?",Timestamp.from(now.plusSeconds(900)),row.get("id"));due.add(row);
    }
   }return due;
  });}
- public List<Map<String,Object>> sources(){return db.queryForList("SELECT * FROM lens_sources ORDER BY id");}
- public Map<String,Object> source(long id){var rows=db.queryForList("SELECT * FROM lens_sources WHERE id=?",id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"订阅源不存在");return rows.getFirst();}
+ public List<Map<String,Object>> sources(){return db.queryForList("SELECT * FROM news_sources ORDER BY id");}
+ public Map<String,Object> source(long id){var rows=db.queryForList("SELECT * FROM news_sources WHERE id=?",id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"订阅源不存在");return rows.getFirst();}
  public Map<String,Object> save(Long id,JsonNode body){
   Map<String,Object> old=id==null?Map.of():source(id);
   String name=body.path("source_name").asText(Objects.toString(old.get("source_name"),""));
@@ -98,64 +98,64 @@ public class NewsService {
   require(!name.isBlank()&&name.length()<=80&&url.length()<=1000&&List.of("科技","国际","财经","教育").contains(category)&&priority>=0&&priority<=100&&interval>=30&&interval<=1440,HttpStatus.BAD_REQUEST,"来源配置无效；频率为 30–1440 分钟");canonical(url);
   if(id==null){
    var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
-   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO lens_sources(source_name,rss_url,category,priority,refresh_interval_min,is_active) VALUES(?,?,?,?,?,?)",java.sql.Statement.RETURN_GENERATED_KEYS);statement.setString(1,name);statement.setString(2,url);statement.setString(3,category);statement.setInt(4,priority);statement.setInt(5,interval);statement.setBoolean(6,active);return statement;},keys);
+   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO news_sources(source_name,rss_url,category,priority,refresh_interval_min,is_active) VALUES(?,?,?,?,?,?)",java.sql.Statement.RETURN_GENERATED_KEYS);statement.setString(1,name);statement.setString(2,url);statement.setString(3,category);statement.setInt(4,priority);statement.setInt(5,interval);statement.setBoolean(6,active);return statement;},keys);
    return source(keys.getKey().longValue());
   }
-  db.update("UPDATE lens_sources SET source_name=?,rss_url=?,category=?,priority=?,refresh_interval_min=?,is_active=? WHERE id=?",name,url,category,priority,interval,active,id);return source(id);
+  db.update("UPDATE news_sources SET source_name=?,rss_url=?,category=?,priority=?,refresh_interval_min=?,is_active=? WHERE id=?",name,url,category,priority,interval,active,id);return source(id);
  }
- public void delete(long id){source(id);db.update("DELETE FROM lens_sources WHERE id=?",id);}
- public Map<String,Object> overview(){return Map.of("configuration",configuration(),"sources",sources(),"articles",db.queryForList("SELECT id,title_en,title_zh,source_name,status,attempts,last_error,published_at FROM lens_articles ORDER BY id DESC LIMIT 100"),"runs",db.queryForList("SELECT * FROM lens_refresh_runs ORDER BY id DESC LIMIT 10"),"batches",db.queryForList("SELECT batch_id,status,created_at,last_error FROM lens_batches ORDER BY created_at DESC LIMIT 10"));}
+ public void delete(long id){source(id);db.update("DELETE FROM news_sources WHERE id=?",id);}
+ public Map<String,Object> overview(){return Map.of("configuration",configuration(),"sources",sources(),"articles",db.queryForList("SELECT id,title_en,title_zh,source_name,status,attempts,last_error,published_at FROM news_articles ORDER BY id DESC LIMIT 100"),"runs",db.queryForList("SELECT * FROM news_refresh_runs ORDER BY id DESC LIMIT 10"),"batches",db.queryForList("SELECT batch_id,status,created_at,last_error FROM news_batches ORDER BY created_at DESC LIMIT 10"));}
  public Map<String,Object> list(String q,String category,String source,int page){
   page=Math.max(0,Math.min(page,1000));
   String where=" WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL AND (?='' OR category=?) AND (?='' OR source_name=?) AND (?='' OR title_en LIKE ? OR title_zh LIKE ?)";
   String search="%"+q+"%";Object[] args={category,category,source,source,q,search,search};
   var params=new ArrayList<>(Arrays.asList(args));params.add(30);params.add(page*30);
-  var rows=db.queryForList("SELECT id,title_en,title_zh,summary_zh,source_name,category,cover_image,published_at,created_at,author FROM lens_articles"+where+" ORDER BY published_at DESC,id DESC LIMIT ? OFFSET ?",params.toArray());
-  return Map.of("articles",rows,"total",db.queryForObject("SELECT COUNT(*) FROM lens_articles"+where,Long.class,args),"page",page,"sources",db.queryForList("SELECT DISTINCT source_name FROM lens_articles WHERE status='ready' OR (title_zh IS NOT NULL AND title_zh<>'') ORDER BY source_name"),"configuration",Map.of("ready",aiReady()&&githubReady()));
+  var rows=db.queryForList("SELECT id,title_en,title_zh,summary_zh,source_name,category,cover_image,published_at,created_at,author FROM news_articles"+where+" ORDER BY published_at DESC,id DESC LIMIT ? OFFSET ?",params.toArray());
+  return Map.of("articles",rows,"total",db.queryForObject("SELECT COUNT(*) FROM news_articles"+where,Long.class,args),"page",page,"sources",db.queryForList("SELECT DISTINCT source_name FROM news_articles WHERE status='ready' OR (title_zh IS NOT NULL AND title_zh<>'') ORDER BY source_name"),"configuration",Map.of("ready",aiReady()&&githubReady()));
  }
  public Map<String,Object> article(long id,boolean admin){
-  var rows=db.queryForList("SELECT * FROM lens_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
-  a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM lens_articles WHERE event_id=?",id));return a;
+  var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
+  a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));return a;
  }
- public void retry(long id){require(db.update("UPDATE lens_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
+ public void retry(long id){require(db.update("UPDATE news_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
  @jakarta.annotation.PreDestroy public void stop(){stopping.set(true);}
  public Map<String,Object> refresh(){return refresh("anonymous","",UUID.randomUUID().toString());}
  public Map<String,Object> refresh(String actor,String ip,String requestId){
   require(githubReady(),HttpStatus.SERVICE_UNAVAILABLE,"GitHub 调度和采集密钥尚未配置");
   return tx.execute(status->{
-   db.queryForObject("SELECT id FROM lens_sync_gate WHERE id=1 FOR UPDATE",Integer.class);
-   var existing=db.queryForList("SELECT id,status FROM lens_refresh_runs WHERE status IN ('queued','dispatching') OR created_at>? ORDER BY id DESC LIMIT 1",Timestamp.from(Instant.now().minusSeconds(120)));
+   db.queryForObject("SELECT id FROM news_sync_gate WHERE id=1 FOR UPDATE",Integer.class);
+   var existing=db.queryForList("SELECT id,status FROM news_refresh_runs WHERE status IN ('queued','dispatching') OR created_at>? ORDER BY id DESC LIMIT 1",Timestamp.from(Instant.now().minusSeconds(120)));
    if(!existing.isEmpty())return Map.<String,Object>of("run_id",existing.getFirst().get("id"),"status",existing.getFirst().get("status"),"message","已有采集任务，请等待抓取和标题翻译完成");
    var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
-   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO lens_refresh_runs(status,requested_by,request_id,request_ip) VALUES('queued',?,?,?)",new String[]{"id"});statement.setString(1,actor);statement.setString(2,requestId);statement.setString(3,ip.length()>100?ip.substring(0,100):ip);return statement;},keys);
+   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO news_refresh_runs(status,requested_by,request_id,request_ip) VALUES('queued',?,?,?)",new String[]{"id"});statement.setString(1,actor);statement.setString(2,requestId);statement.setString(3,ip.length()>100?ip.substring(0,100):ip);return statement;},keys);
    return Map.<String,Object>of("run_id",keys.getKey().longValue(),"status","queued","message","采集任务已提交，正在启动快速抓取；标题翻译后进入列表，打开详情时翻译全文");
   });
  }
  public Map<String,Object> syncStatus(Long runId){
-  var runs=runId==null?db.queryForList("SELECT id,status,last_error,collection_finished FROM lens_refresh_runs ORDER BY id DESC LIMIT 1"):db.queryForList("SELECT id,status,last_error,collection_finished FROM lens_refresh_runs WHERE id=?",runId);
+  var runs=runId==null?db.queryForList("SELECT id,status,last_error,collection_finished FROM news_refresh_runs ORDER BY id DESC LIMIT 1"):db.queryForList("SELECT id,status,last_error,collection_finished FROM news_refresh_runs WHERE id=?",runId);
   var out=new LinkedHashMap<String,Object>();
-  long queued=db.queryForObject("SELECT COUNT(*) FROM lens_batches WHERE status IN ('queued','processing')",Long.class);
-  long pending=db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE (title_zh IS NULL OR title_zh='') AND title_attempts<3",Long.class);
-  long processing=db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE (title_zh IS NULL OR title_zh='') AND title_lease_until>CURRENT_TIMESTAMP",Long.class);
+  long queued=db.queryForObject("SELECT COUNT(*) FROM news_batches WHERE status IN ('queued','processing')",Long.class);
+  long pending=db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE (title_zh IS NULL OR title_zh='') AND title_attempts<3",Long.class);
+  long processing=db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE (title_zh IS NULL OR title_zh='') AND title_lease_until>CURRENT_TIMESTAMP",Long.class);
   String state=runs.isEmpty()?"idle":(String)runs.getFirst().get("status");
   String phase=Set.of("queued","dispatching","failed","uncertain").contains(state)?state:queued>0?"ingesting":pending+processing>0?"translating":!runs.isEmpty()&&!Boolean.TRUE.equals(runs.getFirst().get("collection_finished"))&&Set.of("dispatched","received").contains(state)?"crawling":"idle";
   out.put("run_id",runs.isEmpty()?null:runs.getFirst().get("id"));out.put("status",state);out.put("phase",phase);
   out.put("queued_batches",queued);out.put("pending_articles",Math.max(0,pending-processing));out.put("processing_articles",processing);
-  out.put("published_articles",db.queryForObject("SELECT COUNT(*) FROM lens_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL",Long.class));
+  out.put("published_articles",db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL",Long.class));
   out.put("message",runs.isEmpty()?null:runs.getFirst().get("last_error"));return out;
  }
  public void dispatchQueued(){
   if(stopping.get())return;
-  for(var old:db.queryForList("SELECT * FROM lens_refresh_runs WHERE status='dispatching' AND lease_until<CURRENT_TIMESTAMP")){
+  for(var old:db.queryForList("SELECT * FROM news_refresh_runs WHERE status='dispatching' AND lease_until<CURRENT_TIMESTAMP")){
    long id=((Number)old.get("id")).longValue();
-   tx.executeWithoutResult(status->{if(db.update("UPDATE lens_refresh_runs SET status='uncertain',last_error='调度结果未确认，请检查 GitHub 工作流记录',lease_until=NULL WHERE id=? AND status='dispatching' AND lease_until<CURRENT_TIMESTAMP",id)==1)dispatchAudit(old,"uncertain","调度结果未确认，请检查 GitHub 工作流记录");});
+   tx.executeWithoutResult(status->{if(db.update("UPDATE news_refresh_runs SET status='uncertain',last_error='调度结果未确认，请检查 GitHub 工作流记录',lease_until=NULL WHERE id=? AND status='dispatching' AND lease_until<CURRENT_TIMESTAMP",id)==1)dispatchAudit(old,"uncertain","调度结果未确认，请检查 GitHub 工作流记录");});
   }
-  var rows=db.queryForList("SELECT * FROM lens_refresh_runs WHERE status='queued' ORDER BY id LIMIT 1");if(rows.isEmpty()||stopping.get())return;var row=rows.getFirst();long id=((Number)row.get("id")).longValue();
-  if(db.update("UPDATE lens_refresh_runs SET status='dispatching',lease_until=? WHERE id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(240)),id)!=1)return;
+  var rows=db.queryForList("SELECT * FROM news_refresh_runs WHERE status='queued' ORDER BY id LIMIT 1");if(rows.isEmpty()||stopping.get())return;var row=rows.getFirst();long id=((Number)row.get("id")).longValue();
+  if(db.update("UPDATE news_refresh_runs SET status='dispatching',lease_until=? WHERE id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(240)),id)!=1)return;
   String result="dispatched",error=null;
   try{if(!fastCollector.collect(id,collector.secret()))collector.dispatch(id);}catch(ResponseStatusException e){result="failed";error=e.getReason();}catch(Exception e){result="uncertain";error="GitHub 调度结果未确认，请检查工作流记录；不会自动重复触发";}
   final String completed=result,reason=error;
-  tx.executeWithoutResult(status->{db.update("UPDATE lens_refresh_runs SET status=?,last_error=?,lease_until=NULL WHERE id=? AND status='dispatching'",completed,reason,id);dispatchAudit(row,completed,reason);});
+  tx.executeWithoutResult(status->{db.update("UPDATE news_refresh_runs SET status=?,last_error=?,lease_until=NULL WHERE id=? AND status='dispatching'",completed,reason,id);dispatchAudit(row,completed,reason);});
  }
  private void dispatchAudit(Map<String,Object> row,String result,String error){
   String actor=Objects.toString(row.get("requested_by"),"anonymous");
@@ -167,27 +167,27 @@ public class NewsService {
  public void process(){ingestBatches();translateNext();}
  public void ingestBatches(){
   if(stopping.get())return;
-  db.update("UPDATE lens_batches SET status='queued' WHERE status='processing' AND lease_until<CURRENT_TIMESTAMP");
-  for(var batch:db.queryForList("SELECT batch_id,payload FROM lens_batches WHERE status='queued' ORDER BY created_at LIMIT 10")){
+  db.update("UPDATE news_batches SET status='queued' WHERE status='processing' AND lease_until<CURRENT_TIMESTAMP");
+  for(var batch:db.queryForList("SELECT batch_id,payload FROM news_batches WHERE status='queued' ORDER BY created_at LIMIT 10")){
    if(stopping.get())return;Object id=batch.get("batch_id");
-   if(db.update("UPDATE lens_batches SET status='processing',lease_until=? WHERE batch_id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(120)),id)!=1)continue;
-   try{tx.executeWithoutResult(status->{try{ingest(json.readTree((String)batch.get("payload")));db.update("UPDATE lens_batches SET status='done',payload='{}',lease_until=NULL WHERE batch_id=?",id);}catch(Exception e){throw new IllegalArgumentException("采集包内容无效",e);}});}catch(Exception e){db.update("UPDATE lens_batches SET status='failed',last_error='采集包校验失败',lease_until=NULL WHERE batch_id=?",id);}
+   if(db.update("UPDATE news_batches SET status='processing',lease_until=? WHERE batch_id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(120)),id)!=1)continue;
+   try{tx.executeWithoutResult(status->{try{ingest(json.readTree((String)batch.get("payload")));db.update("UPDATE news_batches SET status='done',payload='{}',lease_until=NULL WHERE batch_id=?",id);}catch(Exception e){throw new IllegalArgumentException("采集包内容无效",e);}});}catch(Exception e){db.update("UPDATE news_batches SET status='failed',last_error='采集包校验失败',lease_until=NULL WHERE batch_id=?",id);}
   }
  }
 
  public void translateTitlesNext(){
   if(stopping.get()||!aiReady())return;
-  var rows=db.queryForList("SELECT * FROM lens_articles WHERE (title_zh IS NULL OR title_zh='') AND title_attempts<3 AND (title_next_attempt_at IS NULL OR title_next_attempt_at<CURRENT_TIMESTAMP) AND (title_lease_until IS NULL OR title_lease_until<CURRENT_TIMESTAMP) ORDER BY id LIMIT 1");
+  var rows=db.queryForList("SELECT * FROM news_articles WHERE (title_zh IS NULL OR title_zh='') AND title_attempts<3 AND (title_next_attempt_at IS NULL OR title_next_attempt_at<CURRENT_TIMESTAMP) AND (title_lease_until IS NULL OR title_lease_until<CURRENT_TIMESTAMP) ORDER BY id LIMIT 1");
   if(rows.isEmpty()||stopping.get())return;
   var a=rows.getFirst();long id=((Number)a.get("id")).longValue();
-  if(db.update("UPDATE lens_articles SET title_lease_until=? WHERE id=? AND (title_zh IS NULL OR title_zh='') AND (title_lease_until IS NULL OR title_lease_until<CURRENT_TIMESTAMP)",Timestamp.from(Instant.now().plusSeconds(90)),id)!=1)return;
+  if(db.update("UPDATE news_articles SET title_lease_until=? WHERE id=? AND (title_zh IS NULL OR title_zh='') AND (title_lease_until IS NULL OR title_lease_until<CURRENT_TIMESTAMP)",Timestamp.from(Instant.now().plusSeconds(90)),id)!=1)return;
   try{
    String title=(String)translation.translateSelection((String)a.get("title_en"),(String)a.get("category")).get("translation");
    require(!title.isBlank()&&title.length()<=1000,HttpStatus.BAD_GATEWAY,"标题译文无效");
-   db.update("UPDATE lens_articles SET title_zh=?,summary_zh='',title_lease_until=NULL,title_next_attempt_at=NULL,event_id=? WHERE id=?",title,eventFor(a),id);
+   db.update("UPDATE news_articles SET title_zh=?,summary_zh='',title_lease_until=NULL,title_next_attempt_at=NULL,event_id=? WHERE id=?",title,eventFor(a),id);
   }catch(Exception e){
    int attempts=((Number)a.get("title_attempts")).intValue()+1;
-   db.update("UPDATE lens_articles SET title_attempts=?,title_lease_until=NULL,title_next_attempt_at=? WHERE id=?",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),id);
+   db.update("UPDATE news_articles SET title_attempts=?,title_lease_until=NULL,title_next_attempt_at=? WHERE id=?",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),id);
   }
  }
  public Map<String,Object> requestBodyTranslation(long id){
@@ -195,24 +195,24 @@ public class NewsService {
   if(!"ready".equals(visible.get("status"))){
    require(aiReady(),HttpStatus.SERVICE_UNAVAILABLE,"翻译服务尚未配置");
    if("failed".equals(visible.get("status"))){
-    require(db.update("UPDATE lens_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status='failed' AND (next_attempt_at IS NULL OR next_attempt_at<CURRENT_TIMESTAMP)",id)==1,HttpStatus.TOO_MANY_REQUESTS,"翻译暂不可用，请稍后再试");
+    require(db.update("UPDATE news_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status='failed' AND (next_attempt_at IS NULL OR next_attempt_at<CURRENT_TIMESTAMP)",id)==1,HttpStatus.TOO_MANY_REQUESTS,"翻译暂不可用，请稍后再试");
    }
-   db.update("UPDATE lens_articles SET body_requested_at=CURRENT_TIMESTAMP WHERE id=? AND body_requested_at IS NULL AND status IN ('pending','processing')",id);
+   db.update("UPDATE news_articles SET body_requested_at=CURRENT_TIMESTAMP WHERE id=? AND body_requested_at IS NULL AND status IN ('pending','processing')",id);
   }
   return Map.of("article_id",id,"translation_status",article(id,false).get("translation_status"));
  }
  public synchronized void translateNext(){
   if(stopping.get()||!aiReady())return;
-  db.update("UPDATE lens_articles SET status='pending' WHERE status='processing' AND next_attempt_at<CURRENT_TIMESTAMP");
-  var pending=db.queryForList("SELECT * FROM lens_articles WHERE status='pending' AND body_requested_at IS NOT NULL AND (next_attempt_at IS NULL OR next_attempt_at<CURRENT_TIMESTAMP) ORDER BY id LIMIT 1");
+  db.update("UPDATE news_articles SET status='pending' WHERE status='processing' AND next_attempt_at<CURRENT_TIMESTAMP");
+  var pending=db.queryForList("SELECT * FROM news_articles WHERE status='pending' AND body_requested_at IS NOT NULL AND (next_attempt_at IS NULL OR next_attempt_at<CURRENT_TIMESTAMP) ORDER BY id LIMIT 1");
   for(var a:pending){if(stopping.get())return;long id=((Number)a.get("id")).longValue();
-   if(db.update("UPDATE lens_articles SET status='processing',next_attempt_at=? WHERE id=? AND status='pending'",Timestamp.from(Instant.now().plusSeconds(1200)),id)!=1)continue;
-   try{translate(a);}catch(Exception e){int attempts=((Number)a.get("attempts")).intValue()+1;db.update("UPDATE lens_articles SET status=?,attempts=?,next_attempt_at=?,last_error=? WHERE id=?",attempts>=3?"failed":"pending",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),"标题或正文翻译服务、段落校验失败；可切换翻译方式后重试",id);}
+   if(db.update("UPDATE news_articles SET status='processing',next_attempt_at=? WHERE id=? AND status='pending'",Timestamp.from(Instant.now().plusSeconds(1200)),id)!=1)continue;
+   try{translate(a);}catch(Exception e){int attempts=((Number)a.get("attempts")).intValue()+1;db.update("UPDATE news_articles SET status=?,attempts=?,next_attempt_at=?,last_error=? WHERE id=?",attempts>=3?"failed":"pending",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),"标题或正文翻译服务、段落校验失败；可切换翻译方式后重试",id);}
   }
  }
  private void ingest(JsonNode batch)throws Exception{
   for(JsonNode a:batch.path("articles")){
-   long sourceId=a.path("source_id").asLong();var sources=db.queryForList("SELECT * FROM lens_sources WHERE id=? AND is_active=TRUE",sourceId);if(sources.isEmpty())continue;var src=sources.getFirst();
+   long sourceId=a.path("source_id").asLong();var sources=db.queryForList("SELECT * FROM news_sources WHERE id=? AND is_active=TRUE",sourceId);if(sources.isEmpty())continue;var src=sources.getFirst();
    String url=canonical(a.path("origin_url").asText()),title=a.path("title_en").asText();JsonNode paragraphs=a.path("paragraphs_en");
    require(paragraphs.isArray()&&paragraphs.size()>0&&paragraphs.size()<=400,HttpStatus.BAD_REQUEST,"正文段落无效");
    var texts=new ArrayList<String>();for(var p:paragraphs){require(p.isTextual()&&!p.asText().isBlank(),HttpStatus.BAD_REQUEST,"正文无效");texts.add(p.asText().strip());}
@@ -220,16 +220,16 @@ public class NewsService {
    require(title.length()>0&&title.length()<=1000&&text.length()<=100000&&url.length()<=2000,HttpStatus.BAD_REQUEST,"正文超限");
    Instant published;try{published=Instant.parse(a.path("published_at").asText());}catch(Exception e){published=Instant.now();}if(published.isAfter(Instant.now().plusSeconds(3600)))published=Instant.now();
    String cover=a.path("cover_image").asText("");if(!cover.isBlank()){try{canonical(cover);}catch(Exception e){cover="";}}
-   try{db.update("INSERT INTO lens_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published));}catch(org.springframework.dao.DuplicateKeyException ignored){}
+   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published));}catch(org.springframework.dao.DuplicateKeyException ignored){}
   }
   for(JsonNode result:batch.path("source_results")){
    boolean ok=result.path("success").asBoolean();long id=result.path("source_id").asLong();
-   db.update("UPDATE lens_sources SET last_crawled_at=CURRENT_TIMESTAMP,lease_until=NULL,last_error=?"+(ok?",last_success_at=CURRENT_TIMESTAMP":"")+" WHERE id=?",ok?null:"来源抓取失败，请检查 RSS 地址或访问限制",id);
+   db.update("UPDATE news_sources SET last_crawled_at=CURRENT_TIMESTAMP,lease_until=NULL,last_error=?"+(ok?",last_success_at=CURRENT_TIMESTAMP":"")+" WHERE id=?",ok?null:"来源抓取失败，请检查 RSS 地址或访问限制",id);
   }
   long runId=batch.path("run_id").asLong(0);
   if(runId>0){
-   db.update("UPDATE lens_refresh_runs SET status='received',collection_finished=(collection_finished OR ?) WHERE id=? AND status IN ('dispatching','dispatched','received')",batch.path("collection_finished").asBoolean(false),runId);
-  }else db.update("UPDATE lens_refresh_runs SET status='received' WHERE status IN ('dispatched','dispatching') AND created_at>?",Timestamp.from(Instant.now().minusSeconds(3600)));
+   db.update("UPDATE news_refresh_runs SET status='received',collection_finished=(collection_finished OR ?) WHERE id=? AND status IN ('dispatching','dispatched','received')",batch.path("collection_finished").asBoolean(false),runId);
+  }else db.update("UPDATE news_refresh_runs SET status='received' WHERE status IN ('dispatched','dispatching') AND created_at>?",Timestamp.from(Instant.now().minusSeconds(3600)));
 
  }
  private JsonNode ai(NewsAiSettings.RuntimeConfig config,String instruction,Object input)throws Exception{
@@ -252,7 +252,7 @@ public class NewsService {
    for(int start=0;start<en.length;start+=8){var chunk=pairs.subList(start,Math.min(start+8,en.length));try{zh.addAll(aligned(ai(config,instruction,chunk),chunk));}catch(Exception e){for(var p:chunk)zh.addAll(aligned(ai(config,instruction,List.of(p)),List.of(p)));}}
   }
   require(zh.size()==en.length,HttpStatus.BAD_GATEWAY,"段落未对齐");
-  db.update("UPDATE lens_articles SET title_zh=?,summary_zh='',content_zh=?,status='ready',translated_at=CURRENT_TIMESTAMP,last_error=NULL,event_id=? WHERE id=?",zh.getFirst(),String.join("\n\n",zh.subList(1,zh.size())),eventFor(a),a.get("id"));
+  db.update("UPDATE news_articles SET title_zh=?,summary_zh='',content_zh=?,status='ready',translated_at=CURRENT_TIMESTAMP,last_error=NULL,event_id=? WHERE id=?",zh.getFirst(),String.join("\n\n",zh.subList(1,zh.size())),eventFor(a),a.get("id"));
  }
  public static List<String> aligned(JsonNode result,List<Map<String,Object>> expected){
   JsonNode rows=result.path("paragraphs");if(!rows.isArray()||rows.size()!=expected.size())throw new IllegalArgumentException("paragraph count");var texts=new ArrayList<String>();
@@ -261,11 +261,11 @@ public class NewsService {
  private static Set<String> tokens(String title){var set=new HashSet<String>();for(String t:title.toLowerCase(Locale.ROOT).split("[^a-z0-9]+"))if(t.length()>2&&!Set.of("the","and","for","with","from","that","this","are","has","after","new").contains(t))set.add(t);return set;}
  private Long eventFor(Map<String,Object>a){
   var title=tokens((String)a.get("title_en"));if(title.size()<4)return null;
-  for(var other:db.queryForList("SELECT id,title_en,priority,content_en FROM lens_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL AND category=? AND published_at>? AND id<>?",a.get("category"),Timestamp.from(Instant.now().minusSeconds(86400)),a.get("id"))){
+  for(var other:db.queryForList("SELECT id,title_en,priority,content_en FROM news_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL AND category=? AND published_at>? AND id<>?",a.get("category"),Timestamp.from(Instant.now().minusSeconds(86400)),a.get("id"))){
    var words=tokens((String)other.get("title_en"));var union=new HashSet<>(title);union.addAll(words);var intersection=new HashSet<>(title);intersection.retainAll(words);
    if(intersection.size()>=4&&(double)intersection.size()/union.size()>=0.6){long current=((Number)a.get("id")).longValue(),old=((Number)other.get("id")).longValue();
     int rank=((Number)a.get("priority")).intValue(),previous=((Number)other.get("priority")).intValue();
-    if(rank>previous||(rank==previous&&((String)a.get("content_en")).length()>((String)other.get("content_en")).length())){db.update("UPDATE lens_articles SET event_id=? WHERE id=? OR event_id=?",current,old,old);return null;}return old;
+    if(rank>previous||(rank==previous&&((String)a.get("content_en")).length()>((String)other.get("content_en")).length())){db.update("UPDATE news_articles SET event_id=? WHERE id=? OR event_id=?",current,old,old);return null;}return old;
    }
   }return null;
  }

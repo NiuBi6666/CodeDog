@@ -16,7 +16,7 @@ _sessions=threading.local()
 def session():
  if not hasattr(_sessions,'value'):
   _sessions.value=requests.Session()
-  _sessions.value.headers.update({'User-Agent':'LENS-NewsReader/1.0 (RSS aggregator; respects paywalls)'})
+  _sessions.value.headers.update({'User-Agent':'CDNews-NewsReader/1.0 (RSS aggregator; respects paywalls)'})
  return _sessions.value
 MAX_BYTES=5*1024*1024
 

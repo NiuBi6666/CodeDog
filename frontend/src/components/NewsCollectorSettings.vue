@@ -2,7 +2,7 @@
 import {ref,onMounted,onBeforeUnmount,computed} from 'vue';
 import {api,jsonBody,notify} from '../api';
 const emit=defineEmits(['updated']);
-const saved=ref(null),error=ref(''),busy=ref(false),form=ref({repository:'NiuBi6666/CodeDog',workflow:'lens-crawl.yml',api_url:'https://codedog.online',github_token:''});
+const saved=ref(null),error=ref(''),busy=ref(false),form=ref({repository:'NiuBi6666/CodeDog',workflow:'news-crawl.yml',api_url:'https://codedog.online',github_token:''});
 const running=computed(()=>['queued','processing'].includes(saved.value?.setup_state));
 const labels={unconfigured:'未配置',saved:'已保存，待自动配置',queued:'等待配置',processing:'正在自动配置',ready:'已配置并触发采集',failed:'配置失败',environment:'使用服务器配置'};
 let timer;
@@ -24,7 +24,7 @@ onMounted(()=>load(true));onBeforeUnmount(()=>clearInterval(timer));
         <form class="form-stack news-form" @submit.prevent="save">
           <fieldset :disabled="busy||running" class="news-fieldset"><div class="news-form-grid">
             <label>GitHub 仓库<input v-model.trim="form.repository" required maxlength="200" placeholder="所有者/仓库名"></label>
-            <label>采集工作流<input v-model.trim="form.workflow" required maxlength="100" placeholder="lens-crawl.yml"></label>
+            <label>采集工作流<input v-model.trim="form.workflow" required maxlength="100" placeholder="news-crawl.yml"></label>
             <label>网站 API 地址<input v-model.trim="form.api_url" type="url" required maxlength="500" placeholder="https://codedog.online"></label>
             <label>GitHub Token<input v-model="form.github_token" type="password" :required="!saved.credential_configured" maxlength="4096" autocomplete="new-password" :spellcheck="false" :placeholder="saved.credential_configured?'已保存；留空保留原 Token':'粘贴新 Token'"><small>加密保存，不回显；更换仓库时须重新输入 Token。</small></label>
           </div>

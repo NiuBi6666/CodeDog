@@ -6,8 +6,8 @@ ENGINES = {'bing', 'alibaba', 'baidu'}
 gate = threading.BoundedSemaphore(1)
 selection_gate = threading.BoundedSemaphore(1)
 _clients = threading.local()
-_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='lens-paragraph')
-_selection_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='lens-selection')
+_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='news-paragraph')
+_selection_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='news-selection')
 
 class RateController:
     def __init__(self, backoffs=(5, 15, 30)):

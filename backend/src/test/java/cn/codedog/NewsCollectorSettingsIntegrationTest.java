@@ -31,7 +31,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:lenscollectorsettings;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE","NEWS_GITHUB_TOKEN=","NEWS_GITHUB_REPO=","NEWS_WEBHOOK_SECRET="})
+@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:newscollectorsettings;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE","NEWS_GITHUB_TOKEN=","NEWS_GITHUB_REPO=","NEWS_WEBHOOK_SECRET="})
 @AutoConfigureMockMvc @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NewsCollectorSettingsIntegrationTest {
  static final String URL="/api/admin/news/collector-settings",TOKEN="test-only-github-credential-never-real";
@@ -59,11 +59,11 @@ class NewsCollectorSettingsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;@Autowired ObjectMapper json;
  @Autowired NewsCollectorSettings settings;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  MockHttpSession admin;
- @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);db.execute("CREATE UNIQUE INDEX idx_collector_test_audit_request_id ON audit_log(request_id)");}
- @BeforeEach void setup()throws Exception{db.update("DELETE FROM lens_collector_settings");db.update("DELETE FROM lens_refresh_runs");calls.clear();variables.clear();fail="";admin=login("Liam","test-only-password");}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}db.execute("CREATE UNIQUE INDEX idx_collector_test_audit_request_id ON audit_log(request_id)");}
+ @BeforeEach void setup()throws Exception{db.update("DELETE FROM news_collector_settings");db.update("DELETE FROM news_refresh_runs");calls.clear();variables.clear();fail="";admin=login("Liam","test-only-password");}
  @AfterAll void stop(){server.stop(0);}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
- String body(String token)throws Exception{return json.writeValueAsString(Map.of("repository","NiuBi6666/CodeDog","workflow","lens-crawl.yml","api_url","https://codedog.online","github_token",token));}
+ String body(String token)throws Exception{return json.writeValueAsString(Map.of("repository","NiuBi6666/CodeDog","workflow","news-crawl.yml","api_url","https://codedog.online","github_token",token));}
  void save()throws Exception{mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body(TOKEN))).andExpect(status().isOk()).andExpect(content().string(not(containsString(TOKEN))));}
  void queue()throws Exception{mvc.perform(post(URL+"/provision").session(admin).with(csrf())).andExpect(status().isOk()).andExpect(jsonPath("$.setup_state").value("queued"));}
  @Test void onlySystemAdministratorCanReadSaveAndProvisionEvenAfterNewsPermissionGrants()throws Exception{
@@ -82,7 +82,7 @@ class NewsCollectorSettingsIntegrationTest {
  }
  @Test void credentialsAreEncryptedRetainedAndNeverReturnedOrAudited()throws Exception{
   save();String secret=settings.secret();assertThat(secret).hasSize(64);assertThat(news.githubReady()).isFalse();
-  var row=db.queryForMap("SELECT github_credential,webhook_credential FROM lens_collector_settings");assertThat(row.toString()).doesNotContain(TOKEN).doesNotContain(secret);assertThat(settings.runtime().toString()).doesNotContain(TOKEN).doesNotContain(secret);
+  var row=db.queryForMap("SELECT github_credential,webhook_credential FROM news_collector_settings");assertThat(row.toString()).doesNotContain(TOKEN).doesNotContain(secret);assertThat(settings.runtime().toString()).doesNotContain(TOKEN).doesNotContain(secret);
   mvc.perform(get(URL).session(admin)).andExpect(content().string(not(containsString(TOKEN)))).andExpect(content().string(not(containsString(secret))));
   mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body(""))).andExpect(status().isOk());assertThat(settings.runtime().token()).isEqualTo(TOKEN);assertThat(settings.secret()).isEqualTo(secret);
   var audits=db.queryForList("SELECT changes_json,detail_json FROM audit_log WHERE module='news' AND event_code='collector_settings_update'");assertThat(audits).isNotEmpty();assertThat(audits.toString()).doesNotContain(TOKEN).doesNotContain(secret).doesNotContain((String)row.get("github_credential"));
@@ -92,7 +92,7 @@ class NewsCollectorSettingsIntegrationTest {
   assertThat(calls.toString()).contains("PUT /repos/NiuBi6666/CodeDog/actions/secrets/NEWS_WEBHOOK_SECRET","NEWS_API_URL","NEWS_ENABLED","/enable","/dispatches").doesNotContain(secret).doesNotContain(TOKEN);
   assertThat(calls.stream().filter(c->c.contains("/dispatches"))).hasSize(1);assertThat(variables).containsExactlyInAnyOrder("NEWS_API_URL","NEWS_ENABLED");
   news.authenticate(secret);assertThatThrownBy(()->news.authenticate("wrong")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
-  assertThat(db.queryForObject("SELECT COUNT(*) FROM lens_refresh_runs WHERE status='dispatched'",Long.class)).isEqualTo(1);
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM news_refresh_runs WHERE status='dispatched'",Long.class)).isEqualTo(1);
   queue();settings.processProvision();assertThat(news.githubReady()).isTrue();assertThat(settings.secret()).isEqualTo(secret);assertThat(calls.stream().filter(c->c.startsWith("POST")&&c.contains("/variables"))).hasSize(2);
   assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE event_code='collector_setup_completed' AND result='success' AND owner_username='Liam'",Long.class)).isGreaterThanOrEqualTo(2);
  }
@@ -103,7 +103,7 @@ class NewsCollectorSettingsIntegrationTest {
   assertThat(db.queryForList("SELECT error_message FROM audit_log WHERE event_code='collector_setup_completed' AND result='failed'").toString()).doesNotContain(TOKEN).contains("权限");
  }
  @Test void completionAuditHasIndependentIdAndPreservesOriginUnderProductionUniqueness()throws Exception{
-  save();queue();String origin=db.queryForObject("SELECT request_id FROM lens_collector_settings WHERE id=1",String.class);
+  save();queue();String origin=db.queryForObject("SELECT request_id FROM news_collector_settings WHERE id=1",String.class);
   assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE request_id=?",Long.class,origin)).isEqualTo(1);
   settings.processProvision();assertThat(settings.view().get("setup_state")).isEqualTo("ready");
   var completion=db.queryForMap("SELECT request_id,detail_json FROM audit_log WHERE event_code='collector_setup_completed' AND detail_json LIKE ?", "%"+origin+"%");
@@ -112,7 +112,7 @@ class NewsCollectorSettingsIntegrationTest {
   assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE request_id=?",Long.class,origin)).isEqualTo(1);
  }
  @Test void expiredSetupLeaseRecoversWithoutDuplicateDispatch()throws Exception{
-  save();queue();db.update("UPDATE lens_collector_settings SET setup_state='processing',lease_until=? WHERE id=1",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)));
+  save();queue();db.update("UPDATE news_collector_settings SET setup_state='processing',lease_until=? WHERE id=1",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)));
   settings.processProvision();settings.processProvision();assertThat(news.githubReady()).isTrue();assertThat(calls.stream().filter(c->c.contains("/dispatches"))).hasSize(1);
  }
  @Test void invalidConfigurationAndChangesDuringSetupAreRejected()throws Exception{

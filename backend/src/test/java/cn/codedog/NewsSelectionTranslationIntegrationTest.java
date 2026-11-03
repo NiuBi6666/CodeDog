@@ -27,7 +27,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:lensselection;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE","NEWS_AI_API_KEY="})
+@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:newsselection;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE","NEWS_AI_API_KEY="})
 @AutoConfigureMockMvc @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NewsSelectionTranslationIntegrationTest {
  static final AtomicInteger calls=new AtomicInteger(),ip=new AtomicInteger();
@@ -46,11 +46,11 @@ class NewsSelectionTranslationIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;@Autowired ObjectMapper json;
  @MockBean NewsAiSettings ai;
  long id;
- @BeforeAll void schema(){new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}}
  @BeforeEach void setup(){
-  db.update("DELETE FROM lens_translation_settings");db.update("DELETE FROM lens_translation_cache");db.update("DELETE FROM lens_articles");
-  db.update("INSERT INTO lens_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,content_zh,status,published_at) VALUES('selection-test','https://example.com/selection',1,'Test','科技','New AI research','新研究','Artificial intelligence improves research.\\n\\nFirst sentence. Second sentence.','译文','ready',CURRENT_TIMESTAMP)");
-  id=db.queryForObject("SELECT id FROM lens_articles",Long.class);
+  db.update("DELETE FROM news_translation_settings");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");
+  db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,content_zh,status,published_at) VALUES('selection-test','https://example.com/selection',1,'Test','科技','New AI research','新研究','Artificial intelligence improves research.\\n\\nFirst sentence. Second sentence.','译文','ready',CURRENT_TIMESTAMP)");
+  id=db.queryForObject("SELECT id FROM news_articles",Long.class);
  }
  @AfterAll void close(){server.stop(0);}
  MockHttpServletRequestBuilder request(String text)throws Exception{return post("/api/news/translate").with(csrf()).header("X-Real-IP","198.51.100."+ip.incrementAndGet()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("article_id",id,"text",text)));}
@@ -68,12 +68,12 @@ class NewsSelectionTranslationIntegrationTest {
   mvc.perform(request("a".repeat(1001))).andExpect(status().isBadRequest());
   mvc.perform(post("/api/news/translate").with(csrf()).contentType(APPLICATION_JSON).content(" ".repeat(4097))).andExpect(status().isPayloadTooLarge());
   mvc.perform(post("/api/news/translate").with(csrf()).contentType(APPLICATION_JSON).content("{bad")).andExpect(status().isBadRequest());
-  db.update("UPDATE lens_articles SET status='pending',title_zh=NULL WHERE id=?",id);
+  db.update("UPDATE news_articles SET status='pending',title_zh=NULL WHERE id=?",id);
   mvc.perform(request("Artificial intelligence")).andExpect(status().isNotFound());
   mvc.perform(get("/api/admin/news")).andExpect(status().isUnauthorized());
  }
  @Test void respectsConfiguredApiAndDoesNotExposeProviderErrors()throws Exception{
-  db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");
+  db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");
   when(ai.configured()).thenReturn(true);
   var runtime=new NewsAiSettings.RuntimeConfig("https://api.example.com/v1","test-model","never-expose-key");
   when(ai.runtime()).thenReturn(runtime);
@@ -90,7 +90,7 @@ class NewsSelectionTranslationIntegrationTest {
   mvc.perform(request).andExpect(status().isTooManyRequests());
  }
  @Test void concurrentSelectionsAreBoundedAndCapacityIsReleased()throws Exception{
-  db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,'api','bing')");
+  db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");
   when(ai.configured()).thenReturn(true);when(ai.runtime()).thenReturn(new NewsAiSettings.RuntimeConfig("https://api.example.com/v1","test","test-only"));
   var entered=new CountDownLatch(2);var release=new CountDownLatch(1);
   when(ai.complete(any(),anyList(),eq(1200))).thenAnswer(invocation->{entered.countDown();release.await(4,TimeUnit.SECONDS);return "{\"choices\":[{\"message\":{\"content\":\"译文\"}}]}";});

@@ -16,14 +16,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class NewsAiSettings {
- private static final String CONTEXT="lens.ai.api-key.v1";
+ private static final String CONTEXT="news.ai.api-key.v1";
  private final JdbcTemplate db;private final PasswordRecoveryCipher cipher;private final ObjectMapper json;
  private final String envBase,envModel,envKey;
  private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NEVER).build();
  public NewsAiSettings(JdbcTemplate db,PasswordRecoveryCipher cipher,ObjectMapper json,
   @Value("${NEWS_AI_BASE_URL:}")String base,@Value("${NEWS_AI_MODEL:}")String model,@Value("${NEWS_AI_API_KEY:}")String key){this.db=db;this.cipher=cipher;this.json=json;envBase=base;envModel=model;envKey=key;}
  public record RuntimeConfig(String baseUrl,String model,String apiKey){@Override public String toString(){return "NewsAiConfig[credentials redacted]";}}
- private Map<String,Object> row(){var rows=db.queryForList("SELECT base_url,model,api_key_ciphertext,updated_at FROM lens_ai_settings WHERE id=1");return rows.isEmpty()?null:rows.getFirst();}
+ private Map<String,Object> row(){var rows=db.queryForList("SELECT base_url,model,api_key_ciphertext,updated_at FROM news_ai_settings WHERE id=1");return rows.isEmpty()?null:rows.getFirst();}
  public Map<String,Object> view(){
   var row=row();boolean stored=row!=null;String base=stored?(String)row.get("base_url"):envBase,model=stored?(String)row.get("model"):envModel;
   boolean present=stored?!((String)row.get("api_key_ciphertext")).isBlank():!envKey.isBlank();
@@ -60,7 +60,7 @@ public class NewsAiSettings {
   if(key.isBlank()&&!hasKey)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"首次配置请填写 API Key");
   if(!cipher.configured())throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"服务器尚未配置加密存储，暂不能保存 API Key");
   String encrypted=key.isBlank()?(old==null?cipher.encrypt(envKey,CONTEXT):(String)old.get("api_key_ciphertext")):cipher.encrypt(key,CONTEXT);
-  db.update("INSERT INTO lens_ai_settings(id,base_url,model,api_key_ciphertext) VALUES(1,?,?,?) ON DUPLICATE KEY UPDATE base_url=VALUES(base_url),model=VALUES(model),api_key_ciphertext=VALUES(api_key_ciphertext),updated_at=CURRENT_TIMESTAMP",base,model,encrypted);
+  db.update("INSERT INTO news_ai_settings(id,base_url,model,api_key_ciphertext) VALUES(1,?,?,?) ON DUPLICATE KEY UPDATE base_url=VALUES(base_url),model=VALUES(model),api_key_ciphertext=VALUES(api_key_ciphertext),updated_at=CURRENT_TIMESTAMP",base,model,encrypted);
   return view();
  }
  public String complete(RuntimeConfig config,List<Map<String,String>> messages,Integer maxTokens)throws Exception{

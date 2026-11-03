@@ -1,5 +1,5 @@
 
-name: LENS overseas news collection
+name: CDNews overseas news collection
 on:
   schedule:
     - cron: '17,47 * * * *'
@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: lens-news-collector
+  group: news-news-collector
   cancel-in-progress: false
 jobs:
   collect:

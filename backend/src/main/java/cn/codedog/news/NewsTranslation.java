@@ -17,9 +17,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class NewsTranslation {
  private final JdbcTemplate db;private final NewsAiSettings ai;private final ObjectMapper json;private final String endpoint;
  private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
- public NewsTranslation(JdbcTemplate db,NewsAiSettings ai,ObjectMapper json,@Value("${NEWS_TRANSLATOR_URL:http://lens-translator:8090}")String endpoint){this.db=db;this.ai=ai;this.json=json;this.endpoint=endpoint;}
+ public NewsTranslation(JdbcTemplate db,NewsAiSettings ai,ObjectMapper json,@Value("${NEWS_TRANSLATOR_URL:http://news-translator:8090}")String endpoint){this.db=db;this.ai=ai;this.json=json;this.endpoint=endpoint;}
  public record Config(String mode,String engine){}
- public Config config(){var rows=db.queryForList("SELECT mode,engine FROM lens_translation_settings WHERE id=1");return rows.isEmpty()?new Config(ai.configured()?"api":"translators","bing"):new Config((String)rows.getFirst().get("mode"),(String)rows.getFirst().get("engine"));}
+ public Config config(){var rows=db.queryForList("SELECT mode,engine FROM news_translation_settings WHERE id=1");return rows.isEmpty()?new Config(ai.configured()?"api":"translators","bing"):new Config((String)rows.getFirst().get("mode"),(String)rows.getFirst().get("engine"));}
  public boolean configured(){return !config().mode().equals("api")||ai.configured();}
  public String label(){var c=config();return c.mode().equals("api")?ai.model():"translators / "+c.engine();}
  public Map<String,Object> view(){var result=new LinkedHashMap<>(ai.view());var c=config();result.put("mode",c.mode());result.put("engine",c.engine());result.put("api_configured",ai.configured());result.put("configured",configured());return result;}
@@ -29,7 +29,7 @@ public class NewsTranslation {
   String mode=body.path("mode").asText("api"),engine=body.path("engine").asText(config().engine());
   if(!Set.of("api","translators").contains(mode)||!Set.of("bing","alibaba","baidu").contains(engine))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"翻译方式或引擎无效");
   if(mode.equals("api"))ai.save(body);
-  db.update("INSERT INTO lens_translation_settings(id,mode,engine) VALUES(1,?,?) ON DUPLICATE KEY UPDATE mode=VALUES(mode),engine=VALUES(engine),updated_at=CURRENT_TIMESTAMP",mode,engine);
+  db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,?,?) ON DUPLICATE KEY UPDATE mode=VALUES(mode),engine=VALUES(engine),updated_at=CURRENT_TIMESTAMP",mode,engine);
   return view();
  }
  public List<String> translate(Config config,List<String> paragraphs)throws Exception{
@@ -37,7 +37,7 @@ public class NewsTranslation {
   var texts=new ArrayList<String>(Collections.nCopies(paragraphs.size(),null));var missing=new ArrayList<String>();var indices=new ArrayList<Integer>();
   for(int i=0;i<paragraphs.size();i++){
    String key=NewsService.digest("translators:"+config.engine()+":zh:paragraph-v1:"+paragraphs.get(i));
-   var cached=db.queryForList("SELECT translated_text FROM lens_translation_cache WHERE cache_key=?",key);
+   var cached=db.queryForList("SELECT translated_text FROM news_translation_cache WHERE cache_key=?",key);
    if(cached.isEmpty()){missing.add(paragraphs.get(i));indices.add(i);}else texts.set(i,(String)cached.getFirst().get("translated_text"));
   }
   if(missing.isEmpty())return texts;
@@ -74,7 +74,7 @@ public class NewsTranslation {
   if(!p.isTextual()||p.asText().isBlank())return;
   String value=p.asText().replaceAll("[\\r\\n]+"," ").strip();
   String key=NewsService.digest("translators:"+config.engine()+":zh:paragraph-v1:"+paragraphs.get(index));
-  try{db.update("INSERT INTO lens_translation_cache(cache_key,engine,translated_text) VALUES(?,?,?)",key,config.engine(),value);}catch(org.springframework.dao.DuplicateKeyException ignored){}
+  try{db.update("INSERT INTO news_translation_cache(cache_key,engine,translated_text) VALUES(?,?,?)",key,config.engine(),value);}catch(org.springframework.dao.DuplicateKeyException ignored){}
   texts.set(index,value);
  }
 
@@ -84,7 +84,7 @@ public class NewsTranslation {
   var runtime=selected.mode().equals("api")?ai.runtime():null;
   String key=NewsService.digest(selected.mode().equals("api")?"selection-api:"+runtime.baseUrl()+":"+runtime.model()+":"+category+":zh:selection-v1:"+text:"translators:"+selected.engine()+":zh:paragraph-v1:"+text);
   String provider=selected.mode().equals("api")?"大模型 API":"translators / "+selected.engine();
-  var cached=db.queryForList("SELECT translated_text FROM lens_translation_cache WHERE cache_key=?",key);
+  var cached=db.queryForList("SELECT translated_text FROM news_translation_cache WHERE cache_key=?",key);
   if(!cached.isEmpty())return Map.of("translation",cached.getFirst().get("translated_text"),"provider",provider,"cached",true);
   try{
    String translated;
@@ -106,7 +106,7 @@ public class NewsTranslation {
    }
    if(translated==null||translated.isBlank()||translated.length()>10000)throw new IllegalArgumentException("empty translation");
    translated=translated.strip();
-   try{db.update("INSERT INTO lens_translation_cache(cache_key,engine,translated_text) VALUES(?,?,?)",key,runtime==null?selected.engine():"selection-api",translated);}catch(org.springframework.dao.DuplicateKeyException ignored){}
+   try{db.update("INSERT INTO news_translation_cache(cache_key,engine,translated_text) VALUES(?,?,?)",key,runtime==null?selected.engine():"selection-api",translated);}catch(org.springframework.dao.DuplicateKeyException ignored){}
    return Map.of("translation",translated,"provider",provider,"cached",false);
   }catch(ResponseStatusException e){
    if(e.getStatusCode().value()==429)throw e;

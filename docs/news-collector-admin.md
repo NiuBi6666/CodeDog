@@ -4,7 +4,7 @@
 
 Token 仅选择目标仓库，授予 Actions、Secrets、Variables 的 Read and write。之前只有 Actions 写权限的 Token 需要补齐权限。建议设置有效期；若组织需要审批须先批准。Metadata 为 GitHub 自动要求的只读权限。
 
-自动任务检查仓库内已存在的 lens-crawl.yml，以 GitHub 仓库公钥和 PyNaCl SealedBox 加密 Webhook 密钥后写入 NEWS_WEBHOOK_SECRET，更新 NEWS_API_URL，启用工作流并设置 NEWS_ENABLED=true，最后 dispatch main 分支并记录采集请求。程序不更改协作者、分支规则、仓库可见性或其他 Secrets。更换仓库生成新的采集密钥。
+自动任务检查仓库内已存在的 news-crawl.yml，以 GitHub 仓库公钥和 PyNaCl SealedBox 加密 Webhook 密钥后写入 NEWS_WEBHOOK_SECRET，更新 NEWS_API_URL，启用工作流并设置 NEWS_ENABLED=true，最后 dispatch main 分支并记录采集请求。程序不更改协作者、分支规则、仓库可见性或其他 Secrets。更换仓库生成新的采集密钥。
 
 配置任务状态持久化，并使用 5 分钟处理租约；重启后可恢复。过程分步骤展示。GitHub 各调用非事务性，权限不足可能造成部分步骤已成功，修正 Token 后可幂等重试。失败请求不回传上游原始响应和凭证。成功仅表示完成配置并提交工作流，不代表新闻已抓取翻译成功。后台抓取记录继续展示真实入库状态。
 

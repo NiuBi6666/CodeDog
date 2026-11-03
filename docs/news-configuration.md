@@ -1,5 +1,5 @@
 
-# LENS 新闻部署与配置
+# CDNews 新闻部署与配置
 
 ## 后台配置正文翻译（推荐）
 
@@ -13,7 +13,7 @@
 
 系统管理员登录 /news，在“GitHub 采集配置”填写 Token，点击“保存并自动配置”。Token 仅选择 CodeDog 仓库，并授予 Actions、Secrets、Variables 三项 Read and write。系统自动生成 Webhook 密钥、以仓库公钥加密上传、设置变量、启用工作流并提交首次采集。无需手工修改 .env 或复制 Webhook 密钥。
 
-Token 留空保留已有值，凭证加密存储且不回显。配置任务分步骤显示，失败可修正 Token 后重试。详见 [后台自动配置采集](lens-collector-admin.md)。
+Token 留空保留已有值，凭证加密存储且不回显。配置任务分步骤显示，失败可修正 Token 后重试。详见 [后台自动配置采集](news-collector-admin.md)。
 
 ## 环境变量兼容与手工配置（可选）
 
@@ -26,7 +26,7 @@ NEWS_AI_API_KEY=provider-api-key
 NEWS_WEBHOOK_SECRET=at-least-32-random-characters
 NEWS_GITHUB_REPO=NiuBi6666/CodeDog
 NEWS_GITHUB_TOKEN=fine-grained-token-with-actions-write
-NEWS_GITHUB_WORKFLOW=lens-crawl.yml
+NEWS_GITHUB_WORKFLOW=news-crawl.yml
 ```
 
 `NEWS_AI_BASE_URL` 到 `/v1` 即可，不要追加 `/chat/completions`。
@@ -58,4 +58,4 @@ Webhook 校验共享密钥、5 分钟时间窗、HMAC-SHA256、2MB 限制。
 GitHub Actions 成功执行并收到第一批真实双语新闻才算端到端验收完成。
 不能绕过付费墙；上线媒体需核实内容授权及对应站点抓取条款。
 
-两种方式的部署、网络与使用限制见 [正文翻译方式](lens-translation-modes.md)。
+两种方式的部署、网络与使用限制见 [正文翻译方式](news-translation-modes.md)。

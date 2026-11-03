@@ -28,7 +28,7 @@ services:
     build: ./backend
     networks:
       - default
-      - lens-translation
+      - news-translation
     container_name: codedog-backend
     restart: unless-stopped
     env_file: .env
@@ -36,7 +36,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-public_doc}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-public_doc}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
-      NEWS_FAST_COLLECTOR_URL: http://lens-collector:8091
+      NEWS_FAST_COLLECTOR_URL: http://news-collector:8091
       LEGACY_IMPORT_ENABLED: ${LEGACY_IMPORT_ENABLED:-false}
       RANKING_DEFAULT_CRM_TEACHER_ID: ${RANKING_DEFAULT_CRM_TEACHER_ID:-}
       CODEDOG_PASSWORD_RECOVERY_KEY: ${CODEDOG_PASSWORD_RECOVERY_KEY:-}
@@ -54,12 +54,12 @@ services:
       retries: 5
       start_period: 30s
 
-  lens-collector:
+  news-collector:
     build: ./integrations/news
-    container_name: codedog-lens-collector
+    container_name: codedog-news-collector
     restart: unless-stopped
     networks:
-      - lens-translation
+      - news-translation
     environment:
       NEWS_API_URL: http://backend:8080
     healthcheck:
@@ -70,12 +70,12 @@ services:
     mem_limit: 256m
     pids_limit: 64
 
-  lens-translator:
+  news-translator:
     build: ./integrations/translation
-    container_name: codedog-lens-translator
+    container_name: codedog-news-translator
     restart: unless-stopped
     networks:
-      - lens-translation
+      - news-translation
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
       interval: 30s
@@ -85,9 +85,9 @@ services:
     mem_limit: 384m
     pids_limit: 64
 
-  lens-web:
-    build: ./lens-web
-    container_name: codedog-lens-web
+  news-web:
+    build: ./news-web
+    container_name: codedog-news-web
     restart: unless-stopped
     networks:
       - default
@@ -115,7 +115,7 @@ services:
       start_period: 10s
 
 networks:
-  lens-translation:
+  news-translation:
   questionnaire:
     external: true
     name: codedog_questionnaire
