@@ -23,19 +23,18 @@ import org.springframework.http.HttpStatus;
 @Service
 public class NewsService {
  private final JdbcTemplate db; private final ObjectMapper json; private final TransactionTemplate tx;
- private final String secret,ghToken,ghRepo,ghWorkflow;
+ private final NewsCollectorSettings collector;
  private final NewsAiSettings aiSettings; private final NewsTranslation translation;
  private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
  public NewsService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,NewsAiSettings aiSettings,NewsTranslation translation,
-  @Value("${NEWS_WEBHOOK_SECRET:}") String secret,
-  @Value("${NEWS_GITHUB_TOKEN:}") String ghToken,
-  @Value("${NEWS_GITHUB_REPO:}") String ghRepo,@Value("${NEWS_GITHUB_WORKFLOW:lens-crawl.yml}") String ghWorkflow) {
-  this.db=db;this.json=json;tx=new TransactionTemplate(manager);this.secret=secret;
-  this.aiSettings=aiSettings;this.translation=translation;this.ghToken=ghToken;this.ghRepo=ghRepo;this.ghWorkflow=ghWorkflow;
+  NewsCollectorSettings collector) {
+  this.db=db;this.json=json;tx=new TransactionTemplate(manager);this.collector=collector;
+  this.aiSettings=aiSettings;this.translation=translation;
  }
+
  public boolean aiReady(){return translation.configured();}
- public boolean githubReady(){return !ghToken.isBlank()&&ghRepo.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")&&secret.length()>=32;}
- public Map<String,Object> configuration(){return Map.of("ai_configured",aiReady(),"github_configured",githubReady(),"webhook_configured",!secret.isBlank(),"model",translation.label(),"translation_mode",translation.config().mode());}
+ public boolean githubReady(){return collector.ready();}
+ public Map<String,Object> configuration(){return Map.of("ai_configured",aiReady(),"github_configured",githubReady(),"webhook_configured",collector.secret().length()>=32,"model",translation.label(),"translation_mode",translation.config().mode());}
  public static String digest(String text){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
  public static String canonical(String value){
   URI u=URI.create(value);if(!"https".equalsIgnoreCase(u.getScheme())||u.getHost()==null||u.getUserInfo()!=null)throw new IllegalArgumentException("HTTPS URL required");
@@ -44,9 +43,9 @@ public class NewsService {
   return "https://"+u.getHost().toLowerCase(Locale.ROOT)+(u.getPort()==-1?"":":"+u.getPort())+(u.getRawPath()==null||u.getRawPath().isEmpty()?"/":u.getRawPath())+(query==null?"":"?"+query);
  }
  private static void require(boolean condition,HttpStatus code,String message){if(!condition)throw new ResponseStatusException(code,message);}
- public void authenticate(String token){require(secret.length()>=32,HttpStatus.SERVICE_UNAVAILABLE,"采集密钥尚未配置");require(token!=null&&MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),token.getBytes(StandardCharsets.UTF_8)),HttpStatus.UNAUTHORIZED,"采集鉴权失败");}
+ public void authenticate(String token){String secret=collector.secret();require(secret.length()>=32,HttpStatus.SERVICE_UNAVAILABLE,"采集密钥尚未配置");require(token!=null&&MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),token.getBytes(StandardCharsets.UTF_8)),HttpStatus.UNAUTHORIZED,"采集鉴权失败");}
  public void verify(byte[] body,String token,String timestamp,String signature){
-  authenticate(token);require(body.length<=2*1024*1024,HttpStatus.PAYLOAD_TOO_LARGE,"批次不能超过 2MB");
+  authenticate(token);String secret=collector.secret();require(body.length<=2*1024*1024,HttpStatus.PAYLOAD_TOO_LARGE,"批次不能超过 2MB");
   try{
    long seconds=Long.parseLong(timestamp);require(Math.abs(Instant.now().getEpochSecond()-seconds)<=300,HttpStatus.UNAUTHORIZED,"签名已过期");
    Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8),"HmacSHA256"));mac.update((timestamp+".").getBytes(StandardCharsets.UTF_8));
@@ -110,8 +109,7 @@ public class NewsService {
   require(db.queryForObject("SELECT COUNT(*) FROM lens_refresh_runs WHERE created_at>?",Long.class,Timestamp.from(Instant.now().minusSeconds(120)))==0,HttpStatus.TOO_MANY_REQUESTS,"正在同步，请两分钟后再试");
   db.update("INSERT INTO lens_refresh_runs(status) VALUES('dispatching')");
   try{
-   var req=HttpRequest.newBuilder(URI.create("https://api.github.com/repos/"+ghRepo+"/actions/workflows/"+ghWorkflow+"/dispatches")).timeout(Duration.ofSeconds(15)).header("Authorization","Bearer "+ghToken).header("Accept","application/vnd.github+json").header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString("{\"ref\":\"main\",\"inputs\":{\"force_all\":\"true\"}}")).build();
-   int code=http.send(req,HttpResponse.BodyHandlers.discarding()).statusCode();require(code==204,HttpStatus.BAD_GATEWAY,"GitHub 未接受调度，请检查仓库、工作流和授权");
+   collector.dispatch();
    db.update("UPDATE lens_refresh_runs SET status='dispatched' WHERE status='dispatching'");return Map.of("status","dispatched","message","采集任务已提交；等待 GitHub 排队，完成后更新报道");
   }catch(ResponseStatusException e){db.update("UPDATE lens_refresh_runs SET status='failed',last_error='GitHub 调度未被接受' WHERE status='dispatching'");throw e;}catch(Exception e){db.update("UPDATE lens_refresh_runs SET status='failed',last_error='GitHub 调度网络失败' WHERE status='dispatching'");throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"GitHub 调度暂时不可用");}
  }

@@ -9,7 +9,13 @@
 
 该配置仅系统管理员可访问。数据库配置优先于环境变量；首次后台保存前兼容环境变量。服务器必须保留 CODEDOG_PASSWORD_RECOVERY_KEY，否则不能解密已保存密钥。
 
-## 其他受保护配置与环境变量兼容
+## 后台配置采集（推荐）
+
+系统管理员登录 /news，在“GitHub 采集配置”填写 Token，点击“保存并自动配置”。Token 仅选择 CodeDog 仓库，并授予 Actions、Secrets、Variables 三项 Read and write。系统自动生成 Webhook 密钥、以仓库公钥加密上传、设置变量、启用工作流并提交首次采集。无需手工修改 .env 或复制 Webhook 密钥。
+
+Token 留空保留已有值，凭证加密存储且不回显。配置任务分步骤显示，失败可修正 Token 后重试。详见 [后台自动配置采集](lens-collector-admin.md)。
+
+## 环境变量兼容与手工配置（可选）
 
 在生产 `/opt/codedog-ranking/.env` 中配置（不得提交 Git）：
 

@@ -1,1 +1,2 @@
 translators==6.0.4
+PyNaCl==1.6.0

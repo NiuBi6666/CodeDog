@@ -47,6 +47,14 @@ def translate(body, translator=translate_piece):
         result.append(text)
     return {'paragraphs': result, 'engine': engine}
 
+def seal_secret(public_key, secret):
+    import base64
+    from nacl.public import PublicKey, SealedBox
+    if not isinstance(secret, str) or not 32 <= len(secret) <= 256:
+        raise ValueError('invalid secret')
+    key = base64.b64decode(public_key, validate=True)
+    return base64.b64encode(SealedBox(PublicKey(key)).encrypt(secret.encode())).decode()
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Do not log article bodies, query strings, or provider errors.
@@ -63,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.reply(200 if self.path == '/health' else 404, {'status': 'ready'} if self.path == '/health' else {})
     def do_POST(self):
-        if self.path != '/translate':
+        if self.path not in ('/translate', '/seal'):
             return self.reply(404, {})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -73,6 +81,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(413, {'error': 'invalid size'})
         if self.headers.get_content_type() != 'application/json':
             return self.reply(415, {'error': 'JSON required'})
+        if self.path == '/seal':
+            if length > 4096:
+                return self.reply(413, {'error': 'invalid size'})
+            try:
+                body = json.loads(self.rfile.read(length))
+                encrypted = seal_secret(body['public_key'], body['secret'])
+                return self.reply(200, {'encrypted_value': encrypted})
+            except Exception:
+                return self.reply(400, {'error': 'invalid encryption request'})
         if not gate.acquire(blocking=False):
             return self.reply(429, {'error': 'translator busy'})
         try:

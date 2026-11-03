@@ -23,3 +23,17 @@ class TranslationTest(unittest.TestCase):
     def test_empty_result_is_not_published(self):
         with self.assertRaises(ValueError):
             translate({'paragraphs':['Hello']}, lambda *_: '')
+
+class SealTest(unittest.TestCase):
+    def test_github_sealed_box_roundtrip_and_invalid_public_key(self):
+        import base64
+        from nacl.public import PrivateKey, SealedBox
+        from service import seal_secret
+        key = PrivateKey.generate()
+        plaintext = 'test-only-webhook-value-at-least-32-chars'
+        encoded = base64.b64encode(bytes(key.public_key)).decode()
+        ciphertext = seal_secret(encoded, plaintext)
+        self.assertNotIn(plaintext, ciphertext)
+        self.assertEqual(SealedBox(key).decrypt(base64.b64decode(ciphertext)).decode(), plaintext)
+        with self.assertRaises(Exception):
+            seal_secret('invalid-key', plaintext)
