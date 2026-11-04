@@ -66,6 +66,20 @@ class NewsTranslationWorkerIntegrationTest {
  @BeforeEach void setup(){streaming=false;block.set(null);entered.set(null);when(collector.ready()).thenReturn(true);db.update("DELETE FROM news_refresh_runs");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("DELETE FROM news_translation_settings");db.update("DELETE FROM news_ai_settings");
   db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,content_en,published_at,body_requested_at) VALUES('test','https://example.com/test',1,'Test source','科技','Original headline unchanged','First paragraph.\n\nSecond paragraph.',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");}
  @AfterAll void close(){server.stop(0);}
+
+ @Test void cachedOutOfOrderParagraphsKeepTheirOriginalPositionAndModelIdentity()throws Exception{
+  db.update("UPDATE news_articles SET title_zh='中文标题',last_error='private-provider-detail'");
+  var local=new NewsTranslation.Config("translators","mtran-bing");
+  db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'translators','mtran-bing')");
+  response.set("{\"paragraphs\":[\"第二段先完成\"]}");
+  translation.translate(local,List.of("Second paragraph."));
+  long id=db.queryForObject("SELECT id FROM news_articles",Long.class);
+  var progress=news.article(id,false);
+  assertThat(progress.get("paragraphs_zh")).isEqualTo(List.of("","第二段先完成"));
+  assertThat(progress.get("translation_completed")).isEqualTo(1L);
+  assertThat(progress).doesNotContainKey("last_error");
+  assertThat(translation.cachedParagraphs(new NewsTranslation.Config("translators","bing"),List.of("Second paragraph."))).containsExactly("");
+ }
  @Test void defaultTranslationPublishesTranslatedTitleAndAlignedBodyWithoutSummary(){
   response.set("{\"paragraphs\":[\"中文新闻标题\",\"第一段。\",\"第二段。\"]}");news.process();
   var article=db.queryForMap("SELECT * FROM news_articles");assertThat(article.get("status")).isEqualTo("ready");assertThat(article.get("title_zh")).isEqualTo("中文新闻标题");assertThat(article.get("title_en")).isEqualTo("Original headline unchanged");assertThat(article.get("summary_zh")).isEqualTo("");assertThat(article.get("content_zh")).isEqualTo("第一段。\n\n第二段。");
@@ -157,6 +171,12 @@ class NewsTranslationWorkerIntegrationTest {
     for(int n=0;n<100&&db.queryForObject("SELECT COUNT(*) FROM news_translation_cache",Long.class)<2;n++)Thread.sleep(10);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM news_translation_cache",Long.class)).isEqualTo(2);
     assertThat(worker.isDone()).isFalse();
+    long id=db.queryForObject("SELECT id FROM news_articles",Long.class);
+    var progress=news.article(id,true);
+    assertThat(progress.get("paragraphs_zh")).isEqualTo(List.of("第一段",""));
+    assertThat(progress.get("translation_completed")).isEqualTo(1L);
+    assertThat(progress.get("translation_total")).isEqualTo(2);
+    assertThat(progress.get("translation_stage")).isEqualTo("processing");
    }finally{release.countDown();}
    worker.get(3,java.util.concurrent.TimeUnit.SECONDS);
   }

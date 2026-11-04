@@ -1,8 +1,9 @@
 import json, os, re, threading, time
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-ENGINES = {'bing', 'alibaba', 'baidu'}
+ENGINES = {'bing', 'alibaba', 'baidu', 'mtran', 'mtran-bing'}
 gate = threading.BoundedSemaphore(1)
 selection_gate = threading.BoundedSemaphore(1)
 _clients = threading.local()
@@ -52,7 +53,41 @@ class RateController:
 
 rate = RateController()
 
+local_rate = RateController()
+local_rate.limit = 1
+_local_gate = threading.BoundedSemaphore(1)
+_local_circuit_lock = threading.Lock()
+_local_unavailable_until = 0
+
+def mtran_piece(text):
+    payload = json.dumps({'from':'en','to':'zh-Hans','text':text,'html':False}).encode()
+    request = urllib.request.Request(os.getenv('MTRAN_URL','http://news-mtran:8989')+'/translate',
+        data=payload, headers={'Content-Type':'application/json'})
+    # Bound local CPU work; interactive requests use their own executor.
+    with _local_gate:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            result = json.loads(response.read(100000))
+    value = result.get('result')
+    if not isinstance(value,str) or not value.strip():
+        raise ValueError('empty local translation')
+    return re.sub(r'[\r\n]+', ' ', value).strip()
+
 def translate_piece(text, engine):
+    global _local_unavailable_until
+    if engine in ('mtran', 'mtran-bing'):
+        with _local_circuit_lock:
+            unavailable = time.monotonic() < _local_unavailable_until
+        if not unavailable:
+            try:
+                return mtran_piece(text)
+            except Exception:
+                with _local_circuit_lock:
+                    _local_unavailable_until = time.monotonic()+30
+        if engine == 'mtran':
+            raise RuntimeError('local translator unavailable')
+        # Only a failed local request falls back. Never treat unchanged English as success.
+        engine = 'bing'
+
     if not hasattr(_clients, 'translator'):
         from translators.server import TranslatorsServer
         _clients.translator = TranslatorsServer()
@@ -86,7 +121,7 @@ def translate(body, translator=translate_piece, controller=None, on_result=None,
     if selection and (len(paragraphs) != 1 or len(paragraphs[0]) > 1000):
         raise ValueError('invalid selection')
     deadline = time.monotonic() + (20 if selection else 540)
-    controller = controller or rate
+    controller = controller or (local_rate if engine.startswith('mtran') else rate)
     def paragraph_work(paragraph):
         translated = []
         try:

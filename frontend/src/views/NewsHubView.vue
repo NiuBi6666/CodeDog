@@ -84,7 +84,7 @@ onMounted(()=>{load();loadAi();});
             <form v-if="aiSettings" class="form-stack news-form" @submit.prevent="saveAi">
               <div class="news-form-grid">
                 <label>翻译方式<select v-model="aiForm.mode"><option value="translators">默认翻译</option><option value="api">大模型 API</option></select></label>
-                <label v-if="aiForm.mode==='translators'">翻译引擎<select v-model="aiForm.engine"><option value="bing">Bing</option><option value="alibaba">Alibaba</option><option value="baidu">Baidu</option></select></label>
+                <label v-if="aiForm.mode==='translators'">翻译引擎<select v-model="aiForm.engine"><option value="mtran-bing">MTranServer · Bing 备用</option><option value="mtran">MTranServer</option><option value="bing">Bing</option><option value="alibaba">Alibaba</option><option value="baidu">Baidu</option></select></label>
               </div>
 
               <template v-if="aiForm.mode==='api'">

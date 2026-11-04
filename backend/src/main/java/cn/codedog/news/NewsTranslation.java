@@ -27,16 +27,27 @@ public class NewsTranslation {
  public synchronized Map<String,Object> save(JsonNode body){
   // Legacy API clients without a mode continue to save model credentials.
   String mode=body.path("mode").asText("api"),engine=body.path("engine").asText(config().engine());
-  if(!Set.of("api","translators").contains(mode)||!Set.of("bing","alibaba","baidu").contains(engine))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"翻译方式或引擎无效");
+  if(!Set.of("api","translators").contains(mode)||!Set.of("bing","alibaba","baidu","mtran","mtran-bing").contains(engine))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"翻译方式或引擎无效");
   if(mode.equals("api"))ai.save(body);
   db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,?,?) ON DUPLICATE KEY UPDATE mode=VALUES(mode),engine=VALUES(engine),updated_at=CURRENT_TIMESTAMP",mode,engine);
   return view();
+ }
+ // Cache identity includes the pinned local model and fallback policy.
+ private String cacheIdentity(Config c){return "translators:"+c.engine()+":zh:paragraph-"+(c.engine().startsWith("mtran")?"mtran-5.0.1-v1":"v1")+":";}
+ private String cacheKey(Config c,String text){return NewsService.digest(cacheIdentity(c)+text);}
+ public List<String> cachedParagraphs(Config c,List<String> paragraphs){
+  var keys=paragraphs.stream().map(p->cacheKey(c,p)).toList();
+  if(keys.isEmpty())return List.of();
+  var found=new HashMap<String,String>();
+  db.query("SELECT cache_key,translated_text FROM news_translation_cache WHERE cache_key IN ("+String.join(",",Collections.nCopies(keys.size(),"?"))+")",
+   (org.springframework.jdbc.core.RowCallbackHandler)r->found.put(r.getString(1),r.getString(2)),keys.toArray());
+  return keys.stream().map(k->found.getOrDefault(k,"")).toList();
  }
  public List<String> translate(Config config,List<String> paragraphs)throws Exception{
   if(paragraphs.isEmpty()||paragraphs.size()>401||paragraphs.stream().anyMatch(p->p==null||p.isBlank())||paragraphs.stream().mapToInt(String::length).sum()>101000)throw new IllegalArgumentException("invalid paragraphs");
   var texts=new ArrayList<String>(Collections.nCopies(paragraphs.size(),null));var missing=new ArrayList<String>();var indices=new ArrayList<Integer>();
   for(int i=0;i<paragraphs.size();i++){
-   String key=NewsService.digest("translators:"+config.engine()+":zh:paragraph-v1:"+paragraphs.get(i));
+   String key=cacheKey(config,paragraphs.get(i));
    var cached=db.queryForList("SELECT translated_text FROM news_translation_cache WHERE cache_key=?",key);
    if(cached.isEmpty()){missing.add(paragraphs.get(i));indices.add(i);}else texts.set(i,(String)cached.getFirst().get("translated_text"));
   }
@@ -73,7 +84,7 @@ public class NewsTranslation {
  private void cache(Config config,List<String> paragraphs,List<String> texts,int index,JsonNode p){
   if(!p.isTextual()||p.asText().isBlank())return;
   String value=p.asText().replaceAll("[\\r\\n]+"," ").strip();
-  String key=NewsService.digest("translators:"+config.engine()+":zh:paragraph-v1:"+paragraphs.get(index));
+  String key=cacheKey(config,paragraphs.get(index));
   try{db.update("INSERT INTO news_translation_cache(cache_key,engine,translated_text) VALUES(?,?,?)",key,config.engine(),value);}catch(org.springframework.dao.DuplicateKeyException ignored){}
   texts.set(index,value);
  }
@@ -82,7 +93,7 @@ public class NewsTranslation {
   var selected=config();
   if(selected.mode().equals("api")&&!ai.configured())throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"翻译服务尚未配置");
   var runtime=selected.mode().equals("api")?ai.runtime():null;
-  String key=NewsService.digest(selected.mode().equals("api")?"selection-api:"+runtime.baseUrl()+":"+runtime.model()+":"+category+":zh:selection-v1:"+text:"translators:"+selected.engine()+":zh:paragraph-v1:"+text);
+  String key=NewsService.digest(selected.mode().equals("api")?"selection-api:"+runtime.baseUrl()+":"+runtime.model()+":"+category+":zh:selection-v1:"+text:cacheIdentity(selected)+text);
   String provider=selected.mode().equals("api")?"大模型 API":"translators / "+selected.engine();
   var cached=db.queryForList("SELECT translated_text FROM news_translation_cache WHERE cache_key=?",key);
   if(!cached.isEmpty())return Map.of("translation",cached.getFirst().get("translated_text"),"provider",provider,"cached",true);

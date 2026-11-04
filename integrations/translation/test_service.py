@@ -117,3 +117,38 @@ class SelectionTest(unittest.TestCase):
         for paragraphs in [['a'*1001],['one','two']]:
             with self.assertRaises(ValueError):
                 translate({'paragraphs':paragraphs},fail,selection=True)
+
+class LocalTranslationTest(unittest.TestCase):
+    def setUp(self):
+        import service
+        service._local_unavailable_until=0
+
+    def test_local_result_and_fallback_only_on_failure(self):
+        import service
+        from unittest.mock import patch, Mock
+        with patch.object(service, 'mtran_piece', return_value='本地译文') as local:
+            self.assertEqual(service.translate_piece('Original', 'mtran-bing'),'本地译文')
+            local.assert_called_once()
+        client=Mock()
+        client.translate_text.return_value='备用译文'
+        with patch.object(service, 'mtran_piece', side_effect=TimeoutError()), patch.object(service._clients, 'translator', client, create=True):
+            self.assertEqual(service.translate_piece('Original', 'mtran-bing'),'备用译文')
+            self.assertEqual(service.translate_piece('Next', 'mtran-bing'),'备用译文')
+            self.assertEqual(client.translate_text.call_args.kwargs['translator'],'bing')
+            self.assertEqual(service.mtran_piece.call_count,1)
+            with self.assertRaises(RuntimeError):
+                service.translate_piece('Original', 'mtran')
+
+    def test_local_http_contract_and_empty_result_rejected(self):
+        import service
+        from unittest.mock import patch, MagicMock
+        response=MagicMock()
+        response.__enter__.return_value=response
+        response.read.return_value=__import__('json').dumps({'result':'第一行\n第二行'}).encode()
+        with patch('urllib.request.urlopen', return_value=response) as request:
+            self.assertEqual(service.mtran_piece('Hello'),'第一行 第二行')
+            payload=__import__('json').loads(request.call_args.args[0].data)
+            self.assertEqual(payload,{'from':'en','to':'zh-Hans','text':'Hello','html':False})
+        response.read.return_value=b'{"result":""}'
+        with patch('urllib.request.urlopen', return_value=response):
+            with self.assertRaises(ValueError):service.mtran_piece('Hello')

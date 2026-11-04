@@ -15,7 +15,7 @@ function exactDate(value){return new Date(value).toLocaleString('zh-CN');}
 const sources=computed(()=>['全部来源',...sourceList.value]);
 const filtered=computed(()=>groupStories(articles.value));
 let generation=0,detailGeneration=0,debounce,clockTimer,detailPoll,feedObserver;
-function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,lang:a.lang||'en',title_en:a.title_original||a.title_en,source_mark:a.source_name?.slice(0,1)||'C',category_en:{国际:'WORLD',军事:'DEFENCE',科技:'TECH',财经:'MARKETS',教育:'EDUCATION',文娱:'CULTURE & SPORT',生活:'LIFESTYLE'}[a.category]||'NEWS',summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_original||a.content_en),content_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
+function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,lang:a.lang||'en',title_en:a.title_original||a.title_en,source_mark:a.source_name?.slice(0,1)||'C',category_en:{国际:'WORLD',军事:'DEFENCE',科技:'TECH',财经:'MARKETS',教育:'EDUCATION',文娱:'CULTURE & SPORT',生活:'LIFESTYLE'}[a.category]||'NEWS',summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_original||a.content_en),content_zh:Array.isArray(a.paragraphs_zh)?a.paragraphs_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
 async function request(path,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('/api'+path,{...options,signal:controller.signal});const p=await r.json();if(!r.ok)throw Error(p.error||'请求失败');return p;}catch(e){throw Error(e.name==='AbortError'?'请求超时，请稍后重试':e.message);}finally{clearTimeout(timer);}}
 function stopDetail(){clearTimeout(detailPoll);detailPoll=null;bodyWaiting.value=false;}
 async function detail(id){
@@ -36,9 +36,9 @@ async function detail(id){
     const next=await request('/news/'+id);if(g!==detailGeneration)return;
     selected.value=normalize(next);
     if(['ready','failed'].includes(next.translation_status)){bodyWaiting.value=false;return;}
-    if(Date.now()-started>=600000){bodyWaiting.value=false;bodyError.value='全文仍在后台翻译，可稍后重新打开；英文原文可先阅读。';return;}
-    detailPoll=setTimeout(tick,2000);
-   }catch(e){if(g===detailGeneration){bodyWaiting.value=false;bodyError.value='暂时无法查询译文，请重试；后台翻译会继续。';}}
+    if(Date.now()-started>=600000){bodyWaiting.value=false;bodyError.value='仍在后台翻译';return;}
+    bodyError.value='';detailPoll=setTimeout(tick,1000);
+   }catch(e){if(g===detailGeneration){bodyError.value='连接恢复中';if(Date.now()-started<600000)detailPoll=setTimeout(tick,3000);else bodyWaiting.value=false;}}
   }
   detailPoll=setTimeout(tick,1000);
  }catch(e){if(g===detailGeneration){bodyWaiting.value=false;if(selected.value)bodyError.value=e.message;else error.value=e.message;}}
@@ -125,8 +125,8 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
           <div v-if="selected.cover_image" class="cover-wrap"><img v-if="selected.cover_image && !imageFailed" :src="proxyImage(selected.cover_image)" :alt="selected.title_en" @error="imageFailed = true" /><div v-else class="cover-fallback"><span>{{ selected.source_mark }}</span><small>IMAGE UNAVAILABLE</small></div></div>
           <p v-if="selected.lang==='zh'" class="original-language-note">中文原稿 · 按来源原文展示，无英文译文</p>
           <div v-if="selected.translation_status!=='ready'" class="body-translation-status" role="status">
-            <span>{{bodyError||(selected.translation_status==='failed'?'全文翻译暂未完成，请稍后重试；可先阅读英文原文。':bodyWaiting?'正在按需翻译全文，完成后自动显示中文；可先阅读英文原文。':'全文尚未翻译，可先阅读英文原文。')}}</span>
-            <button v-if="bodyError||selected.translation_status==='failed'" type="button" @click="detail(selected.id)">重新获取译文</button>
+            <span>{{bodyError||(selected.translation_status==='failed'?'翻译暂不可用':selected.translation_stage==='retrying'?'稍后自动重试':selected.translation_stage==='processing'?'正在翻译':'排队中')}}<template v-if="selected.translation_total"> · {{selected.translation_completed||0}}/{{selected.translation_total}} 段</template></span>
+            <button v-if="bodyError||selected.translation_status==='failed'" type="button" @click="detail(selected.id)">重试翻译</button>
           </div>
           <div class="paragraphs" :style="{'--reading-size':fontSize+'px'}"><div v-for="(paragraph, index) in selected.content_en" :key="index" class="paragraph-pair" tabindex="0"><p v-if="effectiveMode !== 'zh'||!selected.content_zh[index]" class="en-paragraph" data-selectable-original lang="en">{{ paragraph }}</p><p v-if="effectiveMode !== 'en'&&selected.content_zh[index]" class="zh-paragraph">{{ selected.content_zh[index] }}</p></div></div>
           <footer class="article-footer"><div><span class="eyebrow">RELATED COVERAGE</span><div class="related"><a v-for="item in selected.related_sources" :key="item.origin_url" :href="item.origin_url" target="_blank" rel="noopener noreferrer">{{ item.source_name }} ↗</a></div></div><a class="original-link" :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原文 ↗</a></footer>

@@ -70,6 +70,27 @@ services:
     mem_limit: 256m
     pids_limit: 64
 
+  news-mtran:
+    build: ./integrations/mtran
+    container_name: codedog-news-mtran
+    restart: unless-stopped
+    networks:
+      - news-translation
+    environment:
+      MT_OFFLINE: "true"
+    volumes:
+      - news-mtran-models:/models
+      - news-mtran-config:/config
+    cpus: 1.0
+    mem_limit: 768m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8989/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:'en',to:'zh-Hans',text:'The latest news.'}),signal:AbortSignal.timeout(35000)}).then(async r=>process.exit(r.ok&&(await r.json()).result?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 90s
+
   news-translator:
     build: ./integrations/translation
     container_name: codedog-news-translator
@@ -122,3 +143,7 @@ networks:
   codemao-gateway:
     external: true
     name: codemao_default
+
+volumes:
+  news-mtran-models:
+  news-mtran-config:

@@ -131,7 +131,21 @@ public class NewsService {
  }
  public Map<String,Object> article(long id,boolean admin){
   var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
-  NewsContentCleaner.cleanArticle(a);a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));return a;
+  NewsContentCleaner.cleanArticle(a);a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));
+  var original=Arrays.asList(((String)a.get("content_en")).split("\n\n"));
+  List<String> partial;
+  if("ready".equals(a.get("status")))partial=Arrays.asList(Objects.toString(a.get("content_zh"),"").split("\n\n",-1));
+  else if(translation.config().mode().equals("translators"))partial=translation.cachedParagraphs(translation.config(),original);
+  else partial=Collections.nCopies(original.size(),"");
+  a.put("paragraphs_zh",partial);a.put("translation_completed",partial.stream().filter(t->!t.isBlank()).count());a.put("translation_total",original.size());
+  String stage=(String)a.get("translation_status");
+  if("pending".equals(stage)){
+   Object retry=a.get("next_attempt_at");
+   stage=retry instanceof Timestamp t&&t.toInstant().isAfter(Instant.now())?"retrying":"queued";
+  }
+  a.put("translation_stage",stage);
+  if(!admin){a.remove("last_error");a.remove("url_hash");}
+  return a;
  }
  public void retry(long id){require(db.update("UPDATE news_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
  @jakarta.annotation.PreDestroy public void stop(){stopping.set(true);}
@@ -257,7 +271,7 @@ public class NewsService {
  }
  private void translate(Map<String,Object>a)throws Exception{
   var selected=translation.config();
-  String[] body=((String)a.get("content_en")).split("\n\n");
+  String[] body=NewsContentCleaner.clean(Arrays.asList(((String)a.get("content_en")).split("\n\n"))).toArray(String[]::new);
   var input=new ArrayList<String>();input.add((String)a.get("title_en"));input.addAll(Arrays.asList(body));String[] en=input.toArray(String[]::new);
   var zh=new ArrayList<String>();
   if(selected.mode().equals("translators"))zh.addAll(translation.translate(selected,Arrays.asList(en)));
@@ -269,7 +283,7 @@ public class NewsService {
    for(int start=0;start<en.length;start+=8){var chunk=pairs.subList(start,Math.min(start+8,en.length));try{zh.addAll(aligned(ai(config,instruction,chunk),chunk));}catch(Exception e){for(var p:chunk)zh.addAll(aligned(ai(config,instruction,List.of(p)),List.of(p)));}}
   }
   require(zh.size()==en.length,HttpStatus.BAD_GATEWAY,"段落未对齐");
-  db.update("UPDATE news_articles SET title_zh=?,summary_zh='',content_zh=?,status='ready',translated_at=CURRENT_TIMESTAMP,last_error=NULL,event_id=? WHERE id=?",zh.getFirst(),String.join("\n\n",zh.subList(1,zh.size())),eventFor(a),a.get("id"));
+  db.update("UPDATE news_articles SET title_zh=?,summary_zh='',content_en=?,content_zh=?,status='ready',translated_at=CURRENT_TIMESTAMP,last_error=NULL,event_id=? WHERE id=?",zh.getFirst(),String.join("\n\n",body),String.join("\n\n",zh.subList(1,zh.size())),eventFor(a),a.get("id"));
  }
  public static List<String> aligned(JsonNode result,List<Map<String,Object>> expected){
   JsonNode rows=result.path("paragraphs");if(!rows.isArray()||rows.size()!=expected.size())throw new IllegalArgumentException("paragraph count");var texts=new ArrayList<String>();
