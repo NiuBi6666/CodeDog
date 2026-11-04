@@ -55,6 +55,11 @@ class NewsIntegrationTest {
 
   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"is_active\":false}")).andExpect(status().isOk()).andExpect(jsonPath("$.is_active").value(false));
   assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE module='news' AND event_code='source_update'",Long.class)).isPositive();
+
+  for(String category:List.of("科学","健康","环境","体育","文化","生活")){
+   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category",category)))).andExpect(status().isOk()).andExpect(jsonPath("$.category").value(category));
+  }
+  mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category","未知分类")))).andExpect(status().isBadRequest());
   mvc.perform(delete("/api/admin/sources/"+id).session(session).with(csrf())).andExpect(status().isOk());
   u.setPermissions(Set.of());users.saveAndFlush(u);
   mvc.perform(patch("/api/admin/sources/1").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"refresh_interval_min\":10}")).andExpect(status().isForbidden());

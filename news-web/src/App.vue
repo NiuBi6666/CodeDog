@@ -4,7 +4,7 @@ import { useRoute,useRouter } from 'vue-router';
 import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
 const route=useRoute(),router=useRouter();
-const categories=['全部','科技','国际','财经','教育'];
+const categories=['全部','科技','国际','财经','教育','科学','健康','环境','体育','文化','生活'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),page=ref(0),total=ref(0);
 const bodyError=ref(''),bodyWaiting=ref(false);
 const mode=ref('bilingual'),syncing=ref(false),notice=ref(''),imageFailed=ref(false),loading=ref(true),error=ref('');
@@ -14,7 +14,7 @@ function exactDate(value){return new Date(value).toLocaleString('zh-CN');}
 const sources=computed(()=>['全部来源',...sourceList.value]);
 const filtered=computed(()=>groupStories(articles.value));
 let generation=0,detailGeneration=0,debounce,clockTimer,detailPoll;
-function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,source_mark:a.source_name?.slice(0,1)||'L',category_en:{科技:'TECH',国际:'WORLD',财经:'MARKETS',教育:'EDUCATION'}[a.category]||'NEWS',summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_en),content_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
+function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,source_mark:a.source_name?.slice(0,1)||'L',category_en:{科技:'TECH',国际:'WORLD',财经:'MARKETS',教育:'EDUCATION',科学:'SCIENCE',健康:'HEALTH',环境:'ENVIRONMENT',体育:'SPORT',文化:'CULTURE',生活:'LIFESTYLE'}[a.category]||'NEWS',summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_en),content_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
 async function request(path,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('/api'+path,{...options,signal:controller.signal});const p=await r.json();if(!r.ok)throw Error(p.error||'请求失败');return p;}catch(e){throw Error(e.name==='AbortError'?'请求超时，请稍后重试':e.message);}finally{clearTimeout(timer);}}
 function stopDetail(){clearTimeout(detailPoll);detailPoll=null;bodyWaiting.value=false;}
 async function detail(id){

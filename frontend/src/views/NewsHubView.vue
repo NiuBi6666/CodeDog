@@ -28,6 +28,7 @@ const providers=[{label:'硅基流动',url:'https://api.siliconflow.cn/v1'},{lab
 async function loadAi(){if(!auth.user?.admin)return;try{const r=await api('/admin/news/ai-settings');aiSettings.value=r;aiForm.value={mode:r.mode||'translators',engine:r.engine||'bing',base_url:r.base_url||'https://api.siliconflow.cn/v1',model:r.model||'',api_key:''};aiError.value='';}catch(e){aiError.value=e.message;}}
 async function saveAi(){aiBusy.value=true;aiError.value='';aiTest.value='';try{const r=await api('/admin/news/ai-settings',{method:'PUT',body:jsonBody(aiForm.value)});aiSettings.value=r;aiForm.value.api_key='';notify('翻译配置已保存并生效');await load();}catch(e){aiError.value=e.message;}finally{aiBusy.value=false;}}
 async function testAi(){aiBusy.value=true;aiError.value='';aiTest.value='';try{const r=await api('/admin/news/ai-settings/test',{method:'POST'});aiTest.value=r.message;}catch(e){aiError.value=e.message;}finally{aiBusy.value=false;}}
+const newsCategories=['科技','国际','财经','教育','科学','健康','环境','体育','文化','生活'];
 const empty=()=>({source_name:'',rss_url:'',category:'科技',priority:80,refresh_interval_min:10,is_active:true});
 const form=ref(empty());
 async function load(){try{data.value=await api('/admin/news');error.value='';}catch(e){error.value=e.message;}}
@@ -107,7 +108,7 @@ onMounted(()=>{load();loadAi();});
           </tbody></table></div>
           <form v-if="hasPermission(editing?'news.sources.update':'news.sources.create')" class="form-stack news-form news-panel-body news-source-form" @submit.prevent="save">
             <h3>{{editing?'编辑订阅源':'添加订阅源'}}</h3>
-            <div class="news-source-fields"><label>媒体名称<input v-model="form.source_name" maxlength="80" required></label><label>HTTPS RSS 地址<input v-model="form.rss_url" type="url" required placeholder="https://example.com/feed"></label><label>领域<select v-model="form.category"><option>科技</option><option>国际</option><option>财经</option><option>教育</option></select></label><label>刷新间隔（分钟）<input v-model.number="form.refresh_interval_min" type="number" min="10" max="1440" required></label><label>媒体权重<input v-model.number="form.priority" type="number" min="0" max="100" required></label></div>
+            <div class="news-source-fields"><label>媒体名称<input v-model="form.source_name" maxlength="80" required></label><label>HTTPS RSS 地址<input v-model="form.rss_url" type="url" required placeholder="https://example.com/feed"></label><label>领域<select v-model="form.category"><option v-for="item in newsCategories" :key="item" :value="item">{{item}}</option></select></label><label>刷新间隔（分钟）<input v-model.number="form.refresh_interval_min" type="number" min="10" max="1440" required></label><label>媒体权重<input v-model.number="form.priority" type="number" min="0" max="100" required></label></div>
             <div class="news-form-footer"><span class="news-description">刷新间隔为 30–1440 分钟，权重为 0–100。</span><div class="button-row"><button v-if="editing" class="button button-quiet" type="button" @click="cancel">取消</button><button class="button button-primary" type="submit" :disabled="busy">保存来源</button></div></div>
           </form>
         </section>
