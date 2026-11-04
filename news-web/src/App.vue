@@ -6,7 +6,6 @@ import SelectionTranslator from './SelectionTranslator.vue';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
-const subTag=ref(''),subTags=ref([]);
 const feedPanel=ref(null),loadSentinel=ref(null),hasMore=ref(false),nextCursor=ref(''),loadingMore=ref(false),moreError=ref('');
 const bodyError=ref(''),bodyWaiting=ref(false);
 const mode=ref('bilingual'),syncing=ref(false),notice=ref(''),imageFailed=ref(false),loading=ref(true),error=ref('');
@@ -45,14 +44,14 @@ async function detail(id){
  }catch(e){if(g===detailGeneration){bodyWaiting.value=false;if(selected.value)bodyError.value=e.message;else error.value=e.message;}}
 }
 function listPath(cursor=''){
- return '/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,sub_tag:subTag.value,...(cursor?{cursor}:{})});
+ return '/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,...(cursor?{cursor}:{})});
 }
 function applyPage(p,append=false){
  const rows=p.articles.map(normalize);
  const existing=append?articles.value:[];
  const ids=new Set(existing.map(a=>a.id));
  articles.value=[...existing,...rows.filter(a=>!ids.has(a.id))];
- total.value=p.total;subTags.value=p.sub_tags||[];sourceList.value=p.sources.map(s=>s.source_name);
+ total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);
  hasMore.value=p.has_more===true;nextCursor.value=p.next_cursor||'';
  return rows;
 }
@@ -67,7 +66,7 @@ async function load(){
  finally{if(g===generation){loading.value=false;observeFeed();}}
 }
 function selectArticle(id){router.push('/article/'+id);}
-function selectCategory(item){category.value=item;subTag.value='';}
+function selectCategory(item){category.value=item;}
 async function more(){
  if(loading.value||loadingMore.value||syncing.value||moreError.value||!hasMore.value||!nextCursor.value)return;
  const g=generation,cursor=nextCursor.value;
@@ -106,7 +105,7 @@ async function sync(){
  finally{syncing.value=false;observeFeed();}
 }
 function proxyImage(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
-watch([category,source,subTag],()=>{scrollListTop();load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{scrollListTop();load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}observeFeed();});
+watch([category,source],()=>{scrollListTop();load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{scrollListTop();load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}observeFeed();});
 onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);window.addEventListener('resize',observeFeed);});onBeforeUnmount(()=>{feedObserver?.disconnect();window.removeEventListener('resize',observeFeed);detailGeneration++;stopDetail();clearTimeout(debounce);clearInterval(clockTimer);});
 </script>
 
@@ -121,11 +120,10 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
     <main class="workspace">
       <aside ref="feedPanel" class="feed-panel">
         <div class="feed-heading"><h1>今日简报 <span class="count">({{ total }})</span></h1><select v-model="source" aria-label="按来源筛选"><option v-for="item in sources" :key="item">{{ item }}</option></select></div>
-        <nav v-if="category!=='全部'&&subTags.length" class="subtag-nav" aria-label="二级主题"><button :class="{active:!subTag}" :aria-pressed="!subTag" @click="subTag=''">全部主题</button><button v-for="tag in subTags" :key="tag" :class="{active:subTag===tag}" :aria-pressed="subTag===tag" @click="subTag=tag">{{tag}}</button></nav>
         <p v-if="error" class="feed-error" role="alert">{{error}} <button @click="load()">重试</button></p><p v-if="loading" class="feed-state" role="status">正在读取报道…</p><div class="feed-list">
           <div v-for="article in filtered" :key="article.id" class="story-group" :class="{selected:selected?.id===article.id||article.folded.some(item=>item.id===selected?.id)}">
             <button class="story-card" :aria-current="selected?.id===article.id?'true':undefined" @click="selectArticle(article.id)">
-              <div class="story-meta"><span class="source-mark">{{ article.source_mark }}</span><span class="story-source">{{ article.source_name }}</span><span class="category-tag">{{ article.sub_tag||article.category }}</span><span v-if="article.lang==='zh'" class="original-language">中文原稿</span><time :datetime="article.published_at" :title="exactDate(article.published_at)">{{ dateLabel(article.published_at) }}</time></div>
+              <div class="story-meta"><span class="source-mark">{{ article.source_mark }}</span><span class="story-source">{{ article.source_name }}</span><span class="category-tag">{{ article.category }}</span><span v-if="article.lang==='zh'" class="original-language">中文原稿</span><time :datetime="article.published_at" :title="exactDate(article.published_at)">{{ dateLabel(article.published_at) }}</time></div>
               <h2 :class="{'title-zh':mode!=='en'}">{{ mode==='en'?article.title_en:(article.title_zh||article.title_en) }}</h2>
               <p v-if="article.lang!=='zh'&&mode==='bilingual'&&article.title_zh&&article.title_zh!==article.title_en" class="story-en">{{ article.title_en }}</p>
               <p v-if="mode!=='en'&&article.summary_zh.length" class="story-summary">{{ article.summary_zh[0] }}</p>
@@ -136,7 +134,7 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
         </div>
       </aside>
       <article v-if="selected" class="reader-panel"><button class="back-to-list" @click="router.push('/')">← 返回新闻列表</button>
-        <div class="reader-toolbar"><span class="eyebrow">{{ selected.category_en }} / {{ selected.sub_tag||selected.source_name }}</span><div class="reading-tools"><a :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原网页 ↗</a><button :disabled="fontSize<=15" aria-label="缩小正文字号" @click="fontSize=Math.max(15,fontSize-1)">A−</button><button :disabled="fontSize>=22" aria-label="放大正文字号" @click="fontSize=Math.min(22,fontSize+1)">A+</button></div></div>
+        <div class="reader-toolbar"><span class="eyebrow">{{ selected.category_en }} / {{ selected.source_name }}</span><div class="reading-tools"><a :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原网页 ↗</a><button :disabled="fontSize<=15" aria-label="缩小正文字号" @click="fontSize=Math.max(15,fontSize-1)">A−</button><button :disabled="fontSize>=22" aria-label="放大正文字号" @click="fontSize=Math.min(22,fontSize+1)">A+</button></div></div>
         <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><span class="dot">·</span><span>{{ selected.author }}</span><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><h1 :data-selectable-original="effectiveMode==='en'?'':undefined" :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1><p v-if="selected.lang!=='zh' && effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en" data-selectable-original>{{ selected.title_en }}</p>
           <section v-if="effectiveMode!=='en'&&selected.summary_zh.length" class="takeaways" aria-label="核心导读"><h2>核心导读</h2><ul><li v-for="point in selected.summary_zh.slice(0,3)" :key="point">{{ point }}</li></ul></section>
           <div v-if="selected.cover_image" class="cover-wrap"><img v-if="selected.cover_image && !imageFailed" :src="proxyImage(selected.cover_image)" :alt="selected.title_en" @error="imageFailed = true" /><div v-else class="cover-fallback"><span>{{ selected.source_mark }}</span><small>IMAGE UNAVAILABLE</small></div></div>

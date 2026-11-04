@@ -30,3 +30,7 @@
 - Add explanatory copy only when explicitly requested by the user or strictly needed to complete a concrete operation; keep it short and contextual. Put reference material and setup tutorials in docs instead of the default interface.
 - Remove unwanted copy from component source; do not hide it with CSS, shrink it, or move it into tooltips merely to bypass this rule.
 - Before delivery, review visible text at desktop and mobile sizes and remove copy that does not help identify data, enter a value, choose an action, or understand a necessary current state.
+
+## News category scope
+- News uses only the seven primary categories: 国际、军事、科技、财经、教育、文娱、生活.
+- Do not reintroduce secondary categories, topic chips, subcategory filters, or source subcategory configuration unless the user explicitly requests the feature again.

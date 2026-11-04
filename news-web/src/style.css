@@ -253,10 +253,6 @@
   }
 }
 
-/* Secondary topics stay within the feed and never enlarge the masthead. */
-.subtag-nav { display:flex; gap:6px; overflow-x:auto; padding:8px 0; margin-bottom:2px; scrollbar-width:thin; }
-.subtag-nav button { flex:0 0 auto; border:1px solid #dbe1de; background:transparent; color:#61727a; font-size:11px; border-radius:4px; padding:6px 8px; white-space:nowrap; }
-.subtag-nav button.active { background:#e8eeed; border-color:#b8c9cb; color:#294956; }
 .original-language { color:#647b6d; font-size:10px; white-space:nowrap; }
 .original-language-note { color:#62776b; font-size:12px; line-height:1.6; }
 .story-source { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

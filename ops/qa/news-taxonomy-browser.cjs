@@ -38,9 +38,9 @@ async function main(){
 
  await send('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{
  const realFetch=window.fetch.bind(window);window.taxonomyRequests=[];
- const zh={id:91002,source_name:'UN News 中文',category:'生活',sub_tag:'医疗健康',lang:'zh',title_en:'中文医疗原稿',title_original:'中文医疗原稿',title_zh:'中文医疗原稿',content_en:['这是中文原稿第一段。','这是中文原稿第二段。'],content_zh:['这是中文原稿第一段。','这是中文原稿第二段。'],translation_status:'ready',origin_url:'https://example.com/chinese',published_at:'2026-11-04T01:00:00Z',summary_zh:''};
- const en={id:91001,source_name:'TechCrunch',category:'科技',sub_tag:'AI与创投',lang:'en',title_en:'A research team releases a learning agent',title_original:'A research team releases a learning agent',title_zh:'研究团队发布学习智能体',content_en:['The first original paragraph.','The second original paragraph.'],content_zh:['第一段译文。','第二段译文。'],translation_status:'ready',origin_url:'https://example.com/english',published_at:'2026-11-04T01:00:00Z',summary_zh:''};
- const rows=[en,{...en,id:91003,source_name:'Ars Technica',sub_tag:'硬核科技',title_en:'Semiconductor production expands with new chip factories',title_original:'Semiconductor production expands with new chip factories',title_zh:'芯片工厂扩大产能'},zh];
+ const zh={id:91002,source_name:'UN News 中文',category:'生活',lang:'zh',title_en:'中文医疗原稿',title_original:'中文医疗原稿',title_zh:'中文医疗原稿',content_en:['这是中文原稿第一段。','这是中文原稿第二段。'],content_zh:['这是中文原稿第一段。','这是中文原稿第二段。'],translation_status:'ready',origin_url:'https://example.com/chinese',published_at:'2026-11-04T01:00:00Z',summary_zh:''};
+ const en={id:91001,source_name:'TechCrunch',category:'科技',lang:'en',title_en:'A research team releases a learning agent',title_original:'A research team releases a learning agent',title_zh:'研究团队发布学习智能体',content_en:['The first original paragraph.','The second original paragraph.'],content_zh:['第一段译文。','第二段译文。'],translation_status:'ready',origin_url:'https://example.com/english',published_at:'2026-11-04T01:00:00Z',summary_zh:''};
+ const rows=[en,{...en,id:91003,source_name:'Ars Technica',title_en:'Semiconductor production expands with new chip factories',title_original:'Semiconductor production expands with new chip factories',title_zh:'芯片工厂扩大产能'},zh];
  window.fetch=async(url,options={})=>{
   const parsed=new URL(url,location.origin);
   if(!parsed.pathname.startsWith('/api/news'))return realFetch(url,options);
@@ -48,9 +48,9 @@ async function main(){
   if(options.method&&options.method!=='GET')throw Error('Unexpected translation or collection request');
   let data;
   if(parsed.pathname==='/api/news'){
-   const c=parsed.searchParams.get('category')||'',tag=parsed.searchParams.get('sub_tag')||'';
-   const list=rows.filter(a=>(!c||a.category===c)&&(!tag||a.sub_tag===tag));
-   data={articles:list,total:list.length,sources:rows.map(a=>({source_name:a.source_name})),sub_tags:[...new Set(rows.filter(a=>!c||a.category===c).map(a=>a.sub_tag))]};
+   const c=parsed.searchParams.get('category')||'';
+   const list=rows.filter(a=>(!c||a.category===c));
+   data={articles:list,total:list.length,sources:rows.map(a=>({source_name:a.source_name}))};
   }else data=rows.find(a=>a.id===Number(parsed.pathname.split('/').pop()));
   return new Response(JSON.stringify(data),{status:data?200:404,headers:{'Content-Type':'application/json'}});
  };
@@ -66,16 +66,14 @@ async function main(){
  }
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:false});
  await evaluate("[...document.querySelectorAll('.category-nav button')].find(e=>e.textContent==='科技').click()");
- await until("document.querySelector('.subtag-nav')");
- await evaluate("[...document.querySelectorAll('.subtag-nav button')].find(e=>e.textContent==='AI与创投').click()");
- await until("document.querySelectorAll('.story-card').length===1");
- if(!await evaluate("document.querySelector('.category-tag').textContent==='AI与创投'"))throw Error('Subtag filtering failed');
+ await until("document.querySelectorAll('.story-card').length===2 && document.querySelector('.category-tag')?.textContent==='科技'");
+ if(!await evaluate("!document.querySelector('.subtag-nav') && [...document.querySelectorAll('.category-tag')].every(e=>e.textContent==='科技')"))throw Error('Secondary topics remain');
  await evaluate("window.taxonomyRequests=[];document.querySelector('.sync-button').click()");
  await until("!document.querySelector('.sync-button').disabled");
- if(!await evaluate("window.taxonomyRequests.length===1&&window.taxonomyRequests[0].method==='GET'&&new URL(window.taxonomyRequests[0].url,location.origin).searchParams.get('sub_tag')==='AI与创投'"))throw Error('Refresh did not retain subtag or dispatched work');
- console.log('PASS subtag filter and read-only refresh');
+ if(!await evaluate("window.taxonomyRequests.length===1&&window.taxonomyRequests[0].method==='GET'&&!new URL(window.taxonomyRequests[0].url,location.origin).searchParams.has('sub_tag')"))throw Error('Removed topic filter still sent');
+ console.log('PASS only primary categories; no secondary navigation or query parameter');
  await evaluate("[...document.querySelectorAll('.category-nav button')].find(e=>e.textContent==='生活').click()");
- await until("document.querySelector('.category-tag')?.textContent==='医疗健康'");
+ await until("document.querySelector('.category-tag')?.textContent==='生活'");
  await evaluate("window.taxonomyRequests=[];document.querySelector('.story-card').click()");
  await until("document.querySelector('.original-language-note')");
  await evaluate("document.querySelector('.global-modes button:last-child').click()");
@@ -83,7 +81,7 @@ async function main(){
  await snapshot('news-taxonomy-chinese-390');
  console.log('PASS Chinese original displays once in every mode and never requests translation');
  await evaluate("[...document.querySelectorAll('.category-nav button')].find(e=>e.textContent==='科技').click()");
- await until("document.querySelectorAll('.story-card').length===2 && document.querySelector('.category-tag')?.textContent==='AI与创投'");
+ await until("document.querySelectorAll('.story-card').length===2 && document.querySelector('.category-tag')?.textContent==='科技'");
  await evaluate("document.querySelector('.global-modes button:nth-child(2)').click();document.querySelector('.story-card').click()");
  await wait(1500);
  await until("document.querySelectorAll('.en-paragraph').length===2");

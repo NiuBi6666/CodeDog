@@ -39,7 +39,7 @@ async function main(){
  await send('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{
  const realFetch=window.fetch.bind(window);
  window.feedRequests=[];window.feedFail=false;window.feedDelay=false;window.feedExtra=0;
- window.feedRows=Array.from({length:75},(_,i)=>({id:100-i,source_name:'原始新闻测试源',category:'科技',sub_tag:'AI与创投',lang:'zh',title_en:'第 '+i+' 条独立原稿报道，展示新闻阅读列表的正确先后顺序',title_zh:'第 '+i+' 条独立原稿报道，展示新闻阅读列表的正确先后顺序',published_at:new Date(Date.UTC(2026,10,4,12,0)-i*60000).toISOString(),summary_zh:''}));
+ window.feedRows=Array.from({length:75},(_,i)=>({id:100-i,source_name:'原始新闻测试源',category:'科技',lang:'zh',title_en:'第 '+i+' 条独立原稿报道，展示新闻阅读列表的正确先后顺序',title_zh:'第 '+i+' 条独立原稿报道，展示新闻阅读列表的正确先后顺序',published_at:new Date(Date.UTC(2026,10,4,12,0)-i*60000).toISOString(),summary_zh:''}));
  window.fetch=async(url,options={})=>{
   const p=new URL(url,location.origin);
   if(p.pathname!=='/api/news')return realFetch(url,options);
@@ -48,10 +48,10 @@ async function main(){
   if(cursor&&window.feedDelay)await new Promise(resolve=>window.releaseFeed=resolve);
   if(cursor&&window.feedFail){window.feedFail=false;return new Response(JSON.stringify({error:'模拟加载失败'}),{status:503,headers:{'Content-Type':'application/json'}});}
   const category=p.searchParams.get('category');
-  const data=category==='生活'?window.feedRows.slice(0,3).map(a=>({...a,category:'生活',sub_tag:'现代生活'})):window.feedRows;
+  const data=category==='生活'?window.feedRows.slice(0,3).map(a=>({...a,category:'生活'})):window.feedRows;
   const index=cursor?data.findIndex(a=>a.id===Number(cursor))+1:0;
   const rows=data.slice(index,index+30),hasMore=index+rows.length<data.length;
-  return new Response(JSON.stringify({articles:rows,total:data.length+window.feedExtra,sources:[{source_name:'原始新闻测试源'}],sub_tags:[category==='生活'?'现代生活':'AI与创投'],has_more:hasMore,next_cursor:hasMore?String(rows[rows.length-1].id):''}),{status:200,headers:{'Content-Type':'application/json'}});
+  return new Response(JSON.stringify({articles:rows,total:data.length+window.feedExtra,sources:[{source_name:'原始新闻测试源'}],has_more:hasMore,next_cursor:hasMore?String(rows[rows.length-1].id):''}),{status:200,headers:{'Content-Type':'application/json'}});
  };
 })()`});
  const origin=process.env.QA_ORIGIN||'http://127.0.0.1:8098';
@@ -94,7 +94,7 @@ async function main(){
   await until("document.querySelectorAll('.story-card').length===3");
   await evaluate("window.feedDelay=false;window.releaseFeed()");
   await wait(400);
-  if(!await evaluate("document.querySelectorAll('.story-card').length===3 && [...document.querySelectorAll('.category-tag')].every(e=>e.textContent==='现代生活')"))throw Error('Stale append overwrote filter results');
+  if(!await evaluate("document.querySelectorAll('.story-card').length===3 && [...document.querySelectorAll('.category-tag')].every(e=>e.textContent==='生活')"))throw Error('Stale append overwrote filter results');
   console.log('PASS '+width+' filtering discards stale append response');
  }
  await send('Browser.close').catch(()=>{});

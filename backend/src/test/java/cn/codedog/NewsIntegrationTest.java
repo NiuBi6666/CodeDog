@@ -32,7 +32,7 @@ class NewsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;
  @Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  static final String SECRET="test-news-secret-at-least-32-characters";
- @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql")).execute(ds);}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql")).execute(ds);}
  @BeforeEach void clean(){db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void publicReadOnlyAndMissingConfigurationAreHonest()throws Exception{
@@ -57,7 +57,7 @@ class NewsIntegrationTest {
   assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE module='news' AND event_code='source_update'",Long.class)).isPositive();
 
   for(String category:List.of("国际","军事","科技","财经","教育","文娱","生活")){
-   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category",category,"sub_tag","垂直主题","lang","zh")))).andExpect(status().isOk()).andExpect(jsonPath("$.category").value(category));
+   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category",category,"lang","zh")))).andExpect(status().isOk()).andExpect(jsonPath("$.category").value(category));
   }
   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category","未知分类")))).andExpect(status().isBadRequest());
   mvc.perform(delete("/api/admin/sources/"+id).session(session).with(csrf())).andExpect(status().isOk());
@@ -71,16 +71,16 @@ class NewsIntegrationTest {
  @Test void cursorPagingKeepsDescendingOrderWithoutRepeatsWhenNewHeadArrives()throws Exception{
   long source=db.queryForObject("SELECT id FROM news_sources LIMIT 1",Long.class);
   var time=java.sql.Timestamp.from(Instant.parse("2026-01-01T12:00:00.123456Z"));
-  for(int i=0;i<65;i++)db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,published_at,sub_tag) VALUES(?,?,?,?,?,?,?,?,?,?)","cursor-"+i,"https://example.com/cursor/"+i,source,"cursor-source","科技","Title "+i,"标题 "+i,"Original body",time,"游标测试");
-  var first=news.list("","科技","cursor-source",0,"游标测试","");
+  for(int i=0;i<65;i++)db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,published_at) VALUES(?,?,?,?,?,?,?,?,?)","cursor-"+i,"https://example.com/cursor/"+i,source,"cursor-source","科技","Title "+i,"标题 "+i,"Original body",time);
+  var first=news.list("","科技","cursor-source",0,"");
   var rows=(List<Map<String,Object>>)first.get("articles");
   assertThat(rows).hasSize(30);assertThat(first.get("has_more")).isEqualTo(true);
   var ids=new LinkedHashSet<Long>();long previous=Long.MAX_VALUE;
   for(var row:rows){long id=((Number)row.get("id")).longValue();assertThat(id).isLessThan(previous);ids.add(id);previous=id;}
-  db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,published_at,sub_tag) VALUES('cursor-new','https://example.com/cursor/new',?,'cursor-source','科技','Newest title','最新标题','Original',?,'游标测试')",source,java.sql.Timestamp.from(time.toInstant().plusSeconds(60)));
+  db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,published_at) VALUES('cursor-new','https://example.com/cursor/new',?,'cursor-source','科技','Newest title','最新标题','Original',?)",source,java.sql.Timestamp.from(time.toInstant().plusSeconds(60)));
   String cursor=(String)first.get("next_cursor");
   while(!cursor.isEmpty()){
-   var next=news.list("","科技","cursor-source",0,"游标测试",cursor);
+   var next=news.list("","科技","cursor-source",0,cursor);
    for(var row:(List<Map<String,Object>>)next.get("articles")){
     long id=((Number)row.get("id")).longValue();assertThat(id).isLessThan(previous);assertThat(ids.add(id)).isTrue();previous=id;
    }
@@ -88,14 +88,14 @@ class NewsIntegrationTest {
    if(cursor.isEmpty())assertThat(next.get("has_more")).isEqualTo(false);
   }
   assertThat(ids).hasSize(65);
-  var refreshed=news.list("","科技","cursor-source",0,"游标测试","");
+  var refreshed=news.list("","科技","cursor-source",0,"");
   assertThat(((List<Map<String,Object>>)refreshed.get("articles")).getFirst().get("title_en")).isEqualTo("Newest title");
   mvc.perform(get("/api/news").param("cursor","invalid-cursor")).andExpect(status().isBadRequest());
   String encoded=Base64.getUrlEncoder().withoutPadding().encodeToString("bad-date|1".getBytes(StandardCharsets.UTF_8));
   mvc.perform(get("/api/news").param("cursor",encoded)).andExpect(status().isBadRequest());
  }
- @Test void chineseOriginalPublishesWithoutTranslationAndTagsFilterIndependently()throws Exception{
-  db.update("INSERT INTO news_sources(source_name,rss_url,category,sub_tag,lang) VALUES('taxonomy-zh','https://example.com/zh-feed','生活','医疗健康','zh')");
+ @Test void chineseOriginalPublishesWithoutTranslationAndOnlyPrimaryCategoriesAreReturned()throws Exception{
+  db.update("INSERT INTO news_sources(source_name,rss_url,category,lang) VALUES('taxonomy-zh','https://example.com/zh-feed','生活','zh')");
   long source=db.queryForObject("SELECT id FROM news_sources WHERE source_name='taxonomy-zh'",Long.class);
   try{
    String title="中文原稿标题",text="这是保留来源原文的中文医学新闻，不应调用英文翻译服务。".repeat(20);
@@ -104,13 +104,14 @@ class NewsIntegrationTest {
    long id=db.queryForObject("SELECT id FROM news_articles WHERE source_id=?",Long.class,source);
    var article=news.article(id,false);
    assertThat(article.get("lang")).isEqualTo("zh");
-   assertThat(article.get("sub_tag")).isEqualTo("医疗健康");
+   assertThat(article).doesNotContainKey("sub_tag");
+   assertThat(news.source(source)).doesNotContainKey("sub_tag");
    assertThat(article.get("translation_status")).isEqualTo("ready");
    assertThat(article.get("title_original")).isEqualTo(title);
    assertThat(article.get("content_original")).isEqualTo(text);
    assertThat(article.get("content_zh")).isEqualTo(text);
-   mvc.perform(get("/api/news").param("category","生活").param("sub_tag","医疗健康")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.articles[0].lang").value("zh"));
-   mvc.perform(get("/api/news").param("category","生活").param("sub_tag","其他主题")).andExpect(jsonPath("$.total").value(0));
+   mvc.perform(get("/api/news").param("category","生活")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.articles[0].lang").value("zh"));
+   mvc.perform(get("/api/news").param("category","生活")).andExpect(jsonPath("$.sub_tags").doesNotExist()).andExpect(jsonPath("$.articles[0].sub_tag").doesNotExist());
    mvc.perform(post("/api/news/"+id+"/translation").with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isOk()).andExpect(jsonPath("$.translation_status").value("ready"));
    assertThat(db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE body_requested_at IS NOT NULL",Long.class)).isZero();
    assertThat(db.queryForObject("SELECT COUNT(*) FROM news_translation_cache",Long.class)).isZero();
