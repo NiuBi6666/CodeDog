@@ -1,12 +1,13 @@
 <script setup>
-import { computed,ref,watch,onMounted,onBeforeUnmount } from 'vue';
+import { computed,ref,watch,nextTick,onMounted,onBeforeUnmount } from 'vue';
 import { useRoute,useRouter } from 'vue-router';
 import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
-const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),page=ref(0),total=ref(0);
+const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
 const subTag=ref(''),subTags=ref([]);
+const feedPanel=ref(null),loadSentinel=ref(null),hasMore=ref(false),nextCursor=ref(''),loadingMore=ref(false),moreError=ref('');
 const bodyError=ref(''),bodyWaiting=ref(false);
 const mode=ref('bilingual'),syncing=ref(false),notice=ref(''),imageFailed=ref(false),loading=ref(true),error=ref('');
 const effectiveMode=computed(()=>selected.value?.lang==='zh'?'zh':mode.value),fontSize=ref(17),clock=ref(Date.now());
@@ -14,7 +15,7 @@ function dateLabel(value){return relativeTime(value,clock.value);}
 function exactDate(value){return new Date(value).toLocaleString('zh-CN');}
 const sources=computed(()=>['全部来源',...sourceList.value]);
 const filtered=computed(()=>groupStories(articles.value));
-let generation=0,detailGeneration=0,debounce,clockTimer,detailPoll;
+let generation=0,detailGeneration=0,debounce,clockTimer,detailPoll,feedObserver;
 function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,lang:a.lang||'en',title_en:a.title_original||a.title_en,source_mark:a.source_name?.slice(0,1)||'C',category_en:{国际:'WORLD',军事:'DEFENCE',科技:'TECH',财经:'MARKETS',教育:'EDUCATION',文娱:'CULTURE & SPORT',生活:'LIFESTYLE'}[a.category]||'NEWS',summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_original||a.content_en),content_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
 async function request(path,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('/api'+path,{...options,signal:controller.signal});const p=await r.json();if(!r.ok)throw Error(p.error||'请求失败');return p;}catch(e){throw Error(e.name==='AbortError'?'请求超时，请稍后重试':e.message);}finally{clearTimeout(timer);}}
 function stopDetail(){clearTimeout(detailPoll);detailPoll=null;bodyWaiting.value=false;}
@@ -43,26 +44,70 @@ async function detail(id){
   detailPoll=setTimeout(tick,1000);
  }catch(e){if(g===detailGeneration){bodyWaiting.value=false;if(selected.value)bodyError.value=e.message;else error.value=e.message;}}
 }
-async function load(append=false,includeDetail=true){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,sub_tag:subTag.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;subTags.value=p.sub_tags||[];sourceList.value=p.sources.map(s=>s.source_name);if(includeDetail){if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else selected.value=null;}return rows;}catch(e){if(g===generation)error.value=e.message;return null;}finally{if(g===generation)loading.value=false;}}
+function listPath(cursor=''){
+ return '/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,sub_tag:subTag.value,...(cursor?{cursor}:{})});
+}
+function applyPage(p,append=false){
+ const rows=p.articles.map(normalize);
+ const existing=append?articles.value:[];
+ const ids=new Set(existing.map(a=>a.id));
+ articles.value=[...existing,...rows.filter(a=>!ids.has(a.id))];
+ total.value=p.total;subTags.value=p.sub_tags||[];sourceList.value=p.sources.map(s=>s.source_name);
+ hasMore.value=p.has_more===true;nextCursor.value=p.next_cursor||'';
+ return rows;
+}
+async function load(){
+ const g=++generation;loading.value=true;loadingMore.value=false;error.value='';moreError.value='';
+ try{
+  const p=await request(listPath());if(g!==generation)return;
+  const rows=applyPage(p);
+  if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else selected.value=null;
+  return rows;
+ }catch(e){if(g===generation)error.value=e.message;return null;}
+ finally{if(g===generation){loading.value=false;observeFeed();}}
+}
 function selectArticle(id){router.push('/article/'+id);}
 function selectCategory(item){category.value=item;subTag.value='';}
-function more(){page.value++;load(true);}
-// Public refresh only reads prepared articles; collection never runs on a reader's click.
-async function sync(){
- if(syncing.value)return;
- syncing.value=true;notice.value='正在更新列表…';
- const known=new Set(articles.value.map(a=>a.id));
- page.value=0;
+async function more(){
+ if(loading.value||loadingMore.value||syncing.value||moreError.value||!hasMore.value||!nextCursor.value)return;
+ const g=generation,cursor=nextCursor.value;
+ loadingMore.value=true;
  try{
-  const rows=await load(false,false);
-  if(!rows){notice.value=error.value||'列表已由其他筛选操作更新';return;}
-  const added=rows.filter(a=>!known.has(a.id)).length;
-  notice.value=added?'已更新，发现 '+added+' 篇新报道':'列表已更新，暂无新报道；后台定时采集会继续运行';
- }finally{syncing.value=false;}
+  const p=await request(listPath(cursor));if(g!==generation)return;
+  applyPage(p,true);
+ }catch(e){if(g===generation)moreError.value=e.message;}
+ finally{if(g===generation){loadingMore.value=false;observeFeed();}}
+}
+function retryMore(){moreError.value='';more();}
+async function observeFeed(){
+ feedObserver?.disconnect();await nextTick();
+ if(!loadSentinel.value||loading.value||loadingMore.value||syncing.value||moreError.value||!hasMore.value)return;
+ const mobile=matchMedia('(max-width:760px)').matches;
+ if(mobile&&route.params.id)return;
+ feedObserver=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting))more();},{root:mobile?null:feedPanel.value,rootMargin:'0px 0px 120px 0px',threshold:0});
+ feedObserver.observe(loadSentinel.value);
+}
+function scrollListTop(){
+ if(matchMedia('(max-width:760px)').matches)window.scrollTo({top:0,behavior:'instant'});
+ else if(feedPanel.value)feedPanel.value.scrollTop=0;
+}
+// Check the first published item; older backfills must not reset the current feed.
+async function sync(){
+ if(syncing.value||loading.value||loadingMore.value)return;
+ const g=generation,first=articles.value[0];
+ syncing.value=true;notice.value='';
+ try{
+  const p=await request(listPath());if(g!==generation)return;
+  const newest=p.articles[0];
+  const newer=!first?Boolean(newest):Boolean(newest)&&(new Date(newest.published_at)>new Date(first.published_at)||(new Date(newest.published_at).getTime()===new Date(first.published_at).getTime()&&Number(newest.id)>Number(first.id)));
+  if(!newer){notice.value='暂无更新的报道';return;}
+  applyPage(p);moreError.value='';notice.value='已更新最新报道';await nextTick();scrollListTop();
+ }catch(e){if(g===generation)notice.value=e.message;}
+ finally{syncing.value=false;observeFeed();}
 }
 function proxyImage(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
-watch([category,source,subTag],()=>{page.value=0;load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{page.value=0;load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}});
-onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);});onBeforeUnmount(()=>{detailGeneration++;stopDetail();clearTimeout(debounce);clearInterval(clockTimer);});
+watch([category,source,subTag],()=>{scrollListTop();load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{scrollListTop();load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}observeFeed();});
+onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);window.addEventListener('resize',observeFeed);});onBeforeUnmount(()=>{feedObserver?.disconnect();window.removeEventListener('resize',observeFeed);detailGeneration++;stopDetail();clearTimeout(debounce);clearInterval(clockTimer);});
 </script>
 
 <template>
@@ -70,11 +115,11 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);}
     <header class="topbar">
       <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻<span class="brand-edition"> · GLOBAL EDITION</span></small></div></div>
       <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="selectCategory(item)">{{ item }}</button></nav>
-      <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="sync-button" :aria-label="syncing ? '正在刷新新闻列表' : '刷新已入库新闻'" title="刷新已入库新闻；后台每 10 分钟自动采集，可能因调度延迟而推迟" :disabled="syncing" @click="sync"><span :class="{ spin: syncing }">↻</span>{{ syncing ? "同步中" : "立即同步" }}</button><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
+      <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="sync-button" :aria-label="syncing ? '正在刷新新闻列表' : '刷新已入库新闻'" title="刷新已入库新闻；后台每 10 分钟自动采集，可能因调度延迟而推迟" :disabled="syncing||loading||loadingMore" @click="sync"><span :class="{ spin: syncing }">↻</span>{{ syncing ? "同步中" : "立即同步" }}</button><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
     </header>
     <div v-if="notice" class="notice" role="status">{{ notice }}</div>
     <main class="workspace">
-      <aside class="feed-panel">
+      <aside ref="feedPanel" class="feed-panel">
         <div class="feed-heading"><h1>今日简报 <span class="count">({{ total }})</span></h1><select v-model="source" aria-label="按来源筛选"><option v-for="item in sources" :key="item">{{ item }}</option></select></div>
         <nav v-if="category!=='全部'&&subTags.length" class="subtag-nav" aria-label="二级主题"><button :class="{active:!subTag}" :aria-pressed="!subTag" @click="subTag=''">全部主题</button><button v-for="tag in subTags" :key="tag" :class="{active:subTag===tag}" :aria-pressed="subTag===tag" @click="subTag=tag">{{tag}}</button></nav>
         <p v-if="error" class="feed-error" role="alert">{{error}} <button @click="load()">重试</button></p><p v-if="loading" class="feed-state" role="status">正在读取报道…</p><div class="feed-list">
@@ -87,7 +132,7 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);}
             </button>
             <div v-if="article.folded.length" class="folded-sources"><span>同题报道</span><button v-for="item in article.folded" :key="item.id" :aria-current="selected?.id===item.id?'true':undefined" @click="selectArticle(item.id)">{{ item.source_name }} · {{ mode==='en'?item.title_en:(item.title_zh||item.title_en) }} ↗</button></div>
           </div>
-          <div v-if="!loading && !error && !filtered.length" class="empty-state"><strong>暂时没有可阅读的报道</strong><span>调整筛选，或等待采集与标题翻译完成，打开报道后翻译全文。</span></div><button v-if="articles.length<total" class="load-more" :disabled="loading" @click="more">加载更多报道</button>
+          <div v-if="!loading && !error && !filtered.length" class="empty-state"><strong>暂时没有可阅读的报道</strong><span>调整筛选，或等待采集与标题翻译完成，打开报道后翻译全文。</span></div><div ref="loadSentinel" class="feed-load-status" role="status" aria-live="polite"><template v-if="loadingMore">正在加载更早的报道…</template><template v-else-if="moreError">加载失败，已保留当前列表。<button type="button" @click="retryMore">重试</button></template><template v-else-if="!loading&&articles.length">{{hasMore?'上滑继续阅读':'已浏览全部报道'}}</template></div>
         </div>
       </aside>
       <article v-if="selected" class="reader-panel"><button class="back-to-list" @click="router.push('/')">← 返回新闻列表</button>

@@ -260,3 +260,6 @@
 .original-language { color:#647b6d; font-size:10px; white-space:nowrap; }
 .original-language-note { color:#62776b; font-size:12px; line-height:1.6; }
 .story-source { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.feed-load-status { min-height:48px; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px 0; color:#71828a; font-size:12px; text-align:center; }
+.feed-load-status button { border:0; background:transparent; color:#365b70; text-decoration:underline; text-underline-offset:3px; padding:6px; }

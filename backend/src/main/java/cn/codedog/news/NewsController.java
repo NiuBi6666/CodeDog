@@ -14,7 +14,7 @@ public class NewsController {
  private final NewsService news;private final StructuredAuditService audit;
  public NewsController(NewsService news,StructuredAuditService audit){this.news=news;this.audit=audit;}
  private void event(String action,Object id){audit.event("news","management",action);audit.target("NEWS",id);}
- @GetMapping("/news") public Object list(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String category,@RequestParam(defaultValue="")String source,@RequestParam(defaultValue="0")int page,@RequestParam(name="sub_tag",defaultValue="")String subTag){return news.list(q,category,source,page,subTag);}
+ @GetMapping("/news") public Object list(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String category,@RequestParam(defaultValue="")String source,@RequestParam(defaultValue="0")int page,@RequestParam(name="sub_tag",defaultValue="")String subTag,@RequestParam(defaultValue="")String cursor){return news.list(q,category,source,page,subTag,cursor);}
  @GetMapping("/news/sync-status") public Object syncStatus(@RequestParam(name="run_id",required=false)Long runId){return news.syncStatus(runId);}
  @GetMapping("/news/{id}") public Object article(@PathVariable long id){return news.article(id,false);}
  @PostMapping("/news/{id}/translation") public Object requestTranslation(@PathVariable long id){audit.event("news","public","body_translation_request");audit.target("NEWS_ARTICLE",id);return news.requestBodyTranslation(id);}

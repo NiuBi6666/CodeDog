@@ -67,6 +67,33 @@ class NewsIntegrationTest {
   mvc.perform(post("/api/admin/sources").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
  }
 
+
+ @Test void cursorPagingKeepsDescendingOrderWithoutRepeatsWhenNewHeadArrives()throws Exception{
+  long source=db.queryForObject("SELECT id FROM news_sources LIMIT 1",Long.class);
+  var time=java.sql.Timestamp.from(Instant.parse("2026-01-01T12:00:00.123456Z"));
+  for(int i=0;i<65;i++)db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,published_at,sub_tag) VALUES(?,?,?,?,?,?,?,?,?,?)","cursor-"+i,"https://example.com/cursor/"+i,source,"cursor-source","科技","Title "+i,"标题 "+i,"Original body",time,"游标测试");
+  var first=news.list("","科技","cursor-source",0,"游标测试","");
+  var rows=(List<Map<String,Object>>)first.get("articles");
+  assertThat(rows).hasSize(30);assertThat(first.get("has_more")).isEqualTo(true);
+  var ids=new LinkedHashSet<Long>();long previous=Long.MAX_VALUE;
+  for(var row:rows){long id=((Number)row.get("id")).longValue();assertThat(id).isLessThan(previous);ids.add(id);previous=id;}
+  db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,title_en,title_zh,content_en,published_at,sub_tag) VALUES('cursor-new','https://example.com/cursor/new',?,'cursor-source','科技','Newest title','最新标题','Original',?,'游标测试')",source,java.sql.Timestamp.from(time.toInstant().plusSeconds(60)));
+  String cursor=(String)first.get("next_cursor");
+  while(!cursor.isEmpty()){
+   var next=news.list("","科技","cursor-source",0,"游标测试",cursor);
+   for(var row:(List<Map<String,Object>>)next.get("articles")){
+    long id=((Number)row.get("id")).longValue();assertThat(id).isLessThan(previous);assertThat(ids.add(id)).isTrue();previous=id;
+   }
+   cursor=(String)next.get("next_cursor");
+   if(cursor.isEmpty())assertThat(next.get("has_more")).isEqualTo(false);
+  }
+  assertThat(ids).hasSize(65);
+  var refreshed=news.list("","科技","cursor-source",0,"游标测试","");
+  assertThat(((List<Map<String,Object>>)refreshed.get("articles")).getFirst().get("title_en")).isEqualTo("Newest title");
+  mvc.perform(get("/api/news").param("cursor","invalid-cursor")).andExpect(status().isBadRequest());
+  String encoded=Base64.getUrlEncoder().withoutPadding().encodeToString("bad-date|1".getBytes(StandardCharsets.UTF_8));
+  mvc.perform(get("/api/news").param("cursor",encoded)).andExpect(status().isBadRequest());
+ }
  @Test void chineseOriginalPublishesWithoutTranslationAndTagsFilterIndependently()throws Exception{
   db.update("INSERT INTO news_sources(source_name,rss_url,category,sub_tag,lang) VALUES('taxonomy-zh','https://example.com/zh-feed','生活','医疗健康','zh')");
   long source=db.queryForObject("SELECT id FROM news_sources WHERE source_name='taxonomy-zh'",Long.class);

@@ -109,13 +109,27 @@ public class NewsService {
  public void delete(long id){source(id);db.update("DELETE FROM news_sources WHERE id=?",id);}
  public Map<String,Object> overview(){return Map.of("configuration",configuration(),"sources",sources(),"articles",db.queryForList("SELECT id,title_en,title_zh,source_name,status,attempts,last_error,published_at FROM news_articles ORDER BY id DESC LIMIT 100"),"runs",db.queryForList("SELECT * FROM news_refresh_runs ORDER BY id DESC LIMIT 10"),"batches",db.queryForList("SELECT batch_id,status,created_at,last_error FROM news_batches ORDER BY created_at DESC LIMIT 10"));}
  public Map<String,Object> list(String q,String category,String source,int page){return list(q,category,source,page,"");}
- public Map<String,Object> list(String q,String category,String source,int page,String subTag){
+ public Map<String,Object> list(String q,String category,String source,int page,String subTag){return list(q,category,source,page,subTag,"");}
+ public Map<String,Object> list(String q,String category,String source,int page,String subTag,String cursor){
   page=Math.max(0,Math.min(page,1000));
   String where=" WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL AND (?='' OR category=?) AND (?='' OR source_name=?) AND (?='' OR sub_tag=?) AND (?='' OR title_en LIKE ? OR title_zh LIKE ?)";
   String search="%"+q+"%";Object[] args={category,category,source,source,subTag,subTag,q,search,search};
-  var params=new ArrayList<>(Arrays.asList(args));params.add(30);params.add(page*30);
-  var rows=db.queryForList("SELECT id,title_en,title_zh,summary_zh,source_name,category,sub_tag,lang,title_en AS title_original,cover_image,published_at,created_at,author FROM news_articles"+where+" ORDER BY published_at DESC,id DESC LIMIT ? OFFSET ?",params.toArray());
-  return Map.of("articles",rows,"total",db.queryForObject("SELECT COUNT(*) FROM news_articles"+where,Long.class,args),"page",page,"sources",db.queryForList("SELECT DISTINCT source_name FROM news_articles WHERE status='ready' OR (title_zh IS NOT NULL AND title_zh<>'') ORDER BY source_name"),"sub_tags",db.queryForList("SELECT DISTINCT sub_tag FROM news_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND sub_tag<>'' AND (?='' OR category=?) ORDER BY sub_tag",String.class,category,category),"configuration",Map.of("ready",aiReady()&&githubReady()));
+  var params=new ArrayList<>(Arrays.asList(args));String seek="";
+  if(!cursor.isBlank()){
+   try{
+    if(cursor.length()>256)throw new IllegalArgumentException();
+    String[] parts=new String(Base64.getUrlDecoder().decode(cursor),StandardCharsets.UTF_8).split("\\|",-1);
+    if(parts.length!=2)throw new IllegalArgumentException();
+    Timestamp time=Timestamp.from(Instant.parse(parts[0]));long id=Long.parseLong(parts[1]);if(id<1)throw new IllegalArgumentException();
+    seek=" AND (published_at<? OR (published_at=? AND id<?))";params.add(time);params.add(time);params.add(id);
+   }catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"分页位置无效，请重新选择分类");}
+  }
+  params.add(31);params.add(cursor.isBlank()?page*30:0);
+  var rows=db.queryForList("SELECT id,title_en,title_zh,summary_zh,source_name,category,sub_tag,lang,title_en AS title_original,cover_image,published_at,created_at,author FROM news_articles"+where+seek+" ORDER BY published_at DESC,id DESC LIMIT ? OFFSET ?",params.toArray());
+  boolean hasMore=rows.size()>30;if(hasMore)rows=new ArrayList<>(rows.subList(0,30));
+  String nextCursor="";
+  if(hasMore){var last=rows.getLast();nextCursor=Base64.getUrlEncoder().withoutPadding().encodeToString((((Timestamp)last.get("published_at")).toInstant()+"|"+last.get("id")).getBytes(StandardCharsets.UTF_8));}
+  return Map.of("articles",rows,"has_more",hasMore,"next_cursor",nextCursor,"total",db.queryForObject("SELECT COUNT(*) FROM news_articles"+where,Long.class,args),"page",page,"sources",db.queryForList("SELECT DISTINCT source_name FROM news_articles WHERE status='ready' OR (title_zh IS NOT NULL AND title_zh<>'') ORDER BY source_name"),"sub_tags",db.queryForList("SELECT DISTINCT sub_tag FROM news_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND sub_tag<>'' AND (?='' OR category=?) ORDER BY sub_tag",String.class,category,category),"configuration",Map.of("ready",aiReady()&&githubReady()));
  }
  public Map<String,Object> article(long id,boolean admin){
   var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
