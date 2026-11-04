@@ -42,7 +42,7 @@ async function detail(id){
   detailPoll=setTimeout(tick,1000);
  }catch(e){if(g===detailGeneration){bodyWaiting.value=false;if(selected.value)bodyError.value=e.message;else error.value=e.message;}}
 }
-async function load(append=false){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else selected.value=null;return rows;}catch(e){if(g===generation)error.value=e.message;return null;}finally{if(g===generation)loading.value=false;}}
+async function load(append=false,includeDetail=true){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);if(includeDetail){if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else selected.value=null;}return rows;}catch(e){if(g===generation)error.value=e.message;return null;}finally{if(g===generation)loading.value=false;}}
 function selectArticle(id){router.push('/article/'+id);}
 function more(){page.value++;load(true);}
 // Public refresh only reads prepared articles; collection never runs on a reader's click.
@@ -52,7 +52,7 @@ async function sync(){
  const known=new Set(articles.value.map(a=>a.id));
  page.value=0;
  try{
-  const rows=await load();
+  const rows=await load(false,false);
   if(!rows){notice.value=error.value||'列表已由其他筛选操作更新';return;}
   const added=rows.filter(a=>!known.has(a.id)).length;
   notice.value=added?'已更新，发现 '+added+' 篇新报道':'列表已更新，暂无新报道；后台定时采集会继续运行';

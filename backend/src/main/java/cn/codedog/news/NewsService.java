@@ -93,9 +93,9 @@ public class NewsService {
   String url=body.path("rss_url").asText(Objects.toString(old.get("rss_url"),""));
   String category=body.path("category").asText(Objects.toString(old.get("category"),"科技"));
   int priority=body.path("priority").asInt(((Number)old.getOrDefault("priority",80)).intValue());
-  int interval=body.path("refresh_interval_min").asInt(((Number)old.getOrDefault("refresh_interval_min",30)).intValue());
+  int interval=body.path("refresh_interval_min").asInt(((Number)old.getOrDefault("refresh_interval_min",10)).intValue());
   boolean active=body.has("is_active")?body.path("is_active").asBoolean():!Boolean.FALSE.equals(old.get("is_active"));
-  require(!name.isBlank()&&name.length()<=80&&url.length()<=1000&&List.of("科技","国际","财经","教育").contains(category)&&priority>=0&&priority<=100&&interval>=30&&interval<=1440,HttpStatus.BAD_REQUEST,"来源配置无效；频率为 30–1440 分钟");canonical(url);
+  require(!name.isBlank()&&name.length()<=80&&url.length()<=1000&&List.of("科技","国际","财经","教育").contains(category)&&priority>=0&&priority<=100&&interval>=10&&interval<=1440,HttpStatus.BAD_REQUEST,"来源配置无效；频率为 10–1440 分钟");canonical(url);
   if(id==null){
    var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
    db.update(connection->{var statement=connection.prepareStatement("INSERT INTO news_sources(source_name,rss_url,category,priority,refresh_interval_min,is_active) VALUES(?,?,?,?,?,?)",java.sql.Statement.RETURN_GENERATED_KEYS);statement.setString(1,name);statement.setString(2,url);statement.setString(3,category);statement.setInt(4,priority);statement.setInt(5,interval);statement.setBoolean(6,active);return statement;},keys);
