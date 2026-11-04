@@ -59,6 +59,24 @@ def article(entry,source):
  with _article_slots:
   return extract_article(entry,source)
 
+def enough_content(text,lang):
+ return len(''.join(text.split()))>=200 if lang=='zh' else len(text.split())>=150
+
+def rss_fulltext(entry):
+ # Only content:encoded/full content is eligible; RSS summaries are never full articles.
+ from lxml import html
+ for item in entry.get('content',[]):
+  value=item.get('value','')
+  if not isinstance(value,str) or not value.strip() or len(value)>MAX_BYTES:continue
+  try:
+   root=html.fromstring('<div>'+value+'</div>')
+   for node in root.xpath('.//script|.//style|.//noscript'):node.drop_tree()
+   paragraphs=[node.text_content().strip() for node in root.xpath('.//p') if node.text_content().strip()]
+   text='\n'.join(paragraphs) if paragraphs else root.text_content().strip()
+   if text:return {'text':text,'title':entry.get('title','')}
+  except Exception:continue
+ return None
+
 def extract_article(entry,source):
  try:
   url=entry.get('link','')
@@ -66,12 +84,16 @@ def extract_article(entry,source):
    raw,final_url=download(url)
    result=trafilatura.bare_extraction(raw,url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
   except Exception:
-   if not FAST:raise
-   result=jina_article(url)
+   result=None
+   if FAST:
+    try:result=jina_article(url)
+    except Exception:pass
+  if not result or not enough_content(result.get('text') or '',source.get('lang','en')):
+   result=rss_fulltext(entry)
   if not result:return None
   text=result.get('text') or ''
   paragraphs=[p.strip() for p in text.split('\n') if p.strip()]
-  if len(' '.join(paragraphs).split())<150 or len(text)>100000:return None
+  if not enough_content(text,source.get('lang','en')) or len(text)>100000:return None
   # A word count is a first-pass filter, not a paywall bypass.
   if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading')) for p in paragraphs):return None
   published=entry.get('published') or entry.get('updated')

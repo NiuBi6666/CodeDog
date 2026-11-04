@@ -5,6 +5,26 @@ os.environ.setdefault('NEWS_WEBHOOK_SECRET','test-only-webhook-secret-at-least-3
 import crawler
 
 class CollectorTest(unittest.TestCase):
+ def test_chinese_content_uses_characters_not_english_word_count(self):
+  self.assertTrue(crawler.enough_content('这是中文新闻正文。'*30,'zh'))
+  self.assertFalse(crawler.enough_content('短新闻','zh'))
+  self.assertFalse(crawler.enough_content('An English fragment.','en'))
+  source={'id':7,'rss_url':'https://example.com/feed','lang':'zh'}
+  text='这是保留原文的完整中文新闻段落。'*30
+  with patch.object(crawler,'download',return_value=(b'html','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':text,'title':'中文原文标题'}):
+   article=crawler.extract_article({'link':'https://example.com/a','title':'标题'},source)
+  self.assertEqual(article['paragraphs_en'],[text])
+  self.assertEqual(article['title_en'],'中文原文标题')
+
+ def test_explicit_rss_full_content_can_replace_unreachable_page_but_summary_cannot(self):
+  text='An original report with facts and complete paragraphs. '*25
+  entry={'link':'https://example.com/article','title':'RSS original title','content':[{'value':'<p>'+text+'</p><script>bad()</script>'}]}
+  with patch.object(crawler,'download',side_effect=ConnectionError()),patch.object(crawler,'FAST',False):
+   result=crawler.extract_article(entry,self.source())
+   self.assertIsNotNone(result)
+   self.assertNotIn('bad()',result['paragraphs_en'][0])
+   self.assertIsNone(crawler.extract_article({'link':entry['link'],'summary':text,'title':'Summary only'},self.source()))
+
  def source(self,n=1):return {'id':n,'rss_url':'https://example.com/rss'}
  def test_batches_arrive_before_slow_article_and_completion_is_last(self):
   slow=threading.Event();first_push=threading.Event();sent=[]

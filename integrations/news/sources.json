@@ -1,0 +1,352 @@
+[
+  {
+    "source_name": "CNBC World",
+    "category": "国际",
+    "sub_tag": "全球要闻",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "The Guardian",
+    "category": "国际",
+    "sub_tag": "国际深度",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.theguardian.com/world/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "NPR News",
+    "category": "国际",
+    "sub_tag": "综合时政",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://feeds.npr.org/1001/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "UN News",
+    "category": "国际",
+    "sub_tag": "国际组织",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "UN News 中文",
+    "category": "国际",
+    "sub_tag": "国际组织",
+    "lang": "zh",
+    "priority": 85,
+    "rss_url": "https://news.un.org/feed/subscribe/zh/news/all/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "中新网·国际",
+    "category": "国际",
+    "sub_tag": "环球快讯",
+    "lang": "zh",
+    "priority": 80,
+    "rss_url": "https://www.chinanews.com.cn/rss/world.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Defense News",
+    "category": "军事",
+    "sub_tag": "全球防务",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Breaking Defense",
+    "category": "军事",
+    "sub_tag": "军事科技",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://breakingdefense.com/feed/",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "The War Zone",
+    "category": "军事",
+    "sub_tag": "武器装备",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.twz.com/feed",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Guardian Defence",
+    "category": "军事",
+    "sub_tag": "安全局势",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://www.theguardian.com/uk/military/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "TechCrunch",
+    "category": "科技",
+    "sub_tag": "AI与创投",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://techcrunch.com/feed/",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "The Verge",
+    "category": "科技",
+    "sub_tag": "极客数码",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://www.theverge.com/rss/index.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "MIT Tech Review",
+    "category": "科技",
+    "sub_tag": "前沿技术",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.technologyreview.com/feed/",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Ars Technica",
+    "category": "科技",
+    "sub_tag": "硬核科技",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://feeds.arstechnica.com/arstechnica/index",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "ScienceDaily",
+    "category": "科技",
+    "sub_tag": "科学突破",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://www.sciencedaily.com/rss/all.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Nature",
+    "category": "科技",
+    "sub_tag": "学术前沿",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://www.nature.com/nature.rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "36氪",
+    "category": "科技",
+    "sub_tag": "商业科技",
+    "lang": "zh",
+    "priority": 80,
+    "rss_url": "https://36kr.com/feed",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "少数派",
+    "category": "科技",
+    "sub_tag": "效率工具",
+    "lang": "zh",
+    "priority": 80,
+    "rss_url": "https://sspai.com/feed",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "CNBC Finance",
+    "category": "财经",
+    "sub_tag": "金融市场",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Yahoo Finance",
+    "category": "财经",
+    "sub_tag": "股市动态",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://finance.yahoo.com/news/rssindex",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Fortune",
+    "category": "财经",
+    "sub_tag": "商业巨头",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://fortune.com/feed/",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "MarketWatch",
+    "category": "财经",
+    "sub_tag": "宏观经济",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "中新网·财经",
+    "category": "财经",
+    "sub_tag": "国内财经",
+    "lang": "zh",
+    "priority": 80,
+    "rss_url": "https://www.chinanews.com.cn/rss/finance.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "EdSurge",
+    "category": "教育",
+    "sub_tag": "教育科技",
+    "lang": "en",
+    "priority": 95,
+    "rss_url": "https://www.edsurge.com/articles_rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Times Higher Ed",
+    "category": "教育",
+    "sub_tag": "高等教育",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.timeshighereducation.com/Lists/News/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Guardian Education",
+    "category": "教育",
+    "sub_tag": "国际教育",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.theguardian.com/education/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Inside Higher Ed",
+    "category": "教育",
+    "sub_tag": "大学校园",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://www.insidehighered.com/rss/feed",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Variety",
+    "category": "文娱",
+    "sub_tag": "好莱坞影视",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://variety.com/feed/",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Polygon",
+    "category": "文娱",
+    "sub_tag": "游戏电竞",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://www.polygon.com/rss/index.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "ESPN",
+    "category": "文娱",
+    "sub_tag": "国际体育",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.espn.com/espn/rss/news",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "The Guardian Culture",
+    "category": "文娱",
+    "sub_tag": "艺术文化",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.theguardian.com/culture/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Medical News Today",
+    "category": "生活",
+    "sub_tag": "医疗健康",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.medicalnewstoday.com/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "NPR Health",
+    "category": "生活",
+    "sub_tag": "公共卫生",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://feeds.npr.org/1128/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "Lifehacker",
+    "category": "生活",
+    "sub_tag": "效率生活",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://lifehacker.com/feed/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "The Guardian Lifestyle",
+    "category": "生活",
+    "sub_tag": "现代生活",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.theguardian.com/lifeandstyle/rss",
+    "refresh_interval_min": 10,
+    "is_active": true
+  }
+]

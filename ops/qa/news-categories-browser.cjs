@@ -37,7 +37,7 @@ async function main(){
  await send('Page.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
 
  const origin=process.env.QA_ORIGIN||'http://127.0.0.1:8098';
- const expected=['全部','科技','国际','财经','教育','科学','健康','环境','体育','文化','生活'];
+ const expected=['全部','国际','军事','科技','财经','教育','文娱','生活'];
  for(const width of [320,375,390,430,760,768,1024,1440]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
   await send('Page.navigate',{url:origin+'/news'});
@@ -51,7 +51,7 @@ async function main(){
   await evaluate("document.querySelector('.category-nav button:last-child').scrollIntoView({block:'nearest',inline:'nearest'});document.querySelector('.category-nav button:last-child').click()");
   await until("!document.querySelector('.feed-state')");
   if(!await evaluate("document.querySelector('.category-nav button:last-child').classList.contains('active') && document.documentElement.scrollWidth<=innerWidth"))throw Error('Last category not selectable');
-  console.log('PASS '+width+'px: 10 categories, selectable last tab, no page overflow');
+  console.log('PASS '+width+'px: 7 categories, selectable last tab, no page overflow');
   if(width===390)await snapshot('news-categories-390');
  }
  await send('Browser.close').catch(()=>{});

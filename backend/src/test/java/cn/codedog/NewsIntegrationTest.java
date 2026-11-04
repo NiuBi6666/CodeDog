@@ -32,7 +32,7 @@ class NewsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;
  @Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  static final String SECRET="test-news-secret-at-least-32-characters";
- @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql")).execute(ds);}
  @BeforeEach void clean(){db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void publicReadOnlyAndMissingConfigurationAreHonest()throws Exception{
@@ -56,8 +56,8 @@ class NewsIntegrationTest {
   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"is_active\":false}")).andExpect(status().isOk()).andExpect(jsonPath("$.is_active").value(false));
   assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE module='news' AND event_code='source_update'",Long.class)).isPositive();
 
-  for(String category:List.of("科学","健康","环境","体育","文化","生活")){
-   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category",category)))).andExpect(status().isOk()).andExpect(jsonPath("$.category").value(category));
+  for(String category:List.of("国际","军事","科技","财经","教育","文娱","生活")){
+   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category",category,"sub_tag","垂直主题","lang","zh")))).andExpect(status().isOk()).andExpect(jsonPath("$.category").value(category));
   }
   mvc.perform(patch("/api/admin/sources/"+id).session(session).with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("category","未知分类")))).andExpect(status().isBadRequest());
   mvc.perform(delete("/api/admin/sources/"+id).session(session).with(csrf())).andExpect(status().isOk());
@@ -65,6 +65,29 @@ class NewsIntegrationTest {
   mvc.perform(patch("/api/admin/sources/1").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{\"refresh_interval_min\":10}")).andExpect(status().isForbidden());
   mvc.perform(get("/api/admin/news").session(session)).andExpect(status().isForbidden());
   mvc.perform(post("/api/admin/sources").session(session).with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
+ }
+
+ @Test void chineseOriginalPublishesWithoutTranslationAndTagsFilterIndependently()throws Exception{
+  db.update("INSERT INTO news_sources(source_name,rss_url,category,sub_tag,lang) VALUES('taxonomy-zh','https://example.com/zh-feed','生活','医疗健康','zh')");
+  long source=db.queryForObject("SELECT id FROM news_sources WHERE source_name='taxonomy-zh'",Long.class);
+  try{
+   String title="中文原稿标题",text="这是保留来源原文的中文医学新闻，不应调用英文翻译服务。".repeat(20);
+   byte[] body=json.writeValueAsBytes(Map.of("batch_id","taxonomy-chinese-batch","articles",List.of(Map.of("source_id",source,"origin_url","https://example.com/chinese-health","title_en",title,"lang","en","paragraphs_en",List.of(text),"published_at",Instant.now().toString()))));
+   news.accept(body);news.ingestBatches();
+   long id=db.queryForObject("SELECT id FROM news_articles WHERE source_id=?",Long.class,source);
+   var article=news.article(id,false);
+   assertThat(article.get("lang")).isEqualTo("zh");
+   assertThat(article.get("sub_tag")).isEqualTo("医疗健康");
+   assertThat(article.get("translation_status")).isEqualTo("ready");
+   assertThat(article.get("title_original")).isEqualTo(title);
+   assertThat(article.get("content_original")).isEqualTo(text);
+   assertThat(article.get("content_zh")).isEqualTo(text);
+   mvc.perform(get("/api/news").param("category","生活").param("sub_tag","医疗健康")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.articles[0].lang").value("zh"));
+   mvc.perform(get("/api/news").param("category","生活").param("sub_tag","其他主题")).andExpect(jsonPath("$.total").value(0));
+   mvc.perform(post("/api/news/"+id+"/translation").with(csrf()).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isOk()).andExpect(jsonPath("$.translation_status").value("ready"));
+   assertThat(db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE body_requested_at IS NOT NULL",Long.class)).isZero();
+   assertThat(db.queryForObject("SELECT COUNT(*) FROM news_translation_cache",Long.class)).isZero();
+  }finally{db.update("DELETE FROM news_sources WHERE id=?",source);}
  }
  @Test void webhookIsSignedDurableIdempotentAndDeduplicated()throws Exception{
   long source=((Number)db.queryForMap("SELECT id FROM news_sources LIMIT 1").get("id")).longValue();

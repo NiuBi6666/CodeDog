@@ -1,0 +1,11 @@
+ALTER TABLE news_sources ADD sub_tag VARCHAR(40) NOT NULL DEFAULT '';
+ALTER TABLE news_sources ADD lang VARCHAR(5) NOT NULL DEFAULT 'en';
+ALTER TABLE news_articles ADD sub_tag VARCHAR(40) NOT NULL DEFAULT '';
+ALTER TABLE news_articles ADD lang VARCHAR(5) NOT NULL DEFAULT 'en';
+UPDATE news_sources SET sub_tag=CASE category WHEN '国际' THEN '全球要闻' WHEN '科技' THEN '科技动态' WHEN '财经' THEN '金融市场' WHEN '教育' THEN '教育科技' WHEN '科学' THEN '科学探索' WHEN '健康' THEN '医疗健康' WHEN '环境' THEN '环境气候' WHEN '体育' THEN '体育赛事' WHEN '文化' THEN '艺术文化' WHEN '生活' THEN '现代生活' ELSE '综合资讯' END;
+UPDATE news_sources SET category=CASE category WHEN '科学' THEN '科技' WHEN '环境' THEN '科技' WHEN '健康' THEN '生活' WHEN '体育' THEN '文娱' WHEN '文化' THEN '文娱' ELSE category END;
+UPDATE news_articles SET sub_tag=CASE category WHEN '国际' THEN '全球要闻' WHEN '科技' THEN '科技动态' WHEN '财经' THEN '金融市场' WHEN '教育' THEN '教育科技' WHEN '科学' THEN '科学探索' WHEN '健康' THEN '医疗健康' WHEN '环境' THEN '环境气候' WHEN '体育' THEN '体育赛事' WHEN '文化' THEN '艺术文化' WHEN '生活' THEN '现代生活' ELSE '综合资讯' END;
+UPDATE news_articles SET category=CASE category WHEN '科学' THEN '科技' WHEN '环境' THEN '科技' WHEN '健康' THEN '生活' WHEN '体育' THEN '文娱' WHEN '文化' THEN '文娱' ELSE category END;
+CREATE INDEX idx_news_category_subtag ON news_articles(category,sub_tag,published_at);
+UPDATE news_sources SET sub_tag=CASE source_name WHEN 'TechCrunch' THEN 'AI与创投' WHEN 'The Guardian' THEN '国际深度' WHEN 'EdSurge' THEN '教育科技' ELSE sub_tag END;
+UPDATE news_articles SET sub_tag=CASE source_name WHEN 'TechCrunch' THEN 'AI与创投' WHEN 'The Guardian' THEN '国际深度' WHEN 'EdSurge' THEN '教育科技' ELSE sub_tag END;

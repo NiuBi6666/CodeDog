@@ -75,7 +75,7 @@ public class NewsService {
   return values.entrySet().stream().filter(e->!existing.contains(digest(e.getKey()))).map(Map.Entry::getValue).toList();
  }
  public boolean parallelTitles(){return translation.config().mode().equals("api");}
- public List<Map<String,Object>> fastSources(){return db.queryForList("SELECT id,rss_url FROM news_sources WHERE is_active=TRUE ORDER BY priority DESC LIMIT 30");}
+ public List<Map<String,Object>> fastSources(){return db.queryForList("SELECT id,rss_url,lang,category,sub_tag FROM news_sources WHERE is_active=TRUE ORDER BY priority DESC LIMIT 100");}
  public List<Map<String,Object>> tasks(boolean force){return tx.execute(status->{
   var list=db.queryForList("SELECT * FROM news_sources WHERE is_active=TRUE AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP) ORDER BY priority DESC FOR UPDATE");
   var due=new ArrayList<Map<String,Object>>();Instant now=Instant.now();
@@ -91,31 +91,35 @@ public class NewsService {
   Map<String,Object> old=id==null?Map.of():source(id);
   String name=body.path("source_name").asText(Objects.toString(old.get("source_name"),""));
   String url=body.path("rss_url").asText(Objects.toString(old.get("rss_url"),""));
+  String subTag=body.path("sub_tag").asText(Objects.toString(old.get("sub_tag"),""));
+  String lang=body.path("lang").asText(Objects.toString(old.get("lang"),"en"));
+  require(subTag.length()<=40&&!subTag.chars().anyMatch(Character::isISOControl)&&Set.of("en","zh").contains(lang),HttpStatus.BAD_REQUEST,"二级标签或原文语言无效");
   String category=body.path("category").asText(Objects.toString(old.get("category"),"科技"));
   int priority=body.path("priority").asInt(((Number)old.getOrDefault("priority",80)).intValue());
   int interval=body.path("refresh_interval_min").asInt(((Number)old.getOrDefault("refresh_interval_min",10)).intValue());
   boolean active=body.has("is_active")?body.path("is_active").asBoolean():!Boolean.FALSE.equals(old.get("is_active"));
-  require(!name.isBlank()&&name.length()<=80&&url.length()<=1000&&List.of("科技","国际","财经","教育","科学","健康","环境","体育","文化","生活").contains(category)&&priority>=0&&priority<=100&&interval>=10&&interval<=1440,HttpStatus.BAD_REQUEST,"来源配置无效；频率为 10–1440 分钟");canonical(url);
+  require(!name.isBlank()&&name.length()<=80&&url.length()<=1000&&List.of("国际","军事","科技","财经","教育","文娱","生活").contains(category)&&priority>=0&&priority<=100&&interval>=10&&interval<=1440,HttpStatus.BAD_REQUEST,"来源配置无效；频率为 10–1440 分钟");canonical(url);
   if(id==null){
    var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
-   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO news_sources(source_name,rss_url,category,priority,refresh_interval_min,is_active) VALUES(?,?,?,?,?,?)",java.sql.Statement.RETURN_GENERATED_KEYS);statement.setString(1,name);statement.setString(2,url);statement.setString(3,category);statement.setInt(4,priority);statement.setInt(5,interval);statement.setBoolean(6,active);return statement;},keys);
+   db.update(connection->{var statement=connection.prepareStatement("INSERT INTO news_sources(source_name,rss_url,category,priority,refresh_interval_min,is_active,sub_tag,lang) VALUES(?,?,?,?,?,?,?,?)",java.sql.Statement.RETURN_GENERATED_KEYS);statement.setString(1,name);statement.setString(2,url);statement.setString(3,category);statement.setInt(4,priority);statement.setInt(5,interval);statement.setBoolean(6,active);statement.setString(7,subTag);statement.setString(8,lang);return statement;},keys);
    return source(keys.getKey().longValue());
   }
-  db.update("UPDATE news_sources SET source_name=?,rss_url=?,category=?,priority=?,refresh_interval_min=?,is_active=? WHERE id=?",name,url,category,priority,interval,active,id);return source(id);
+  db.update("UPDATE news_sources SET source_name=?,rss_url=?,category=?,priority=?,refresh_interval_min=?,is_active=?,sub_tag=?,lang=? WHERE id=?",name,url,category,priority,interval,active,subTag,lang,id);return source(id);
  }
  public void delete(long id){source(id);db.update("DELETE FROM news_sources WHERE id=?",id);}
  public Map<String,Object> overview(){return Map.of("configuration",configuration(),"sources",sources(),"articles",db.queryForList("SELECT id,title_en,title_zh,source_name,status,attempts,last_error,published_at FROM news_articles ORDER BY id DESC LIMIT 100"),"runs",db.queryForList("SELECT * FROM news_refresh_runs ORDER BY id DESC LIMIT 10"),"batches",db.queryForList("SELECT batch_id,status,created_at,last_error FROM news_batches ORDER BY created_at DESC LIMIT 10"));}
- public Map<String,Object> list(String q,String category,String source,int page){
+ public Map<String,Object> list(String q,String category,String source,int page){return list(q,category,source,page,"");}
+ public Map<String,Object> list(String q,String category,String source,int page,String subTag){
   page=Math.max(0,Math.min(page,1000));
-  String where=" WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL AND (?='' OR category=?) AND (?='' OR source_name=?) AND (?='' OR title_en LIKE ? OR title_zh LIKE ?)";
-  String search="%"+q+"%";Object[] args={category,category,source,source,q,search,search};
+  String where=" WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND event_id IS NULL AND (?='' OR category=?) AND (?='' OR source_name=?) AND (?='' OR sub_tag=?) AND (?='' OR title_en LIKE ? OR title_zh LIKE ?)";
+  String search="%"+q+"%";Object[] args={category,category,source,source,subTag,subTag,q,search,search};
   var params=new ArrayList<>(Arrays.asList(args));params.add(30);params.add(page*30);
-  var rows=db.queryForList("SELECT id,title_en,title_zh,summary_zh,source_name,category,cover_image,published_at,created_at,author FROM news_articles"+where+" ORDER BY published_at DESC,id DESC LIMIT ? OFFSET ?",params.toArray());
-  return Map.of("articles",rows,"total",db.queryForObject("SELECT COUNT(*) FROM news_articles"+where,Long.class,args),"page",page,"sources",db.queryForList("SELECT DISTINCT source_name FROM news_articles WHERE status='ready' OR (title_zh IS NOT NULL AND title_zh<>'') ORDER BY source_name"),"configuration",Map.of("ready",aiReady()&&githubReady()));
+  var rows=db.queryForList("SELECT id,title_en,title_zh,summary_zh,source_name,category,sub_tag,lang,title_en AS title_original,cover_image,published_at,created_at,author FROM news_articles"+where+" ORDER BY published_at DESC,id DESC LIMIT ? OFFSET ?",params.toArray());
+  return Map.of("articles",rows,"total",db.queryForObject("SELECT COUNT(*) FROM news_articles"+where,Long.class,args),"page",page,"sources",db.queryForList("SELECT DISTINCT source_name FROM news_articles WHERE status='ready' OR (title_zh IS NOT NULL AND title_zh<>'') ORDER BY source_name"),"sub_tags",db.queryForList("SELECT DISTINCT sub_tag FROM news_articles WHERE (status='ready' OR (title_zh IS NOT NULL AND title_zh<>'')) AND sub_tag<>'' AND (?='' OR category=?) ORDER BY sub_tag",String.class,category,category),"configuration",Map.of("ready",aiReady()&&githubReady()));
  }
  public Map<String,Object> article(long id,boolean admin){
   var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
-  a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));return a;
+  a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));return a;
  }
  public void retry(long id){require(db.update("UPDATE news_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
  @jakarta.annotation.PreDestroy public void stop(){stopping.set(true);}
@@ -216,11 +220,12 @@ public class NewsService {
    String url=canonical(a.path("origin_url").asText()),title=a.path("title_en").asText();JsonNode paragraphs=a.path("paragraphs_en");
    require(paragraphs.isArray()&&paragraphs.size()>0&&paragraphs.size()<=400,HttpStatus.BAD_REQUEST,"正文段落无效");
    var texts=new ArrayList<String>();for(var p:paragraphs){require(p.isTextual()&&!p.asText().isBlank(),HttpStatus.BAD_REQUEST,"正文无效");texts.add(p.asText().strip());}
-   String text=String.join("\n\n",texts);if(text.split("\\s+").length<150)continue;
+   String text=String.join("\n\n",texts);if("zh".equals(src.get("lang"))?text.replaceAll("\\s+","").length()<200:text.split("\\s+").length<150)continue;
    require(title.length()>0&&title.length()<=1000&&text.length()<=100000&&url.length()<=2000,HttpStatus.BAD_REQUEST,"正文超限");
    Instant published;try{published=Instant.parse(a.path("published_at").asText());}catch(Exception e){published=Instant.now();}if(published.isAfter(Instant.now().plusSeconds(3600)))published=Instant.now();
    String cover=a.path("cover_image").asText("");if(!cover.isBlank()){try{canonical(cover);}catch(Exception e){cover="";}}
-   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published));}catch(org.springframework.dao.DuplicateKeyException ignored){}
+   boolean chinese="zh".equals(src.get("lang"));
+   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,sub_tag,lang,title_zh,content_zh,status,translated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("sub_tag"),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null);}catch(org.springframework.dao.DuplicateKeyException ignored){}
   }
   for(JsonNode result:batch.path("source_results")){
    boolean ok=result.path("success").asBoolean();long id=result.path("source_id").asLong();
