@@ -8,7 +8,7 @@ const categories=['全部','国际','军事','科技','财经','教育','文娱'
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
 const feedPanel=ref(null),loadSentinel=ref(null),hasMore=ref(false),nextCursor=ref(''),loadingMore=ref(false),moreError=ref('');
 const bodyError=ref(''),bodyWaiting=ref(false);
-const mode=ref('bilingual'),syncing=ref(false),notice=ref(''),imageFailed=ref(false),loading=ref(true),error=ref('');
+const mode=ref('bilingual'),imageFailed=ref(false),loading=ref(true),error=ref('');
 const effectiveMode=computed(()=>selected.value?.lang==='zh'?'zh':mode.value),fontSize=ref(17),clock=ref(Date.now());
 function dateLabel(value){return relativeTime(value,clock.value);}
 function exactDate(value){return new Date(value).toLocaleString('zh-CN');}
@@ -68,7 +68,7 @@ async function load(){
 function selectArticle(id){router.push('/article/'+id);}
 function selectCategory(item){category.value=item;}
 async function more(){
- if(loading.value||loadingMore.value||syncing.value||moreError.value||!hasMore.value||!nextCursor.value)return;
+ if(loading.value||loadingMore.value||moreError.value||!hasMore.value||!nextCursor.value)return;
  const g=generation,cursor=nextCursor.value;
  loadingMore.value=true;
  try{
@@ -80,7 +80,7 @@ async function more(){
 function retryMore(){moreError.value='';more();}
 async function observeFeed(){
  feedObserver?.disconnect();await nextTick();
- if(!loadSentinel.value||loading.value||loadingMore.value||syncing.value||moreError.value||!hasMore.value)return;
+ if(!loadSentinel.value||loading.value||loadingMore.value||moreError.value||!hasMore.value)return;
  const mobile=matchMedia('(max-width:760px)').matches;
  if(mobile&&route.params.id)return;
  feedObserver=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting))more();},{root:mobile?null:feedPanel.value,rootMargin:'0px 0px 120px 0px',threshold:0});
@@ -89,20 +89,6 @@ async function observeFeed(){
 function scrollListTop(){
  if(matchMedia('(max-width:760px)').matches)window.scrollTo({top:0,behavior:'instant'});
  else if(feedPanel.value)feedPanel.value.scrollTop=0;
-}
-// Check the first published item; older backfills must not reset the current feed.
-async function sync(){
- if(syncing.value||loading.value||loadingMore.value)return;
- const g=generation,first=articles.value[0];
- syncing.value=true;notice.value='';
- try{
-  const p=await request(listPath());if(g!==generation)return;
-  const newest=p.articles[0];
-  const newer=!first?Boolean(newest):Boolean(newest)&&(new Date(newest.published_at)>new Date(first.published_at)||(new Date(newest.published_at).getTime()===new Date(first.published_at).getTime()&&Number(newest.id)>Number(first.id)));
-  if(!newer){notice.value='暂无更新的报道';return;}
-  applyPage(p);moreError.value='';notice.value='已更新最新报道';await nextTick();scrollListTop();
- }catch(e){if(g===generation)notice.value=e.message;}
- finally{syncing.value=false;observeFeed();}
 }
 function proxyImage(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
 watch([category,source],()=>{scrollListTop();load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{scrollListTop();load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}observeFeed();});
@@ -114,9 +100,8 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
     <header class="topbar">
       <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻<span class="brand-edition"> · GLOBAL EDITION</span></small></div></div>
       <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="selectCategory(item)">{{ item }}</button></nav>
-      <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="sync-button" :aria-label="syncing ? '正在刷新新闻列表' : '刷新已入库新闻'" title="刷新已入库新闻；后台每 10 分钟自动采集，可能因调度延迟而推迟" :disabled="syncing||loading||loadingMore" @click="sync"><span :class="{ spin: syncing }">↻</span>{{ syncing ? "同步中" : "立即同步" }}</button><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
+      <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
     </header>
-    <div v-if="notice" class="notice" role="status">{{ notice }}</div>
     <main class="workspace">
       <aside ref="feedPanel" class="feed-panel">
         <div class="feed-heading"><h1>今日简报 <span class="count">({{ total }})</span></h1><select v-model="source" aria-label="按来源筛选"><option v-for="item in sources" :key="item">{{ item }}</option></select></div>

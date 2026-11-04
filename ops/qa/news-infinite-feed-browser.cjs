@@ -62,11 +62,7 @@ async function main(){
   await send('Page.navigate',{url:origin+'/news'});
   await until("document.querySelectorAll('.story-card').length===30");
   if(!await evaluate("!document.querySelector('.load-more')"))throw Error('Load-more button remains');
-  await evaluate(mobile?"window.scrollTo(0,500)":"document.querySelector('.feed-panel').scrollTop=500");
-  await evaluate("window.originalFirst=document.querySelector('.story-card');window.originalCount=document.querySelector('.count').textContent;window.feedExtra=7;window.savedScroll="+(mobile?'window.scrollY':"document.querySelector('.feed-panel').scrollTop")+";window.feedRequests=[];document.querySelector('.sync-button').click()");
-  await until("!document.querySelector('.sync-button').disabled");
-  if(!await evaluate("window.originalFirst===document.querySelector('.story-card') && window.originalCount===document.querySelector('.count').textContent && Math.abs(window.savedScroll-"+(mobile?'window.scrollY':"document.querySelector('.feed-panel').scrollTop")+")<1 && document.querySelector('.notice').textContent==='暂无更新的报道'"))throw Error('Unchanged head reset feed/count/scroll');
-  console.log('PASS '+width+' no newer headline: DOM, count and scroll retained');
+  if(!await evaluate("!document.querySelector('.sync-button') && window.feedRequests.every(r=>r.method==='GET')"))throw Error('Public refresh button remains');
   await evaluate("window.feedRequests=[];window.feedDelay=true;window.feedFail=true");
   await scrollBottom(mobile);await until("window.releaseFeed");
   await scrollBottom(mobile);await wait(200);
@@ -84,10 +80,8 @@ async function main(){
   const requests=await evaluate("window.feedRequests.length");await scrollBottom(mobile);await wait(400);
   if(await evaluate("window.feedRequests.length")!==requests)throw Error('Loading continued after end');
   console.log('PASS '+width+' scroll loads older stories in order and stops at end');
-  await evaluate("window.feedRows.unshift({...window.feedRows[0],id:200,title_zh:'真正更新的头条',published_at:'2026-11-04T12:01:00Z'});document.querySelector('.sync-button').click()");
-  await until("document.querySelector('.story-card h2')?.textContent==='真正更新的头条'");
-  if(!await evaluate("document.querySelectorAll('.story-card').length===30 && document.querySelector('.notice').textContent==='已更新最新报道'"))throw Error('Newer head did not reset with fresh cursor');
-  console.log('PASS '+width+' genuinely newer headline refreshes first page');
+  await send('Page.navigate',{url:origin+'/news'});
+  await until("document.querySelectorAll('.story-card').length===30");
   await evaluate("window.feedDelay=true;window.releaseFeed=null");
   await scrollBottom(mobile);await until("window.releaseFeed");
   await evaluate("[...document.querySelectorAll('.category-nav button')].find(e=>e.textContent==='生活').click()");

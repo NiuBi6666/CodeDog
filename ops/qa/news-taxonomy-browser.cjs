@@ -68,9 +68,7 @@ async function main(){
  await evaluate("[...document.querySelectorAll('.category-nav button')].find(e=>e.textContent==='科技').click()");
  await until("document.querySelectorAll('.story-card').length===2 && document.querySelector('.category-tag')?.textContent==='科技'");
  if(!await evaluate("!document.querySelector('.subtag-nav') && [...document.querySelectorAll('.category-tag')].every(e=>e.textContent==='科技')"))throw Error('Secondary topics remain');
- await evaluate("window.taxonomyRequests=[];document.querySelector('.sync-button').click()");
- await until("!document.querySelector('.sync-button').disabled");
- if(!await evaluate("window.taxonomyRequests.length===1&&window.taxonomyRequests[0].method==='GET'&&!new URL(window.taxonomyRequests[0].url,location.origin).searchParams.has('sub_tag')"))throw Error('Removed topic filter still sent');
+ if(!await evaluate("!document.querySelector('.sync-button') && window.taxonomyRequests.every(r=>r.method==='GET'&&!new URL(r.url,location.origin).searchParams.has('sub_tag'))"))throw Error('Removed refresh button or topic parameter remains');
  console.log('PASS only primary categories; no secondary navigation or query parameter');
  await evaluate("[...document.querySelectorAll('.category-nav button')].find(e=>e.textContent==='生活').click()");
  await until("document.querySelector('.category-tag')?.textContent==='生活'");
