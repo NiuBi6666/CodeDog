@@ -59,3 +59,12 @@ GitHub Actions 成功执行并收到第一批真实双语新闻才算端到端�
 不能绕过付费墙；上线媒体需核实内容授权及对应站点抓取条款。
 
 两种方式的部署、网络与使用限制见 [正文翻译方式](news-translation-modes.md)。
+
+
+## 配置参考（不在页面常驻展示）
+GitHub Token 仅授权目标仓库；Actions、Secrets、Variables 使用 Read and write。
+Token 加密保存且不回显。输入框留空保留原密钥，更换仓库时重新输入对应 Token。
+保存并自动配置会同步 Webhook 密钥、NEWS_API_URL、NEWS_ENABLED，并启用和运行 main 分支工作流。
+大模型 API Base URL 填根地址，不含 /chat/completions。测试操作使用已保存配置，API 模式测试可能产生服务商调用费用。
+默认翻译依赖第三方服务，失败或限流时可在翻译配置切换引擎。
+订阅源间隔范围 10–1440 分钟，权重范围 0–100；页面输入框保留实际校验。

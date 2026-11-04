@@ -46,7 +46,7 @@ onMounted(()=>{load();loadAi();});
   <AdminLayout page-title="新闻聚合" active-page="news">
     <div class="news-admin">
       <div class="admin-page-heading">
-        <div><h1>新闻聚合</h1><p>管理新闻来源、采集配置与正文翻译</p></div>
+        <div><h1>新闻聚合</h1></div>
         <div class="button-row">
           <a class="button button-quiet" href="/news" target="_blank" rel="noopener">打开新闻站 ↗</a>
           <button class="button button-quiet" type="button" @click="load">刷新状态</button>
@@ -76,40 +76,40 @@ onMounted(()=>{load();loadAi();});
         </div>
 
         <section v-if="auth.user?.admin" v-show="activeTab==='translation'" id="news-panel-translation" role="tabpanel" aria-labelledby="news-tab-translation" tabindex="0" class="admin-panel news-section">
-          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2><p class="news-description">采集后翻译标题，打开新闻详情时按需翻译全文；保留英文原文，不生成摘要。</p></div><span class="status-badge status-offline">仅系统管理员</span></div>
+          <div class="panel-heading news-panel-heading"><div><h2>正文翻译配置</h2></div><span class="status-badge status-offline">仅系统管理员</span></div>
           <div class="news-panel-body">
             <div v-if="aiError" class="notice notice-error" role="alert">{{aiError}}</div>
             <div v-if="aiTest" class="notice notice-success" role="status">{{aiTest}}</div>
             <p v-if="!aiSettings&&!aiError" class="news-description">正在读取翻译配置…</p>
             <form v-if="aiSettings" class="form-stack news-form" @submit.prevent="saveAi">
               <div class="news-form-grid">
-                <label>翻译方式<select v-model="aiForm.mode"><option value="translators">默认翻译（无需 API Key）</option><option value="api">大模型 API</option></select></label>
+                <label>翻译方式<select v-model="aiForm.mode"><option value="translators">默认翻译</option><option value="api">大模型 API</option></select></label>
                 <label v-if="aiForm.mode==='translators'">翻译引擎<select v-model="aiForm.engine"><option value="bing">Bing</option><option value="alibaba">Alibaba</option><option value="baidu">Baidu</option></select></label>
               </div>
-              <p v-if="aiForm.mode==='translators'" class="news-hint">默认翻译依赖第三方在线服务，遇到限流或不可用时可切换引擎。切换方式会保留已保存的 API Key。</p>
+
               <template v-if="aiForm.mode==='api'">
                 <div class="button-row news-presets"><span>常用服务</span><button v-for="provider in providers" :key="provider.url" class="button button-quiet button-small" type="button" @click="aiForm.base_url=provider.url;aiForm.api_key='';aiTest=''">{{provider.label}}</button></div>
                 <div class="news-form-grid">
-                  <label>API Base URL<input v-model.trim="aiForm.base_url" type="url" placeholder="https://api.example.com/v1" maxlength="500" required autocomplete="off"><small>填写接口根地址，不含 /chat/completions。</small></label>
-                  <label>模型名称<input v-model.trim="aiForm.model" placeholder="服务商控制台中的完整模型名称" maxlength="200" required autocomplete="off"></label>
-                  <label class="news-field-wide">API Key<input v-model="aiForm.api_key" type="password" :required="!aiSettings.api_key_configured" :placeholder="aiSettings.api_key_configured?'已保存；留空保留原密钥':'粘贴服务商 API Key'" maxlength="4096" autocomplete="new-password" :spellcheck="false"><small>{{aiSettings.api_key_configured?'密钥已配置；更换服务地址时须填写对应服务商的新密钥。':'密钥加密保存，不回显。'}}</small></label>
+                  <label>API Base URL<input v-model.trim="aiForm.base_url" type="url" placeholder="https://api.example.com/v1" maxlength="500" required autocomplete="off"></label>
+                  <label>模型名称<input v-model.trim="aiForm.model" placeholder="模型名称" maxlength="200" required autocomplete="off"></label>
+                  <label class="news-field-wide">API Key<input v-model="aiForm.api_key" type="password" :required="!aiSettings.api_key_configured" :placeholder="aiSettings.api_key_configured?'已配置，留空不修改':'粘贴服务商 API Key'" maxlength="4096" autocomplete="new-password" :spellcheck="false"></label>
                 </div>
               </template>
               <div v-if="aiForm.mode==='api'&&!aiSettings.encryption_available" class="notice notice-error">服务器加密存储暂不可用，请联系管理员。</div>
-              <div class="news-form-footer"><span class="news-description">保存后立即生效。测试使用已保存配置，大模型测试可能消耗少量额度。</span><div class="button-row"><button class="button button-quiet" type="button" :disabled="aiBusy||!aiSettings.configured" @click="testAi">测试已保存配置</button><button class="button button-primary" type="submit" :disabled="aiBusy||(aiForm.mode==='api'&&!aiSettings.encryption_available)">{{aiBusy?'处理中…':'保存翻译配置'}}</button></div></div>
+              <div class="news-form-footer"><div class="button-row"><button class="button button-quiet" type="button" :disabled="aiBusy||!aiSettings.configured" @click="testAi">测试已保存配置</button><button class="button button-primary" type="submit" :disabled="aiBusy||(aiForm.mode==='api'&&!aiSettings.encryption_available)">{{aiBusy?'处理中…':'保存翻译配置'}}</button></div></div>
             </form>
           </div>
         </section>
 
         <section v-show="activeTab==='sources'" id="news-panel-sources" role="tabpanel" aria-labelledby="news-tab-sources" tabindex="0" class="admin-panel news-section">
-          <div class="panel-heading news-panel-heading"><div><h2>订阅源</h2><p class="news-description">计划每 10 分钟检查一次，按各来源的刷新间隔采集。</p></div><span class="status-badge status-offline">{{data.sources.length}} 个来源</span></div>
+          <div class="panel-heading news-panel-heading"><div><h2>订阅源</h2></div><span class="status-badge status-offline">{{data.sources.length}} 个来源</span></div>
           <div class="document-table-wrap news-table-wrap"><table class="document-table"><thead><tr><th>媒体 / RSS</th><th>分类</th><th>频率 / 权重</th><th>最近抓取</th><th>最近成功</th><th>状态</th><th>操作</th></tr></thead><tbody>
             <tr v-for="s in data.sources" :key="s.id"><td class="news-title-cell"><strong>{{s.source_name}}</strong><small>{{s.rss_url}}</small><span v-if="s.last_error" class="news-row-error">{{s.last_error}}</span></td><td>{{s.category}}<small>{{s.sub_tag||'未设主题'}} · {{s.lang==='zh'?'中文':'英文'}}</small></td><td>{{s.refresh_interval_min}} 分钟 / {{s.priority}}</td><td>{{date(s.last_crawled_at)}}</td><td>{{date(s.last_success_at)}}</td><td><span class="status-badge" :class="s.is_active?'status-normal':'status-offline'">{{s.is_active?'已启用':'已暂停'}}</span></td><td><div class="button-row news-table-actions"><button v-if="hasPermission('news.sources.update')" class="button button-quiet button-small" type="button" @click="edit(s)">编辑</button><button v-if="hasPermission('news.sources.update')" class="button button-quiet button-small" type="button" @click="toggle(s)">{{s.is_active?'停用':'启用'}}</button><button v-if="hasPermission('news.sources.delete')" class="button button-quiet button-small news-danger" type="button" @click="remove(s)">删除</button></div></td></tr>
           </tbody></table></div>
           <form v-if="hasPermission(editing?'news.sources.update':'news.sources.create')" class="form-stack news-form news-panel-body news-source-form" @submit.prevent="save">
             <h3>{{editing?'编辑订阅源':'添加订阅源'}}</h3>
-            <div class="news-source-fields"><label>媒体名称<input v-model="form.source_name" maxlength="80" required></label><label>HTTPS RSS 地址<input v-model="form.rss_url" type="url" required placeholder="https://example.com/feed"></label><label>领域<select v-model="form.category"><option v-for="item in newsCategories" :key="item" :value="item">{{item}}</option></select></label><label>二级标签<input v-model="form.sub_tag" maxlength="40" placeholder="如：教育科技"></label><label>原文语言<select v-model="form.lang"><option value="en">英文（预译标题，按需译全文）</option><option value="zh">中文（直接展示原稿）</option></select></label><label>刷新间隔（分钟）<input v-model.number="form.refresh_interval_min" type="number" min="10" max="1440" required></label><label>媒体权重<input v-model.number="form.priority" type="number" min="0" max="100" required></label></div>
-            <div class="news-form-footer"><span class="news-description">刷新间隔为 10–1440 分钟，权重为 0–100。</span><div class="button-row"><button v-if="editing" class="button button-quiet" type="button" @click="cancel">取消</button><button class="button button-primary" type="submit" :disabled="busy">保存来源</button></div></div>
+            <div class="news-source-fields"><label>媒体名称<input v-model="form.source_name" maxlength="80" required></label><label>HTTPS RSS 地址<input v-model="form.rss_url" type="url" required placeholder="https://example.com/feed"></label><label>领域<select v-model="form.category"><option v-for="item in newsCategories" :key="item" :value="item">{{item}}</option></select></label><label>二级标签<input v-model="form.sub_tag" maxlength="40" placeholder="如：教育科技"></label><label>原文语言<select v-model="form.lang"><option value="en">英文</option><option value="zh">中文</option></select></label><label>刷新间隔（分钟）<input v-model.number="form.refresh_interval_min" type="number" min="10" max="1440" required></label><label>媒体权重<input v-model.number="form.priority" type="number" min="0" max="100" required></label></div>
+            <div class="news-form-footer"><div class="button-row"><button v-if="editing" class="button button-quiet" type="button" @click="cancel">取消</button><button class="button button-primary" type="submit" :disabled="busy">保存来源</button></div></div>
           </form>
         </section>
 

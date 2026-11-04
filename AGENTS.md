@@ -20,3 +20,13 @@
 - For mutations, record a field-level before/after change summary and batch counts or per-item failures where applicable. Record denied and failed operations with a sanitized reason; ensure one logical operation produces one authoritative audit event.
 - Never write passwords, password recovery ciphertext, session IDs, CSRF tokens, device tokens, cookies, authorization headers, encryption keys, or complete sensitive personal data to audit logs. Mask identifiers when full values are not necessary for investigation.
 - Permission and audit coverage are release-blocking acceptance criteria. Do not describe a feature as complete until its authorization and audit tests pass on the remote server.
+
+## UI copy: minimal by default
+
+- Applies to all new or modified user-facing pages and components in this repository.
+- Do not add unsolicited page subtitles, introductory paragraphs, how-to prose, feature explanations, implementation details, storage/encryption descriptions, permanent success narratives, or footer instructions.
+- Prefer a clear field label, concise action label, and one status indicator. Do not repeat status already shown by a badge or action feedback.
+- Keep necessary accessible labels, loading/empty/error states, validation messages, and short input placeholders that affect correct entry. Never hide errors or remove authorization controls to reduce copy.
+- Add explanatory copy only when explicitly requested by the user or strictly needed to complete a concrete operation; keep it short and contextual. Put reference material and setup tutorials in docs instead of the default interface.
+- Remove unwanted copy from component source; do not hide it with CSS, shrink it, or move it into tooltips merely to bypass this rule.
+- Before delivery, review visible text at desktop and mobile sizes and remove copy that does not help identify data, enter a value, choose an action, or understand a necessary current state.
