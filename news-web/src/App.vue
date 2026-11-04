@@ -1,7 +1,6 @@
 <script setup>
 import { computed,ref,watch,onMounted,onBeforeUnmount } from 'vue';
 import { useRoute,useRouter } from 'vue-router';
-import { syncMessage,syncExpired } from './sync-state.js';
 import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
 const route=useRoute(),router=useRouter();
@@ -14,7 +13,7 @@ function dateLabel(value){return relativeTime(value,clock.value);}
 function exactDate(value){return new Date(value).toLocaleString('zh-CN');}
 const sources=computed(()=>['全部来源',...sourceList.value]);
 const filtered=computed(()=>groupStories(articles.value));
-let generation=0,detailGeneration=0,poll,debounce,clockTimer,detailPoll;
+let generation=0,detailGeneration=0,debounce,clockTimer,detailPoll;
 function normalize(a){const lines=v=>Array.isArray(v)?v:(v||'').split(/\n\n/).filter(Boolean);return {...a,source_mark:a.source_name?.slice(0,1)||'L',category_en:{科技:'TECH',国际:'WORLD',财经:'MARKETS',教育:'EDUCATION'}[a.category]||'NEWS',summary_zh:Array.isArray(a.summary_zh)?a.summary_zh:(a.summary_zh||'').split('\n').filter(Boolean),content_en:lines(a.content_en),content_zh:lines(a.content_zh),related_sources:a.related_sources||[]};}
 async function request(path,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('/api'+path,{...options,signal:controller.signal});const p=await r.json();if(!r.ok)throw Error(p.error||'请求失败');return p;}catch(e){throw Error(e.name==='AbortError'?'请求超时，请稍后重试':e.message);}finally{clearTimeout(timer);}}
 function stopDetail(){clearTimeout(detailPoll);detailPoll=null;bodyWaiting.value=false;}
@@ -43,34 +42,25 @@ async function detail(id){
   detailPoll=setTimeout(tick,1000);
  }catch(e){if(g===detailGeneration){bodyWaiting.value=false;if(selected.value)bodyError.value=e.message;else error.value=e.message;}}
 }
-async function load(append=false){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else selected.value=null;}catch(e){if(g===generation)error.value=e.message;}finally{if(g===generation)loading.value=false;}}
+async function load(append=false){const g=++generation;loading.value=true;error.value='';try{const p=await request('/news?'+new URLSearchParams({q:query.value,category:category.value==='全部'?'':category.value,source:source.value==='全部来源'?'':source.value,page:String(page.value)}));if(g!==generation)return;const rows=p.articles.map(normalize);articles.value=append?[...articles.value,...rows]:rows;total.value=p.total;sourceList.value=p.sources.map(s=>s.source_name);if(route.params.id){if(!selected.value||selected.value.id!==Number(route.params.id))await detail(route.params.id);}else selected.value=null;return rows;}catch(e){if(g===generation)error.value=e.message;return null;}finally{if(g===generation)loading.value=false;}}
 function selectArticle(id){router.push('/article/'+id);}
 function more(){page.value++;load(true);}
-function stopPoll(){clearTimeout(poll);poll=null;syncing.value=false;}
+// Public refresh only reads prepared articles; collection never runs on a reader's click.
 async function sync(){
- if(syncing.value)return;syncing.value=true;notice.value='正在提交采集任务…';
+ if(syncing.value)return;
+ syncing.value=true;notice.value='正在更新列表…';
+ const known=new Set(articles.value.map(a=>a.id));
+ page.value=0;
  try{
-  const before=await request('/news/sync-status');
-  const initial=Number(before.published_articles||0),started=Date.now();
-  const p=await request('/user/refresh',{method:'POST'});notice.value=p.message;
-  async function tick(){
-   if(!syncing.value)return;
-   try{
-    const s=await request('/news/sync-status?run_id='+encodeURIComponent(p.run_id));
-    await load();
-    if(!syncing.value)return;
-    notice.value=syncMessage(s,Math.max(0,Number(s.published_articles||0)-initial));
-    if(['failed','uncertain','idle'].includes(s.phase)){stopPoll();return;}
-    if(syncExpired(started)){notice.value='等待时间较长，后台仍会继续抓取和翻译标题；可稍后刷新列表。';stopPoll();return;}
-    poll=setTimeout(tick,5000);
-   }catch(e){notice.value='暂时无法查询进度，后台任务仍会继续；可稍后刷新。';stopPoll();}
-  }
-  poll=setTimeout(tick,5000);
- }catch(e){notice.value=e.message;stopPoll();}
+  const rows=await load();
+  if(!rows){notice.value=error.value||'列表已由其他筛选操作更新';return;}
+  const added=rows.filter(a=>!known.has(a.id)).length;
+  notice.value=added?'已更新，发现 '+added+' 篇新报道':'列表已更新，暂无新报道；后台定时采集会继续运行';
+ }finally{syncing.value=false;}
 }
 function proxyImage(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
 watch([category,source],()=>{page.value=0;load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{page.value=0;load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}});
-onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);});onBeforeUnmount(()=>{stopPoll();detailGeneration++;stopDetail();clearTimeout(debounce);clearInterval(clockTimer);});
+onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);});onBeforeUnmount(()=>{detailGeneration++;stopDetail();clearTimeout(debounce);clearInterval(clockTimer);});
 </script>
 
 <template>
@@ -78,7 +68,7 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);}
     <header class="topbar">
       <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻<span class="brand-edition"> · GLOBAL EDITION</span></small></div></div>
       <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="category = item">{{ item }}</button></nav>
-      <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="sync-button" :aria-label="syncing ? '正在同步新闻' : '立即同步新闻'" :disabled="syncing" @click="sync"><span :class="{ spin: syncing }">↻</span>{{ syncing ? "同步中" : "立即同步" }}</button><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
+      <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="sync-button" :aria-label="syncing ? '正在刷新新闻列表' : '刷新已入库新闻'" title="刷新已入库新闻；后台每 10 分钟自动采集，可能因调度延迟而推迟" :disabled="syncing" @click="sync"><span :class="{ spin: syncing }">↻</span>{{ syncing ? "同步中" : "立即同步" }}</button><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
     </header>
     <div v-if="notice" class="notice" role="status">{{ notice }}</div>
     <main class="workspace">
