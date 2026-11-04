@@ -28,7 +28,8 @@ class CollectorTest(unittest.TestCase):
  def test_footer_cleanup_is_conservative_and_rechecks_minimum_body_length(self):
   body=('The investigation took place on November 4 and the report preserves its chronology. '*18).strip()
   dates=['- 2026年11月04日 11:06:43','- 2026年11月03日 17:12:22']
-  self.assertEqual(crawler.clean_paragraphs([body,'国际新闻精选：',*dates]),[body])
+  for heading in ['国际新闻精选：','经济新闻精选：','财经新闻精选：','社会新闻精选：','文化新闻精选：','港澳台新闻精选：']:
+   with self.subTest(heading=heading):self.assertEqual(crawler.clean_paragraphs([body,heading,*dates]),[body])
   self.assertEqual(crawler.clean_paragraphs([body,*dates]),[body,*dates])
   self.assertEqual(crawler.clean_paragraphs([body,'Read more:','The minister announced new measures.',*dates]),[body,'Read more:','The minister announced new measures.',*dates])
   with patch.object(crawler,'download',return_value=(b'<p>x</p>','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':'Short article.\nRelated stories:\n'+'\n'.join(['[More news](https://example.com/a)']*200)}):

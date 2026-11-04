@@ -8,7 +8,8 @@ import static org.assertj.core.api.Assertions.*;
 class NewsContentCleanerTest {
  private static final String DATE="- 2026年11月04日 11:06:43";
  @Test void removesConfirmedRecommendationDatesButNotTheReporting(){
-  assertThat(NewsContentCleaner.clean(List.of("事实正文。","国际新闻精选：",DATE,DATE))).containsExactly("事实正文。");
+  for(String heading:List.of("国际新闻精选：","经济新闻精选：","财经新闻精选：","社会新闻精选：","文化新闻精选：","港澳台新闻精选："))
+   assertThat(NewsContentCleaner.clean(List.of("事实正文。",heading,DATE,DATE))).as(heading).containsExactly("事实正文。");
  }
  @Test void preservesEventDatesAndLiveUpdatesWithoutARecommendationHeading(){
   var reporting=List.of("At 11:06 the minister spoke.",DATE,DATE,"A new development followed.");

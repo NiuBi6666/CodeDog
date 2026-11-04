@@ -36,7 +36,7 @@ class NewsIntegrationTest {
  @BeforeEach void clean(){db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void historicalArticleResponseOmitsFooterAndKeepsStoredOriginal()throws Exception{
-  String original="正文事实。\n\n国际新闻精选：\n\n- 2026年11月04日 11:06:43\n\n- 2026年11月03日 17:12:22";
+  String original="正文事实。\n\n经济新闻精选：\n\n- 2026年11月04日 11:06:43\n\n- 2026年11月03日 17:12:22";
   db.update("INSERT INTO news_articles(source_id,url_hash,origin_url,source_name,category,title_en,title_zh,content_en,content_zh,status,lang,published_at) VALUES((SELECT MIN(id) FROM news_sources),?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",NewsService.digest("https://example.com/footer"),"https://example.com/footer","test","国际","标题","标题",original,original,"ready","zh");
   long id=db.queryForObject("SELECT id FROM news_articles WHERE origin_url='https://example.com/footer'",Long.class);
   mvc.perform(get("/api/news/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.content_en").value("正文事实。")).andExpect(jsonPath("$.content_zh").value("正文事实。")).andExpect(jsonPath("$.content_original").value("正文事实。"));

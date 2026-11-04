@@ -78,7 +78,7 @@ def rss_fulltext(entry):
  return None
 
 # Only remove a complete, recognizable footer module; dates inside reporting are meaningful.
-_RECOMMENDATION_HEADING=re.compile(r'^(?:国际新闻精选|财经新闻精选|新闻精选|相关推荐|相关阅读|推荐阅读|Related (?:articles|stories|coverage)|Recommended (?:stories|articles)|Read more|More on this story)[:：]?$',re.I)
+_RECOMMENDATION_HEADING=re.compile(r'^(?:[\u3400-\u9fff]{0,12}新闻精选|相关推荐|相关阅读|推荐阅读|Related (?:articles|stories|coverage)|Recommended (?:stories|articles)|Read more|More on this story)[:：]?$',re.I)
 _FOOTER_ITEM=re.compile(r'^(?:[-•*]\s*)?(?:\d{4}(?:年\d{1,2}月\d{1,2}日|[-/]\d{1,2}[-/]\d{1,2})\s+\d{1,2}:\d{2}(?::\d{2})?|\[[^\]]+\]\(https?://[^)]+\))$')
 def clean_paragraphs(paragraphs):
  rows=[p.strip() for p in paragraphs if p.strip()]

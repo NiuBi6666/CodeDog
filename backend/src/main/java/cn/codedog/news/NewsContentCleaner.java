@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 /** Conservative footer removal for new ingestion and historical article responses. */
 public final class NewsContentCleaner {
  private NewsContentCleaner(){}
- private static final Pattern HEADING=Pattern.compile("^(?:国际新闻精选|财经新闻精选|新闻精选|相关推荐|相关阅读|推荐阅读|Related (?:articles|stories|coverage)|Recommended (?:stories|articles)|Read more|More on this story)[:：]?$",Pattern.CASE_INSENSITIVE);
+ private static final Pattern HEADING=Pattern.compile("^(?:[\\p{IsHan}]{0,12}新闻精选|相关推荐|相关阅读|推荐阅读|Related (?:articles|stories|coverage)|Recommended (?:stories|articles)|Read more|More on this story)[:：]?$",Pattern.CASE_INSENSITIVE);
  private static final Pattern ITEM=Pattern.compile("^(?:[-•*]\\s*)?(?:\\d{4}(?:年\\d{1,2}月\\d{1,2}日|[-/]\\d{1,2}[-/]\\d{1,2})\\s+\\d{1,2}:\\d{2}(?::\\d{2})?|\\[[^\\]]+\\]\\(https?://[^)]+\\))$");
  public static List<String> paragraphs(String text){
   if(text==null||text.isBlank())return List.of();
