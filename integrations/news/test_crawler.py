@@ -25,6 +25,35 @@ class CollectorTest(unittest.TestCase):
    self.assertNotIn('bad()',result['paragraphs_en'][0])
    self.assertIsNone(crawler.extract_article({'link':entry['link'],'summary':text,'title':'Summary only'},self.source()))
 
+ def test_footer_cleanup_is_conservative_and_rechecks_minimum_body_length(self):
+  body=('The investigation took place on November 4 and the report preserves its chronology. '*18).strip()
+  dates=['- 2026年11月04日 11:06:43','- 2026年11月03日 17:12:22']
+  self.assertEqual(crawler.clean_paragraphs([body,'国际新闻精选：',*dates]),[body])
+  self.assertEqual(crawler.clean_paragraphs([body,*dates]),[body,*dates])
+  self.assertEqual(crawler.clean_paragraphs([body,'Read more:','The minister announced new measures.',*dates]),[body,'Read more:','The minister announced new measures.',*dates])
+  with patch.object(crawler,'download',return_value=(b'<p>x</p>','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':'Short article.\nRelated stories:\n'+'\n'.join(['[More news](https://example.com/a)']*200)}):
+   self.assertIsNone(crawler.extract_article({'link':'https://example.com/a'},self.source()))
+
+ def test_known_publisher_recommendations_are_removed_before_extraction(self):
+  raw='<html><head><title>Report title</title></head><body><div class="left_zw"><p>Original report with an event date: 2026-11-04 11:06:43.</p></div><div><h4 class="newsRecommendTitle">国际新闻精选：</h4><ul><li>Unrelated story 2026-11-03</li></ul></div><footer>Subscribe</footer></body></html>'
+  cleaned=crawler.prepare_article_html(raw.encode(),'https://www.chinanews.com.cn/gj/story.shtml')
+  self.assertIn('Original report with an event date',cleaned)
+  self.assertIn('Report title',cleaned)
+  self.assertNotIn('Unrelated story',cleaned)
+  self.assertNotIn('Subscribe',cleaned)
+  # The same CSS class on an unrelated publisher must not truncate its article.
+  self.assertIn('Unrelated story',crawler.prepare_article_html(raw.encode(),'https://example.com/story'))
+
+ def test_rss_fulltext_and_reader_fallback_get_the_same_footer_cleanup(self):
+  body='Original article text with facts and quotations. '*30
+  footer='\nRelated stories:\n[First](https://example.com/1)\n[Second](https://example.com/2)'
+  with patch.object(crawler,'download',side_effect=ConnectionError()),patch.object(crawler,'FAST',True),patch.object(crawler,'jina_article',return_value={'text':body+footer}):
+   result=crawler.extract_article({'link':'https://example.com/a'},self.source())
+   self.assertEqual(result['paragraphs_en'],[body.strip()])
+  entry={'link':'https://example.com/a','content':[{'value':'<p>'+body+'</p><p>Related stories:</p><p>[First](https://example.com/1)</p><p>[Second](https://example.com/2)</p>'}]}
+  with patch.object(crawler,'download',side_effect=ConnectionError()),patch.object(crawler,'FAST',False):
+   self.assertEqual(crawler.extract_article(entry,self.source())['paragraphs_en'],[body.strip()])
+
  def source(self,n=1):return {'id':n,'rss_url':'https://example.com/rss'}
  def test_batches_arrive_before_slow_article_and_completion_is_last(self):
   slow=threading.Event();first_push=threading.Event();sent=[]

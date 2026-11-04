@@ -1,6 +1,6 @@
 
 """Bounded RSS collector, shared by overseas Actions and the internal fast gateway."""
-import os,json,time,hmac,hashlib,uuid,socket,ipaddress,datetime,urllib.parse
+import os,json,time,hmac,hashlib,uuid,socket,ipaddress,datetime,urllib.parse,re
 from email.utils import parsedate_to_datetime
 import requests,feedparser,trafilatura
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -77,12 +77,39 @@ def rss_fulltext(entry):
   except Exception:continue
  return None
 
+# Only remove a complete, recognizable footer module; dates inside reporting are meaningful.
+_RECOMMENDATION_HEADING=re.compile(r'^(?:国际新闻精选|财经新闻精选|新闻精选|相关推荐|相关阅读|推荐阅读|Related (?:articles|stories|coverage)|Recommended (?:stories|articles)|Read more|More on this story)[:：]?$',re.I)
+_FOOTER_ITEM=re.compile(r'^(?:[-•*]\s*)?(?:\d{4}(?:年\d{1,2}月\d{1,2}日|[-/]\d{1,2}[-/]\d{1,2})\s+\d{1,2}:\d{2}(?::\d{2})?|\[[^\]]+\]\(https?://[^)]+\))$')
+def clean_paragraphs(paragraphs):
+ rows=[p.strip() for p in paragraphs if p.strip()]
+ for i,p in enumerate(rows):
+  if i and _RECOMMENDATION_HEADING.fullmatch(p):
+   tail=rows[i+1:]
+   if len(tail)>=2 and all(_FOOTER_ITEM.fullmatch(item) for item in tail):
+    return rows[:i]
+ return rows
+
+def prepare_article_html(raw,url):
+ from lxml import html
+ from copy import deepcopy
+ root=html.fromstring(raw)
+ # A known publisher-specific body container excludes its sibling recommendation list.
+ host=(urllib.parse.urlparse(url).hostname or '').lower()
+ if host=='chinanews.com.cn' or host.endswith('.chinanews.com.cn'):
+  bodies=root.xpath('//body')
+  article=root.xpath('//*[contains(concat(" ",normalize-space(@class)," ")," left_zw ")]')
+  if bodies and article:
+   content=deepcopy(article[0]);bodies[0].clear();bodies[0].append(content)
+ for node in root.xpath('//nav|//footer|//form|//script[not(@type="application/ld+json")]|//style|//noscript|//*[@role="navigation"]'):
+  if node.getparent() is not None:node.drop_tree()
+ return html.tostring(root,encoding='unicode')
+
 def extract_article(entry,source):
  try:
   url=entry.get('link','')
   try:
    raw,final_url=download(url)
-   result=trafilatura.bare_extraction(raw,url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
+   result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
   except Exception:
    result=None
    if FAST:
@@ -92,7 +119,8 @@ def extract_article(entry,source):
    result=rss_fulltext(entry)
   if not result:return None
   text=result.get('text') or ''
-  paragraphs=[p.strip() for p in text.split('\n') if p.strip()]
+  paragraphs=clean_paragraphs(text.split('\n'))
+  text='\n'.join(paragraphs)
   if not enough_content(text,source.get('lang','en')) or len(text)>100000:return None
   # A word count is a first-pass filter, not a paywall bypass.
   if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading')) for p in paragraphs):return None

@@ -131,7 +131,7 @@ public class NewsService {
  }
  public Map<String,Object> article(long id,boolean admin){
   var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
-  a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));return a;
+  NewsContentCleaner.cleanArticle(a);a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));return a;
  }
  public void retry(long id){require(db.update("UPDATE news_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
  @jakarta.annotation.PreDestroy public void stop(){stopping.set(true);}
@@ -232,7 +232,7 @@ public class NewsService {
    String url=canonical(a.path("origin_url").asText()),title=a.path("title_en").asText();JsonNode paragraphs=a.path("paragraphs_en");
    require(paragraphs.isArray()&&paragraphs.size()>0&&paragraphs.size()<=400,HttpStatus.BAD_REQUEST,"正文段落无效");
    var texts=new ArrayList<String>();for(var p:paragraphs){require(p.isTextual()&&!p.asText().isBlank(),HttpStatus.BAD_REQUEST,"正文无效");texts.add(p.asText().strip());}
-   String text=String.join("\n\n",texts);if("zh".equals(src.get("lang"))?text.replaceAll("\\s+","").length()<200:text.split("\\s+").length<150)continue;
+   texts=new ArrayList<>(NewsContentCleaner.clean(texts));String text=String.join("\n\n",texts);if("zh".equals(src.get("lang"))?text.replaceAll("\\s+","").length()<200:text.split("\\s+").length<150)continue;
    require(title.length()>0&&title.length()<=1000&&text.length()<=100000&&url.length()<=2000,HttpStatus.BAD_REQUEST,"正文超限");
    Instant published;try{published=Instant.parse(a.path("published_at").asText());}catch(Exception e){published=Instant.now();}if(published.isAfter(Instant.now().plusSeconds(3600)))published=Instant.now();
    String cover=a.path("cover_image").asText("");if(!cover.isBlank()){try{canonical(cover);}catch(Exception e){cover="";}}

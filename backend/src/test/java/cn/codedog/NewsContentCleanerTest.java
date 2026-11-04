@@ -1,0 +1,42 @@
+package cn.codedog;
+
+import cn.codedog.news.NewsContentCleaner;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.*;
+
+class NewsContentCleanerTest {
+ private static final String DATE="- 2026年11月04日 11:06:43";
+ @Test void removesConfirmedRecommendationDatesButNotTheReporting(){
+  assertThat(NewsContentCleaner.clean(List.of("事实正文。","国际新闻精选：",DATE,DATE))).containsExactly("事实正文。");
+ }
+ @Test void preservesEventDatesAndLiveUpdatesWithoutARecommendationHeading(){
+  var reporting=List.of("At 11:06 the minister spoke.",DATE,DATE,"A new development followed.");
+  assertThat(NewsContentCleaner.clean(reporting)).isEqualTo(reporting);
+ }
+ @Test void preservesAmbiguousHeadingsFollowedByReporting(){
+  var reporting=List.of("Original report.","Read more:","The minister announced new measures.",DATE,DATE);
+  assertThat(NewsContentCleaner.clean(reporting)).isEqualTo(reporting);
+ }
+ @Test void pairedCleanupUsesOriginalIndexEvenIfTranslatedHeadingDiffers(){
+  var article=new HashMap<String,Object>();
+  article.put("content_en","Original report.\n\nRelated stories:\n\n[First](https://example.com/1)\n\n[Second](https://example.com/2)");
+  article.put("content_zh","新闻译文。\n\n模型翻译出的其他说法\n\n第一条\n\n第二条");
+  NewsContentCleaner.cleanArticle(article);
+  assertThat(article.get("content_en")).isEqualTo("Original report.");
+  assertThat(article.get("content_zh")).isEqualTo("新闻译文。");
+ }
+ @Test void incompleteTranslationIsNotCutAtAnUnrelatedIndex(){
+  var article=new HashMap<String,Object>();
+  article.put("content_en","Original report.\n\nRelated stories:\n\n[First](https://example.com/1)\n\n[Second](https://example.com/2)");
+  article.put("content_zh","第一段。\n\n第二段。");
+  NewsContentCleaner.cleanArticle(article);
+  assertThat(article.get("content_zh")).isEqualTo("第一段。\n\n第二段。");
+ }
+ @Test void pendingTranslationStaysNullAndRepeatedCleanupIsStable(){
+  var article=new HashMap<String,Object>();article.put("content_en","新闻正文。\n\n国际新闻精选：\n\n"+DATE+"\n\n"+DATE);
+  NewsContentCleaner.cleanArticle(article);NewsContentCleaner.cleanArticle(article);
+  assertThat(article.get("content_en")).isEqualTo("新闻正文。");
+  assertThat(article).doesNotContainKey("content_zh");
+ }
+}
