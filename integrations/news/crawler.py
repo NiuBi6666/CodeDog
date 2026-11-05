@@ -62,10 +62,18 @@ def article(entry,source):
 def enough_content(text,lang):
  return len(''.join(text.split()))>=200 if lang=='zh' else len(text.split())>=150
 
-def rss_fulltext(entry):
- # Only content:encoded/full content is eligible; RSS summaries are never full articles.
+def publisher_full_feed(entry,source):
+ # 36kr's official feed places its full HTML report in description, unlike ordinary RSS summaries.
+ return (urllib.parse.urlparse(source.get('rss_url','')).hostname in ('36kr.com','www.36kr.com')
+  and urllib.parse.urlparse(entry.get('link','')).hostname in ('36kr.com','www.36kr.com')
+  and urllib.parse.urlparse(entry.get('link','')).path.startswith('/p/'))
+
+def rss_fulltext(entry,source=None):
+ # Generic summaries stay excluded. Only a verified publisher full-feed format is eligible.
  from lxml import html
- for item in entry.get('content',[]):
+ candidates=list(entry.get('content',[]))
+ if source and publisher_full_feed(entry,source):candidates.append({'value':entry.get('summary','')})
+ for item in candidates:
   value=item.get('value','')
   if not isinstance(value,str) or not value.strip() or len(value)>MAX_BYTES:continue
   try:
@@ -107,16 +115,19 @@ def prepare_article_html(raw,url):
 def extract_article(entry,source):
  try:
   url=entry.get('link','')
+  result=rss_fulltext(entry,source) if publisher_full_feed(entry,source) else None
+  if result and not enough_content(result.get('text') or '',source.get('lang','en')):result=None
   try:
-   raw,final_url=download(url)
-   result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
+   if result is None:
+    raw,final_url=download(url)
+    result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
   except Exception:
    result=None
    if FAST:
     try:result=jina_article(url)
     except Exception:pass
   if not result or not enough_content(result.get('text') or '',source.get('lang','en')):
-   result=rss_fulltext(entry)
+   result=rss_fulltext(entry,source)
   if not result:return None
   text=result.get('text') or ''
   paragraphs=clean_paragraphs(text.split('\n'))

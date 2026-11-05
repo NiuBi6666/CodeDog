@@ -25,6 +25,19 @@ class CollectorTest(unittest.TestCase):
    self.assertNotIn('bad()',result['paragraphs_en'][0])
    self.assertIsNone(crawler.extract_article({'link':entry['link'],'summary':text,'title':'Summary only'},self.source()))
 
+
+ def test_36kr_official_full_description_preserves_paragraphs_without_fetching_blocked_page(self):
+  source={'id':28,'lang':'zh','rss_url':'https://www.36kr.com/feed'}
+  text='这是来自官方订阅源的完整新闻报道，保留原始事实与段落。'*20
+  entry={'link':'https://36kr.com/p/123?f=rss','title':'新闻标题','summary':'<p>'+text+'</p><p>第二段正文。</p><script>bad()</script>'}
+  with patch.object(crawler,'download') as fetch:
+   result=crawler.extract_article(entry,source)
+   self.assertEqual(result['paragraphs_en'],[text,'第二段正文。'])
+   fetch.assert_not_called()
+  self.assertIsNone(crawler.rss_fulltext(entry,{'rss_url':'https://example.com/feed'}))
+  entry['link']='https://36kr.com.example.com/p/123'
+  self.assertIsNone(crawler.rss_fulltext(entry,source))
+
  def test_footer_cleanup_is_conservative_and_rechecks_minimum_body_length(self):
   body=('The investigation took place on November 4 and the report preserves its chronology. '*18).strip()
   dates=['- 2026年11月04日 11:06:43','- 2026年11月03日 17:12:22']

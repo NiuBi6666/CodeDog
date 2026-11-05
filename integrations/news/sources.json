@@ -148,7 +148,7 @@
     "category": "科技",
     "lang": "zh",
     "priority": 80,
-    "rss_url": "https://36kr.com/feed",
+    "rss_url": "https://www.36kr.com/feed",
     "refresh_interval_min": 10,
     "is_active": true
   },
@@ -312,6 +312,60 @@
     "priority": 90,
     "rss_url": "https://www.theguardian.com/lifeandstyle/rss",
     "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "France 24",
+    "category": "国际",
+    "lang": "en",
+    "priority": 88,
+    "rss_url": "https://www.france24.com/en/rss",
+    "refresh_interval_min": 30,
+    "is_active": true
+  },
+  {
+    "source_name": "ABC News",
+    "category": "国际",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://abcnews.com/abcnews/internationalheadlines",
+    "refresh_interval_min": 30,
+    "is_active": true
+  },
+  {
+    "source_name": "CBS News",
+    "category": "国际",
+    "lang": "en",
+    "priority": 90,
+    "rss_url": "https://www.cbsnews.com/latest/rss/world",
+    "refresh_interval_min": 30,
+    "is_active": true
+  },
+  {
+    "source_name": "Sky News",
+    "category": "国际",
+    "lang": "en",
+    "priority": 88,
+    "rss_url": "https://feeds.skynews.com/feeds/rss/world.xml",
+    "refresh_interval_min": 30,
+    "is_active": true
+  },
+  {
+    "source_name": "WIRED",
+    "category": "科技",
+    "lang": "en",
+    "priority": 88,
+    "rss_url": "https://www.wired.com/feed/rss",
+    "refresh_interval_min": 30,
+    "is_active": true
+  },
+  {
+    "source_name": "Smithsonian Magazine",
+    "category": "科技",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://www.smithsonianmag.com/rss/latest_articles/",
+    "refresh_interval_min": 30,
     "is_active": true
   }
 ]
