@@ -81,7 +81,7 @@ def rss_fulltext(entry,source=None):
    for node in root.xpath('.//script|.//style|.//noscript'):node.drop_tree()
    paragraphs=[node.text_content().strip() for node in root.xpath('.//p') if node.text_content().strip()]
    text='\n'.join(paragraphs) if paragraphs else root.text_content().strip()
-   if text:return {'text':text,'title':entry.get('title','')}
+   if text and '\ufffd' not in text:return {'text':text,'title':entry.get('title','')}
   except Exception:continue
  return None
 
@@ -119,7 +119,9 @@ def extract_article(entry,source):
   if result and not enough_content(result.get('text') or '',source.get('lang','en')):result=None
   try:
    if result is None:
-    raw,final_url=download(url)
+    # The canonical www page can recover corrupted characters in 36kr's RSS body.
+    page_url=urllib.parse.urlparse(url)._replace(netloc='www.36kr.com').geturl() if publisher_full_feed(entry,source) else url
+    raw,final_url=download(page_url)
     result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
   except Exception:
    result=None
@@ -132,7 +134,7 @@ def extract_article(entry,source):
   text=result.get('text') or ''
   paragraphs=clean_paragraphs(text.split('\n'))
   text='\n'.join(paragraphs)
-  if not enough_content(text,source.get('lang','en')) or len(text)>100000:return None
+  if not enough_content(text,source.get('lang','en')) or len(text)>100000 or '\ufffd' in text:return None
   # A word count is a first-pass filter, not a paywall bypass.
   if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading')) for p in paragraphs):return None
   published=entry.get('published') or entry.get('updated')

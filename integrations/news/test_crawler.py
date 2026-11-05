@@ -38,6 +38,22 @@ class CollectorTest(unittest.TestCase):
   entry['link']='https://36kr.com.example.com/p/123'
   self.assertIsNone(crawler.rss_fulltext(entry,source))
 
+ def test_corrupted_36kr_feed_recovers_from_official_page_and_preserves_original_url(self):
+  source={'id':28,'lang':'zh','rss_url':'https://www.36kr.com/feed'}
+  clean='对比当地车企薪资被认为竞争力不足。'*30
+  broken=clean.replace('当地','当\ufffd\ufffd\ufffd',1)
+  entry={'link':'https://36kr.com/p/123?f=rss','title':'新闻标题','summary':'<p>'+broken+'</p>'}
+  self.assertIsNone(crawler.rss_fulltext(entry,source))
+  with patch.object(crawler,'download',return_value=(b'<html></html>','https://www.36kr.com/p/123?f=rss')) as fetch,patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':clean}):
+   result=crawler.extract_article(entry,source)
+   fetch.assert_called_once_with('https://www.36kr.com/p/123?f=rss')
+   self.assertEqual(result['origin_url'],entry['link'])
+   self.assertEqual(result['paragraphs_en'],[clean])
+  with patch.object(crawler,'download',side_effect=ConnectionError()),patch.object(crawler,'FAST',False):
+   self.assertIsNone(crawler.extract_article(entry,source))
+  with patch.object(crawler,'download',return_value=(b'<html></html>','https://www.36kr.com/p/123')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':broken}):
+   self.assertIsNone(crawler.extract_article(entry,source))
+
  def test_footer_cleanup_is_conservative_and_rechecks_minimum_body_length(self):
   body=('The investigation took place on November 4 and the report preserves its chronology. '*18).strip()
   dates=['- 2026年11月04日 11:06:43','- 2026年11月03日 17:12:22']
