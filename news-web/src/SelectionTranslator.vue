@@ -1,10 +1,11 @@
 <script setup>
 import { ref,nextTick,watch,onMounted,onBeforeUnmount } from 'vue';
 const props=defineProps({articleId:{type:Number,required:true}});
-const panel=ref(null),text=ref(''),translation=ref(''),provider=ref(''),state=ref('idle'),error=ref(''),position=ref({left:'8px',top:'8px'});
+const panel=ref(null),text=ref(''),translation=ref(''),state=ref('idle'),error=ref(''),position=ref({left:'8px',top:'8px'});
 let anchor,controller,ticket=0,debounce,timer;
+const cache=new Map();
 function close(clear=false){
- ticket++;controller?.abort();clearTimeout(timer);text.value='';translation.value='';error.value='';state.value='idle';
+ ticket++;controller?.abort();clearTimeout(timer);clearTimeout(debounce);text.value='';translation.value='';error.value='';state.value='idle';
  if(clear)window.getSelection()?.removeAllRanges();
 }
 async function place(){
@@ -16,7 +17,7 @@ async function place(){
 }
 function readSelection(){
  const selection=window.getSelection();
- if(!selection||selection.isCollapsed||!selection.rangeCount){if(state.value==='idle')close();return;}
+ if(!selection||selection.isCollapsed||!selection.rangeCount){close();return;}
  const node=selection.anchorNode;
  if(panel.value?.contains(node))return;
  const range=selection.getRangeAt(0),common=range.commonAncestorContainer;
@@ -28,14 +29,23 @@ function readSelection(){
  close();text.value=value;anchor=range.getBoundingClientRect();
  if(value.length>1000){state.value='error';error.value='每次最多翻译 1000 个字符，请缩小选区。';}
  place();
+ if(value.length<=1000)translate();
 }
-function selectionChanged(){clearTimeout(debounce);debounce=setTimeout(readSelection,160);}
+function selectionChanged(){
+ const selection=window.getSelection();
+ if(panel.value?.contains(selection?.anchorNode))return;
+ const value=selection?.toString().replace(/\s+/g,' ').trim()||'';
+ if(value!==text.value)close();
+ clearTimeout(debounce);debounce=setTimeout(readSelection,180);
+}
 function pointerUp(event){if(!panel.value?.contains(event.target))selectionChanged();}
 function pointerDown(event){if(text.value&&!panel.value?.contains(event.target))close();}
 function keyDown(event){if(event.key==='Escape'&&text.value){close(true);}}
 function scrolled(event){if(text.value&&!panel.value?.contains(event.target))close();}
 async function translate(){
  if(!text.value||text.value.length>1000||state.value==='loading')return;
+ const selectedText=text.value,articleId=props.articleId,key=articleId+':'+selectedText;
+ if(cache.has(key)){translation.value=cache.get(key);state.value='done';error.value='';place();return;}
  controller?.abort();controller=new AbortController();
  const current=++ticket,signal=controller.signal;
  state.value='loading';error.value='';place();
@@ -44,12 +54,14 @@ async function translate(){
   const csrfResponse=await fetch('/api/auth/csrf',{signal,credentials:'same-origin',cache:'no-store'});
   if(!csrfResponse.ok)throw Error('无法获取翻译凭证，请重试');
   const csrf=await csrfResponse.json();
-  const response=await fetch('/api/news/translate',{method:'POST',signal,credentials:'same-origin',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':csrf.token},body:JSON.stringify({article_id:props.articleId,text:text.value})});
+  if(current!==ticket)return;
+  const response=await fetch('/api/news/translate',{method:'POST',signal,credentials:'same-origin',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':csrf.token},body:JSON.stringify({article_id:articleId,text:selectedText})});
   let body;try{body=await response.json();}catch(_){throw Error('翻译服务暂不可用，请稍后重试');}
   if(!response.ok)throw Error(body.error||(response.status===429?'翻译过于频繁，请稍后再试':'翻译暂未完成，请重试'));
   if(!body.translation)throw Error('没有收到译文，请重试');
   if(current!==ticket)return;
-  translation.value=body.translation;provider.value=body.provider;state.value='done';
+  translation.value=body.translation;state.value='done';
+  if(cache.size>=100)cache.delete(cache.keys().next().value);cache.set(key,body.translation);
  }catch(e){
   if(current!==ticket)return;
   state.value='error';error.value=e.name==='AbortError'?'翻译等待超时，请稍后重试。':e.message;
@@ -79,10 +91,9 @@ onBeforeUnmount(()=>{
   <section v-if="text" ref="panel" class="selection-translator" :style="position" role="dialog" aria-label="划词翻译" :aria-busy="state==='loading'">
    <header><strong>划词翻译</strong><button type="button" class="selection-close" aria-label="关闭划词翻译" @pointerdown.prevent @click="close(true)">×</button></header>
    <p class="selection-original" lang="en">{{text}}</p>
-   <button v-if="state==='idle'" class="selection-translate" type="button" @pointerdown.prevent @click="translate">翻译选中内容 →</button>
    <div aria-live="polite" aria-atomic="true">
     <p v-if="state==='loading'" class="selection-status" role="status">正在翻译…</p>
-    <template v-if="state==='done'"><p class="selection-result" lang="zh-CN">{{translation}}</p><small class="selection-provider">{{provider}}</small></template>
+    <p v-if="state==='done'" class="selection-result" lang="zh-CN">{{translation}}</p>
     <p v-if="state==='error'" class="selection-error" role="alert">{{error}}</p>
    </div>
    <button v-if="state==='error'&&text.length<=1000" class="selection-translate" type="button" @pointerdown.prevent @click="translate">重新翻译</button>
