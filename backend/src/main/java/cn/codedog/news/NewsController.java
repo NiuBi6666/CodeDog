@@ -11,12 +11,12 @@ import org.springframework.http.HttpStatus;
 
 @RestController @RequestMapping("/api")
 public class NewsController {
- private final NewsEventService events;private final NewsService news;private final StructuredAuditService audit;
- public NewsController(NewsService news,StructuredAuditService audit,NewsEventService events){this.news=news;this.audit=audit;this.events=events;}
+ private final NewsService news;private final StructuredAuditService audit;
+ public NewsController(NewsService news,StructuredAuditService audit){this.news=news;this.audit=audit;}
  private void event(String action,Object id){audit.event("news","management",action);audit.target("NEWS",id);}
- @GetMapping("/news") public Object list(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String category,@RequestParam(defaultValue="")String source,@RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="")String cursor){return events.annotate(news.list(q,category,source,page,cursor));}
+ @GetMapping("/news") public Object list(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String category,@RequestParam(defaultValue="")String source,@RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="")String cursor){return news.list(q,category,source,page,cursor);}
  @GetMapping("/news/sync-status") public Object syncStatus(@RequestParam(name="run_id",required=false)Long runId){return news.syncStatus(runId);}
- @GetMapping("/news/{id}") public Object article(@PathVariable long id){return events.annotate(news.article(id,false));}
+ @GetMapping("/news/{id}") public Object article(@PathVariable long id){return news.article(id,false);}
  @PostMapping("/news/{id}/translation") public Object requestTranslation(@PathVariable long id){audit.event("news","public","body_translation_request");audit.target("NEWS_ARTICLE",id);return news.requestBodyTranslation(id);}
  @GetMapping("/admin/news")public Object overview(){event("overview",null);return news.overview();}
  @GetMapping("/admin/sources")public Object sources(){event("sources_read",null);return Map.of("sources",news.sources());}

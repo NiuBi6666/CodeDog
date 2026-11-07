@@ -4,7 +4,6 @@ import { useRoute,useRouter } from 'vue-router';
 import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
 import BackToTop from './BackToTop.vue';
-import EventTimeline from './EventTimeline.vue';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
@@ -68,7 +67,7 @@ async function load(){
  finally{if(g===generation){loading.value=false;observeFeed();}}
 }
 function selectArticle(id){router.push('/article/'+id);}
-function selectCategory(item){category.value=item;if(route.path==='/events'||route.params.eventId)router.push('/');}
+function selectCategory(item){category.value=item;}
 async function more(){
  if(loading.value||loadingMore.value||moreError.value||!hasMore.value||!nextCursor.value)return;
  const g=generation,cursor=nextCursor.value;
@@ -101,11 +100,10 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
   <div class="site-shell" :class="{'article-open':route.params.id}">
     <header class="topbar">
       <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻<span class="brand-edition"> · GLOBAL EDITION</span></small></div></div>
-      <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><RouterLink class="events-nav" to="/events">事件追踪</RouterLink><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="selectCategory(item)">{{ item }}</button></nav>
+      <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="selectCategory(item)">{{ item }}</button></nav>
       <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
     </header>
-    <EventTimeline v-if="route.path==='/events'||route.params.eventId" />
-    <main v-else class="workspace">
+    <main class="workspace">
       <aside ref="feedPanel" class="feed-panel">
         <div class="feed-heading"><h1>今日简报 <span class="count">({{ total }})</span></h1><select v-model="source" aria-label="按来源筛选"><option v-for="item in sources" :key="item">{{ item }}</option></select></div>
         <p v-if="error" class="feed-error" role="alert">{{error}} <button @click="load()">重试</button></p><p v-if="loading" class="feed-state" role="status">正在读取报道…</p><div class="feed-list">
@@ -116,7 +114,6 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
               <h2 :class="{'title-zh':mode!=='en'}">{{ mode==='en'?article.title_en:(article.title_zh||article.title_en) }}</h2>
               <p v-if="mode!=='en'&&article.summary_zh.length" class="story-summary">{{ article.summary_zh[0] }}</p>
             </button>
-            <div v-if="article.events?.length" class="story-events"><RouterLink v-for="event in article.events" :key="event.id" :to="'/event/'+event.id">追踪此事件 · {{event.article_count}} 篇报道 ↗</RouterLink></div>
             <div v-if="article.folded.length" class="folded-sources"><span>同题报道</span><button v-for="item in article.folded" :key="item.id" :aria-current="selected?.id===item.id?'true':undefined" @click="selectArticle(item.id)">{{ item.source_name }} · {{ mode==='en'?item.title_en:(item.title_zh||item.title_en) }} ↗</button></div>
           </div>
           <div v-if="!loading && !error && !filtered.length" class="empty-state"><strong>暂时没有可阅读的报道</strong><span>调整筛选，或等待采集与标题翻译完成，打开报道后翻译全文。</span></div><div ref="loadSentinel" class="feed-load-status" role="status" aria-live="polite"><template v-if="loadingMore">正在加载更早的报道…</template><template v-else-if="moreError">加载失败，已保留当前列表。<button type="button" @click="retryMore">重试</button></template><template v-else-if="!loading&&articles.length">{{hasMore?'上滑继续阅读':'已浏览全部报道'}}</template></div>
@@ -132,7 +129,6 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
             <span>{{bodyError||(selected.translation_status==='failed'?'翻译暂不可用':selected.translation_stage==='retrying'?'稍后自动重试':selected.translation_stage==='processing'?'正在翻译':'排队中')}}<template v-if="selected.translation_total"> · {{selected.translation_completed||0}}/{{selected.translation_total}} 段</template></span>
             <button v-if="bodyError||selected.translation_status==='failed'" type="button" @click="detail(selected.id)">重试翻译</button>
           </div>
-          <div v-if="selected.events?.length" class="story-events"><RouterLink v-for="event in selected.events" :key="event.id" :to="'/event/'+event.id">追踪此事件 · {{event.article_count}} 篇报道 ↗</RouterLink></div>
           <div class="paragraphs" :style="{'--reading-size':fontSize+'px'}"><div v-for="(paragraph, index) in selected.content_en" :key="index" class="paragraph-pair" tabindex="0"><p v-if="effectiveMode !== 'zh'||!selected.content_zh[index]" class="en-paragraph" data-selectable-original lang="en">{{ paragraph }}</p><p v-if="effectiveMode !== 'en'&&selected.content_zh[index]" class="zh-paragraph">{{ selected.content_zh[index] }}</p></div></div>
           <footer class="article-footer"><div><span class="eyebrow">RELATED COVERAGE</span><div class="related"><a v-for="item in selected.related_sources" :key="item.origin_url" :href="item.origin_url" target="_blank" rel="noopener noreferrer">{{ item.source_name }} ↗</a></div></div><a class="original-link" :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原文 ↗</a></footer>
         </div>
