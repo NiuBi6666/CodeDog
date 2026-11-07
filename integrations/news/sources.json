@@ -304,5 +304,41 @@
     "rss_url": "https://www.smithsonianmag.com/rss/latest_articles/",
     "refresh_interval_min": 30,
     "is_active": true
+  },
+  {
+    "source_name": "ABC Politics",
+    "category": "国际",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://abcnews.go.com/abcnews/politicsheadlines",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "ABC Business",
+    "category": "财经",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://abcnews.go.com/abcnews/moneyheadlines",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "NPR Business",
+    "category": "财经",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://feeds.npr.org/1006/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
+  },
+  {
+    "source_name": "NPR Politics",
+    "category": "国际",
+    "lang": "en",
+    "priority": 85,
+    "rss_url": "https://feeds.npr.org/1014/rss.xml",
+    "refresh_interval_min": 10,
+    "is_active": true
   }
 ]

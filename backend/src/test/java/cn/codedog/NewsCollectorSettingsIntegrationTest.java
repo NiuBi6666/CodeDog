@@ -59,8 +59,8 @@ class NewsCollectorSettingsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;@Autowired ObjectMapper json;
  @Autowired NewsCollectorSettings settings;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  MockHttpSession admin;
- @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql")).execute(ds);db.execute("CREATE UNIQUE INDEX idx_collector_test_audit_request_id ON audit_log(request_id)");}
- @BeforeEach void setup()throws Exception{db.update("DELETE FROM news_collector_settings");db.update("DELETE FROM news_refresh_runs");calls.clear();variables.clear();fail="";admin=login("Liam","test-only-password");}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql"),new ClassPathResource("db/migration/V142__news_collection_coverage.sql")).execute(ds);db.execute("CREATE UNIQUE INDEX idx_collector_test_audit_request_id ON audit_log(request_id)");}
+ @BeforeEach void setup()throws Exception{db.update("DELETE FROM news_collector_settings");db.update("DELETE FROM news_refresh_runs");db.update("UPDATE news_collection_schedule SET last_queued_at=NULL");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL,is_active=TRUE");calls.clear();variables.clear();fail="";admin=login("Liam","test-only-password");}
  @AfterAll void stop(){server.stop(0);}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  String body(String token)throws Exception{return json.writeValueAsString(Map.of("repository","NiuBi6666/CodeDog","workflow","news-crawl.yml","api_url","https://codedog.online","github_token",token));}
@@ -119,5 +119,29 @@ class NewsCollectorSettingsIntegrationTest {
   mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body(""))).andExpect(status().isBadRequest());
   for(String body:List.of("{\"repository\":\"bad/repo/extra\",\"github_token\":\"test\"}","{\"repository\":\"owner/repo\",\"workflow\":\"../evil.yml\",\"github_token\":\"test\"}","{\"repository\":\"owner/repo\",\"api_url\":\"http://127.0.0.1\",\"github_token\":\"test\"}"))mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
   save();queue();mvc.perform(put(URL).session(admin).with(csrf()).contentType(APPLICATION_JSON).content(body(TOKEN))).andExpect(status().isConflict());assertThat(calls).isEmpty();
+ }
+ @Test void serverScheduleIsAtomicPersistentAuditedAndDispatchesFullOverseasCollection()throws Exception{
+  save();queue();settings.processProvision();db.update("DELETE FROM news_refresh_runs");calls.clear();
+  var pool=java.util.concurrent.Executors.newFixedThreadPool(6);
+  try{
+   var jobs=new ArrayList<java.util.concurrent.Future<Long>>();
+   for(int i=0;i<6;i++)jobs.add(pool.submit(()->news.queueScheduledCollection()));
+   int queued=0;for(var job:jobs)if(job.get()!=null)queued++;
+   assertThat(queued).isEqualTo(1);
+  }finally{pool.shutdownNow();}
+  assertThat(news.queueScheduledCollection()).isNull();news.dispatchQueued();news.dispatchQueued();
+  assertThat(calls.stream().filter(c->c.contains("/dispatches"))).hasSize(1);
+  assertThat(calls.toString()).contains("\"force_all\":\"false\"");
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE event_code='collection_scheduled' AND actor_type='SYSTEM'",Long.class)).isPositive();
+  db.update("UPDATE news_refresh_runs SET collection_finished=TRUE");assertThat(news.queueScheduledCollection()).isNull();
+  db.update("UPDATE news_collection_schedule SET last_queued_at=?",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(601)));
+  assertThat(news.queueScheduledCollection()).isNotNull();
+ }
+ @Test void schedulerSkipsUnconfiguredNotDueAndAmbiguousActiveRuns()throws Exception{
+  assertThat(news.queueScheduledCollection()).isNull();save();queue();settings.processProvision();
+  db.update("UPDATE news_refresh_runs SET status='uncertain'");assertThat(news.queueScheduledCollection()).isNull();
+  db.update("DELETE FROM news_refresh_runs");db.update("UPDATE news_sources SET last_crawled_at=CURRENT_TIMESTAMP");
+  assertThat(news.queueScheduledCollection()).isNull();
+  db.update("UPDATE news_sources SET last_crawled_at=NULL,is_active=FALSE");assertThat(news.queueScheduledCollection()).isNull();
  }
 }

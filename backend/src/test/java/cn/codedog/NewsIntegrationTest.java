@@ -32,7 +32,7 @@ class NewsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;
  @Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  static final String SECRET="test-news-secret-at-least-32-characters";
- @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql")).execute(ds);}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql"),new ClassPathResource("db/migration/V142__news_collection_coverage.sql")).execute(ds);}
  @BeforeEach void clean(){db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void historicalArticleResponseOmitsFooterAndKeepsStoredOriginal()throws Exception{
@@ -162,4 +162,21 @@ class NewsIntegrationTest {
   mvc.perform(post("/api/crawler/filter").header("X-Webhook-Secret",SECRET).contentType(APPLICATION_JSON).content("{\"urls\":[\"http://invalid.example\"]}")).andExpect(status().isBadRequest());
  }
  static String sign(byte[] bytes,String ts)throws Exception{Mac m=Mac.getInstance("HmacSHA256");m.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8),"HmacSHA256"));m.update((ts+".").getBytes(StandardCharsets.UTF_8));return HexFormat.of().formatHex(m.doFinal(bytes));}
+ @Test void shortOfficialBriefsAndReportsAreStoredAndCoverageIsAdminOnly()throws Exception{
+  db.update("INSERT INTO news_sources(source_name,rss_url,category,lang) VALUES('official-brief','https://36kr.com/feed','科技','zh')");
+  long source=db.queryForObject("SELECT id FROM news_sources WHERE source_name='official-brief'",Long.class);
+  String url="https://36kr.com/newsflashes/100";
+  var articles=List.of(Map.of("source_id",source,"origin_url",url,"title_en","官方短讯","paragraphs_en",List.of("官方发布最新短讯，相关事实已在此完整呈现，保留报道原文。"),"content_kind","brief"),Map.of("source_id",source,"origin_url","https://example.com/spoof","title_en","伪造快讯","paragraphs_en",List.of("官方发布最新短讯，相关事实已在此完整呈现，保留报道原文。"),"content_kind","brief"));
+  var stats=Map.of("rss_entries",30,"checked_entries",30,"new_articles",2,"accepted_articles",1,"rejected_articles",1,"reasons",Map.of("blocked",1,"secret-field",100),"rejected",List.of(Map.of("origin_url","https://example.com/blocked","title","Blocked report","reason","blocked")),"private_secret","must-not-persist");
+  news.accept(json.writeValueAsBytes(Map.of("batch_id","coverage-short-brief","articles",articles,"source_results",List.of(Map.of("source_id",source,"success",false,"stats",stats)))));news.ingestBatches();
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE source_id=?",Long.class,source)).isEqualTo(1);
+  assertThat(db.queryForObject("SELECT content_kind FROM news_articles WHERE origin_url=?",String.class,url)).isEqualTo("brief");
+  var row=db.queryForMap("SELECT last_collection_stats,last_error,last_success_at FROM news_sources WHERE id=?",source);
+  assertThat(row.get("last_error")).isEqualTo("部分报道未收录：1 篇");assertThat(row.get("last_success_at")).isNull();
+  assertThat(row.get("last_collection_stats").toString()).contains("rss_entries","blocked").doesNotContain("must-not-persist","secret-field");
+  mvc.perform(get("/api/news")).andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("last_collection_stats"))));
+  mvc.perform(get("/api/admin/sources")).andExpect(status().isUnauthorized());
+  var admin=login("Liam","test-only-password");
+  mvc.perform(get("/api/admin/sources").session(admin)).andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.containsString("last_collection_stats")));
+ }
 }

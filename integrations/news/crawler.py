@@ -4,7 +4,7 @@ import os,json,time,hmac,hashlib,uuid,socket,ipaddress,datetime,urllib.parse,re
 from email.utils import parsedate_to_datetime
 import requests,feedparser,trafilatura
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
+import threading,calendar,collections
 
 API=os.environ.get('NEWS_API_URL','https://codedog.online').rstrip('/')
 SECRET=os.environ.get('NEWS_WEBHOOK_SECRET','')
@@ -12,6 +12,7 @@ FAST=False
 ON_FAILURE=None
 DEADLINE=float('inf')
 _article_slots=threading.BoundedSemaphore(20)
+_reader_slots=threading.BoundedSemaphore(2)
 _sessions=threading.local()
 def session():
  if not hasattr(_sessions,'value'):
@@ -60,13 +61,13 @@ def article(entry,source):
   return extract_article(entry,source)
 
 def enough_content(text,lang):
- return len(''.join(text.split()))>=200 if lang=='zh' else len(text.split())>=150
+ return len(''.join(text.split()))>=60 if lang=='zh' else len(text.split())>=35
 
 def publisher_full_feed(entry,source):
  # 36kr's official feed places its full HTML report in description, unlike ordinary RSS summaries.
  return (urllib.parse.urlparse(source.get('rss_url','')).hostname in ('36kr.com','www.36kr.com')
   and urllib.parse.urlparse(entry.get('link','')).hostname in ('36kr.com','www.36kr.com')
-  and urllib.parse.urlparse(entry.get('link','')).path.startswith('/p/'))
+  and urllib.parse.urlparse(entry.get('link','')).path.startswith(('/p/','/newsflashes/')))
 
 def rss_fulltext(entry,source=None):
  # Generic summaries stay excluded. Only a verified publisher full-feed format is eligible.
@@ -112,40 +113,68 @@ def prepare_article_html(raw,url):
   if node.getparent() is not None:node.drop_tree()
  return html.tostring(root,encoding='unicode')
 
+def reject(reason):
+ _sessions.rejection=reason
+ return None
+
+def brief_entry(entry,source):
+ return publisher_full_feed(entry,source) and urllib.parse.urlparse(entry.get('link','')).path.startswith('/newsflashes/')
+
+def has_body(text,source,brief=False):
+ return len(''.join(text.split()))>=20 if brief and source.get('lang')=='zh' else enough_content(text,source.get('lang','en'))
+
+def feed_image(entry):
+ for item in list(entry.get('media_content',[]))+list(entry.get('media_thumbnail',[]))+list(entry.get('enclosures',[])):
+  url=item.get('url') or item.get('href','')
+  if url.startswith('https://') and (item.get('medium')=='image' or item.get('type','').startswith('image/') or not item.get('type')):return url
+ return ''
+
+def publication_date(entry,result):
+ for value in (entry.get('published'),entry.get('updated'),result.get('date')):
+  if not value:continue
+  try:date=parsedate_to_datetime(value)
+  except Exception:
+   try:date=datetime.datetime.fromisoformat(value.replace('Z','+00:00'))
+   except Exception:continue
+  if date.tzinfo is None:date=date.replace(tzinfo=datetime.timezone.utc)
+  return date.astimezone(datetime.timezone.utc).isoformat().replace('+00:00','Z')
+ for field in ('published_parsed','updated_parsed'):
+  if entry.get(field):return datetime.datetime.fromtimestamp(calendar.timegm(entry[field]),datetime.timezone.utc).isoformat().replace('+00:00','Z')
+ return datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z')
+
 def extract_article(entry,source):
  try:
-  url=entry.get('link','')
-  result=rss_fulltext(entry,source) if publisher_full_feed(entry,source) else None
-  if result and not enough_content(result.get('text') or '',source.get('lang','en')):result=None
-  try:
-   if result is None:
-    # The canonical www page can recover corrupted characters in 36kr's RSS body.
+  url=entry.get('link','');brief=brief_entry(entry,source)
+  result=rss_fulltext(entry,source)
+  if result and not has_body(result.get('text') or '',source,brief):result=None
+  failure='empty_body'
+  if result is None:
+   try:
     page_url=urllib.parse.urlparse(url)._replace(netloc='www.36kr.com').geturl() if publisher_full_feed(entry,source) else url
     raw,final_url=download(page_url)
     result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
-  except Exception:
-   result=None
-   if FAST:
-    try:result=jina_article(url)
+   except Exception as e:
+    failure='deadline' if isinstance(e,TimeoutError) else 'blocked' if isinstance(e,requests.HTTPError) and e.response is not None and e.response.status_code in (401,403,429) else 'download_failed'
+   if not result or not has_body(result.get('text') or '',source,brief):
+    try:
+     with _reader_slots:result=jina_article(url)
     except Exception:pass
-  if not result or not enough_content(result.get('text') or '',source.get('lang','en')):
-   result=rss_fulltext(entry,source)
-  if not result:return None
+  if not result:return reject(failure)
   text=result.get('text') or ''
-  paragraphs=clean_paragraphs(text.split('\n'))
-  text='\n'.join(paragraphs)
-  if not enough_content(text,source.get('lang','en')) or len(text)>100000 or '\ufffd' in text:return None
-  # A word count is a first-pass filter, not a paywall bypass.
-  if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading')) for p in paragraphs):return None
-  published=entry.get('published') or entry.get('updated')
-  try:date=parsedate_to_datetime(published).astimezone(datetime.timezone.utc).isoformat().replace('+00:00','Z')
-  except Exception:
-   try:date=datetime.datetime.fromisoformat(result.get('date','')).replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00','Z')
-   except Exception:date=datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z')
-  return {'source_id':source['id'],'origin_url':url,'title_en':(result.get('title') or entry.get('title',''))[:1000],
-          'author':result.get('author') or '', 'published_at':date,'cover_image':result.get('image') or '', 'paragraphs_en':paragraphs}
+  paragraphs=clean_paragraphs(text.split('\n'));text='\n'.join(paragraphs)
+  if '\ufffd' in text:return reject('encoding_error')
+  if len(text)>100000:return reject('too_large')
+  if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading','you have reached your article limit','verify you are human','access denied')) for p in paragraphs):return reject('restricted_content')
+  if not has_body(text,source,brief):return reject('too_short')
+  return {'source_id':source['id'],'origin_url':url,'title_en':(entry.get('title') or result.get('title',''))[:1000],
+          'author':result.get('author') or '', 'published_at':publication_date(entry,result),'cover_image':result.get('image') or feed_image(entry), 'paragraphs_en':paragraphs,'content_kind':'brief' if brief else 'article'}
  except Exception:
-  return None
+  return reject('extraction_failed')
+
+def inspect_article(entry,source):
+ _sessions.rejection='extraction_failed'
+ result=article(entry,source)
+ return result,getattr(_sessions,'rejection','extraction_failed')
 
 class WebhookError(RuntimeError):pass
 
@@ -169,54 +198,60 @@ def send(articles,results,completed=False):
    time.sleep(2**attempt)
 
 def unseen(entries):
- # Fail closed: if the preflight is unavailable, do not redownload every old article.
+ # Check the entire feed in bounded receiver requests; fail closed on preflight errors.
  unique={}
  for e in entries:
   url=e.get('link','')
   if url.startswith('https://'):unique.setdefault(url,e)
- urls=list(unique)
- if not urls:return []
- r=session().post(API+'/api/crawler/filter',json={'urls':urls},headers={'X-Webhook-Secret':SECRET},timeout=(3,10))
- r.raise_for_status()
- allowed=set(r.json()['urls'])
+ urls=list(unique);allowed=set()
+ for offset in range(0,len(urls),100):
+  r=session().post(API+'/api/crawler/filter',json={'urls':urls[offset:offset+100]},headers={'X-Webhook-Secret':SECRET},timeout=(3,10))
+  r.raise_for_status();allowed.update(r.json()['urls'])
  return [e for url,e in unique.items() if url in allowed]
 
 def collect_source(source):
- pending=[]
- accepted=0
- success=False
+ pending=[];accepted=0;reasons=collections.Counter();rejected=[]
+ stats={'rss_entries':0,'checked_entries':0,'new_articles':0,'accepted_articles':0,'rejected_articles':0,'reasons':{},'rejected':[]}
+ def report(ok,feed_error=None):
+  stats.update(accepted_articles=accepted,rejected_articles=sum(reasons.values()),reasons=dict(reasons),rejected=rejected)
+  if feed_error:stats['feed_error']=feed_error
+  send([], [{'source_id':source['id'],'success':ok,'stats':stats}])
  try:
   raw,_=download(source['rss_url']);feed=feedparser.parse(raw)
   if not feed.entries:raise ValueError('Feed is empty or unreadable')
-  entries=unseen(feed.entries[:3 if FAST else 15])
-  print('source_id=%s candidates=%s unseen=%s'%(source['id'],min(len(feed.entries),3 if FAST else 15),len(entries)),flush=True)
+  candidates=feed.entries[:3] if FAST else feed.entries
+  stats.update(rss_entries=len(feed.entries),checked_entries=len(candidates))
+  entries=unseen(candidates);stats['new_articles']=len(entries)
+  print('source_id=%s candidates=%s unseen=%s'%(source['id'],len(candidates),len(entries)),flush=True)
   with ThreadPoolExecutor(max_workers=2 if FAST else 4) as pool:
-   futures=[pool.submit(article,e,source) for e in entries]
+   futures={pool.submit(inspect_article,e,source):e for e in entries}
    for future in as_completed(futures):
-    value=future.result()
+    value,reason=future.result()
     if value:
      pending.append(value);accepted+=1
-     if len(pending)>=3:
-      send(pending,[]);pending=[]
-  success=not FAST or accepted==len(entries)
- except WebhookError:
-  raise
- except Exception:
-  if pending:
-   send(pending,[]);pending=[]
+     if len(pending)>=3:send(pending,[]);pending=[]
+    else:
+     reasons[reason]+=1;entry=futures[future]
+     if len(rejected)<100 and isinstance(entry,dict):rejected.append({'origin_url':entry.get('link','')[:2000],'title':entry.get('title','')[:300],'reason':reason})
+  if pending:send(pending,[]);pending=[]
+  success=not reasons
+  if FAST:
+   if not success and ON_FAILURE:ON_FAILURE()
+  else:report(success)
+  print(json.dumps({'source_id':source['id'],**{k:v for k,v in stats.items() if k!='rejected'},'accepted_articles':accepted,'reasons':dict(reasons),'feed_success':success},ensure_ascii=False),flush=True)
+  return success
+ except WebhookError:raise
+ except Exception as e:
+  if pending:send(pending,[])
   if FAST:
    if ON_FAILURE:ON_FAILURE()
-  else:send([], [{'source_id':source['id'],'success':False}])
+  else:report(False,'deadline' if isinstance(e,TimeoutError) else 'feed_or_preflight_failed')
   print('source_id=%s feed_success=False'%source['id'],flush=True)
   return False
- if pending:send(pending,[])
- if FAST:
-  if not success and ON_FAILURE:ON_FAILURE()
- else:send([], [{'source_id':source['id'],'success':success}])
- print('source_id=%s accepted_articles=%s feed_success=%s'%(source['id'],accepted,success),flush=True)
- return success
 
 def run(internal=False):
+ global DEADLINE
+ if not FAST:DEADLINE=time.monotonic()+1200
  if not internal:public_url(API)
  r=session().get(API+'/api/crawler/tasks',params={'force_all':os.environ.get('FORCE_ALL','false'),'fast':str(FAST).lower()},headers={'X-Webhook-Secret':SECRET},timeout=(10,30))
  r.raise_for_status();sources=r.json()['sources']

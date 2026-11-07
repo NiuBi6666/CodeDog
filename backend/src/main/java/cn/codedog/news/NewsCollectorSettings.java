@@ -67,8 +67,10 @@ public class NewsCollectorSettings {
  }
  public void dispatch()throws Exception{dispatch(runtime(),null);}
  public void dispatch(long runId)throws Exception{dispatch(runtime(),runId);}
+ public void dispatchScheduled(long runId)throws Exception{dispatch(runtime(),runId,false);}
  private void dispatch(RuntimeConfig c)throws Exception{dispatch(c,null);}
- private void dispatch(RuntimeConfig c,Long runId)throws Exception{accepted(github(c,"POST","/repos/"+c.repository()+"/actions/workflows/"+c.workflow()+"/dispatches",Map.of("ref","main","inputs",Map.of("force_all","true","run_id",runId==null?"":runId.toString()))),204);}
+ private void dispatch(RuntimeConfig c,Long runId)throws Exception{dispatch(c,runId,true);}
+ private void dispatch(RuntimeConfig c,Long runId,boolean force)throws Exception{accepted(github(c,"POST","/repos/"+c.repository()+"/actions/workflows/"+c.workflow()+"/dispatches",Map.of("ref","main","inputs",Map.of("force_all",Boolean.toString(force),"run_id",runId==null?"":runId.toString()))),204);}
  @Scheduled(fixedDelay=5000,initialDelay=20000)
  public synchronized void processProvision(){
   var row=row();if(row==null)return;String state=(String)row.get("setup_state");Timestamp lease=(Timestamp)row.get("lease_until");if(!state.equals("queued")&&!(state.equals("processing")&&lease!=null&&lease.toInstant().isBefore(Instant.now())))return;

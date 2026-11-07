@@ -81,7 +81,7 @@ public class NewsService {
   var due=new ArrayList<Map<String,Object>>();Instant now=Instant.now();
   for(var row:list){Timestamp last=(Timestamp)row.get("last_crawled_at");
    if(force||last==null||last.toInstant().plusSeconds(((Number)row.get("refresh_interval_min")).longValue()*60).isBefore(now)){
-    db.update("UPDATE news_sources SET lease_until=? WHERE id=?",Timestamp.from(now.plusSeconds(900)),row.get("id"));due.add(row);
+    db.update("UPDATE news_sources SET lease_until=? WHERE id=?",Timestamp.from(now.plusSeconds(900)),row.get("id"));var task=new LinkedHashMap<>(row);task.remove("last_collection_stats");due.add(task);
    }
   }return due;
  });}
@@ -161,6 +161,25 @@ public class NewsService {
    return Map.<String,Object>of("run_id",keys.getKey().longValue(),"status","queued","message","采集任务已提交，正在启动快速抓取；标题翻译后进入列表，打开详情时翻译全文");
   });
  }
+ public Long queueScheduledCollection(){
+  if(stopping.get()||!githubReady())return null;
+  return tx.execute(status->{
+   db.queryForObject("SELECT id FROM news_sync_gate WHERE id=1 FOR UPDATE",Integer.class);
+   Timestamp previous=db.queryForObject("SELECT last_queued_at FROM news_collection_schedule WHERE id=1",Timestamp.class);
+   Instant now=Instant.now();
+   if(previous!=null&&previous.toInstant().plusSeconds(600).isAfter(now))return null;
+   long active=db.queryForObject("SELECT COUNT(*) FROM news_refresh_runs WHERE status IN ('queued','dispatching','dispatched','received','uncertain') AND collection_finished=FALSE AND created_at>?",Long.class,Timestamp.from(now.minusSeconds(1800)));
+   if(active>0)return null;
+   long due=db.queryForList("SELECT last_crawled_at,refresh_interval_min FROM news_sources WHERE is_active=TRUE AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP)").stream().filter(s->{Timestamp last=(Timestamp)s.get("last_crawled_at");return last==null||last.toInstant().plusSeconds(((Number)s.get("refresh_interval_min")).longValue()*60).isBefore(now);}).count();
+   if(due==0)return null;
+   var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();String requestId=UUID.randomUUID().toString();
+   db.update(c->{var st=c.prepareStatement("INSERT INTO news_refresh_runs(status,requested_by,request_id,request_ip) VALUES('queued','system-scheduled',?,'internal')",new String[]{"id"});st.setString(1,requestId);return st;},keys);
+   long id=keys.getKey().longValue();
+   db.update("UPDATE news_collection_schedule SET last_queued_at=? WHERE id=1",Timestamp.from(now));
+   db.update("INSERT INTO audit_log(action,owner_username,actor_type,actor_id,actor_name,request_id,http_method,request_path,status_code,duration_ms,module,event_type,event_code,result,target_type,target_id,detail_json,ip_address,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)","news_collection_scheduled","system","SYSTEM","system","新闻定时采集",requestId,"SYSTEM","scheduled://news-collection",200,0,"news","management","collection_scheduled","success","NEWS_REFRESH_RUN",Long.toString(id),"{\"due_sources\":"+due+"}","internal",Timestamp.from(now));
+   return id;
+  });
+ }
  public Map<String,Object> syncStatus(Long runId){
   var runs=runId==null?db.queryForList("SELECT id,status,last_error,collection_finished FROM news_refresh_runs ORDER BY id DESC LIMIT 1"):db.queryForList("SELECT id,status,last_error,collection_finished FROM news_refresh_runs WHERE id=?",runId);
   var out=new LinkedHashMap<String,Object>();
@@ -183,7 +202,7 @@ public class NewsService {
   var rows=db.queryForList("SELECT * FROM news_refresh_runs WHERE status='queued' ORDER BY id LIMIT 1");if(rows.isEmpty()||stopping.get())return;var row=rows.getFirst();long id=((Number)row.get("id")).longValue();
   if(db.update("UPDATE news_refresh_runs SET status='dispatching',lease_until=? WHERE id=? AND status='queued'",Timestamp.from(Instant.now().plusSeconds(240)),id)!=1)return;
   String result="dispatched",error=null;
-  try{if(!fastCollector.collect(id,collector.secret()))collector.dispatch(id);}catch(ResponseStatusException e){result="failed";error=e.getReason();}catch(Exception e){result="uncertain";error="GitHub 调度结果未确认，请检查工作流记录；不会自动重复触发";}
+  try{if("system-scheduled".equals(row.get("requested_by")))collector.dispatchScheduled(id);else if(!fastCollector.collect(id,collector.secret()))collector.dispatch(id);}catch(ResponseStatusException e){result="failed";error=e.getReason();}catch(Exception e){result="uncertain";error="GitHub 调度结果未确认，请检查工作流记录；不会自动重复触发";}
   final String completed=result,reason=error;
   tx.executeWithoutResult(status->{db.update("UPDATE news_refresh_runs SET status=?,last_error=?,lease_until=NULL WHERE id=? AND status='dispatching'",completed,reason,id);dispatchAudit(row,completed,reason);});
  }
@@ -240,22 +259,41 @@ public class NewsService {
    try{translate(a);}catch(Exception e){int attempts=((Number)a.get("attempts")).intValue()+1;db.update("UPDATE news_articles SET status=?,attempts=?,next_attempt_at=?,last_error=? WHERE id=?",attempts>=3?"failed":"pending",attempts,Timestamp.from(Instant.now().plusSeconds(60L*attempts)),"标题或正文翻译服务、段落校验失败；可切换翻译方式后重试",id);}
   }
  }
+ private String collectionStats(JsonNode input){
+  var out=json.createObjectNode();
+  for(String key:List.of("rss_entries","checked_entries","new_articles","accepted_articles","rejected_articles"))out.put(key,Math.max(0,Math.min(100000,input.path(key).asInt())));
+  var reasons=Set.of("empty_body","deadline","blocked","download_failed","encoding_error","too_large","restricted_content","too_short","extraction_failed");
+  var counts=out.putObject("reasons");for(String key:reasons)if(input.path("reasons").has(key))counts.put(key,Math.max(0,Math.min(100000,input.path("reasons").path(key).asInt())));
+  if(input.has("feed_error"))out.put("feed_error","deadline".equals(input.path("feed_error").asText())?"deadline":"feed_or_preflight_failed");
+  var rows=out.putArray("rejected");
+  for(var item:input.path("rejected")){
+   if(rows.size()>=100)break;String reason=item.path("reason").asText();if(!reasons.contains(reason))continue;
+   String url=item.path("origin_url").asText();try{url=canonical(url);}catch(Exception e){continue;}
+   if(url.length()>2000)continue;String title=item.path("title").asText();
+   rows.addObject().put("origin_url",url).put("title",title.substring(0,Math.min(title.length(),300))).put("reason",reason);
+  }
+  return out.toString();
+ }
  private void ingest(JsonNode batch)throws Exception{
   for(JsonNode a:batch.path("articles")){
    long sourceId=a.path("source_id").asLong();var sources=db.queryForList("SELECT * FROM news_sources WHERE id=? AND is_active=TRUE",sourceId);if(sources.isEmpty())continue;var src=sources.getFirst();
    String url=canonical(a.path("origin_url").asText()),title=a.path("title_en").asText();JsonNode paragraphs=a.path("paragraphs_en");
    require(paragraphs.isArray()&&paragraphs.size()>0&&paragraphs.size()<=400,HttpStatus.BAD_REQUEST,"正文段落无效");
    var texts=new ArrayList<String>();for(var p:paragraphs){require(p.isTextual()&&!p.asText().isBlank(),HttpStatus.BAD_REQUEST,"正文无效");texts.add(p.asText().strip());}
-   texts=new ArrayList<>(NewsContentCleaner.clean(texts));String text=String.join("\n\n",texts);if("zh".equals(src.get("lang"))?text.replaceAll("\\s+","").length()<200:text.split("\\s+").length<150)continue;
+   texts=new ArrayList<>(NewsContentCleaner.clean(texts));String text=String.join("\n\n",texts);
+   boolean brief="brief".equals(a.path("content_kind").asText())&&"zh".equals(src.get("lang"))&&Set.of("36kr.com","www.36kr.com").contains(URI.create((String)src.get("rss_url")).getHost())&&Set.of("36kr.com","www.36kr.com").contains(URI.create(url).getHost())&&URI.create(url).getPath().startsWith("/newsflashes/");
+   if("zh".equals(src.get("lang"))?text.replaceAll("\\s+","").length()<(brief?20:60):text.split("\\s+").length<35)continue;
    require(title.length()>0&&title.length()<=1000&&text.length()<=100000&&url.length()<=2000,HttpStatus.BAD_REQUEST,"正文超限");
    Instant published;try{published=Instant.parse(a.path("published_at").asText());}catch(Exception e){published=Instant.now();}if(published.isAfter(Instant.now().plusSeconds(3600)))published=Instant.now();
    String cover=a.path("cover_image").asText("");if(!cover.isBlank()){try{canonical(cover);}catch(Exception e){cover="";}}
    boolean chinese="zh".equals(src.get("lang"));
-   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,lang,title_zh,content_zh,status,translated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null);}catch(org.springframework.dao.DuplicateKeyException ignored){}
+   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,lang,title_zh,content_zh,status,translated_at,content_kind) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null,brief?"brief":"article");}catch(org.springframework.dao.DuplicateKeyException ignored){}
   }
   for(JsonNode result:batch.path("source_results")){
    boolean ok=result.path("success").asBoolean();long id=result.path("source_id").asLong();
-   db.update("UPDATE news_sources SET last_crawled_at=CURRENT_TIMESTAMP,lease_until=NULL,last_error=?"+(ok?",last_success_at=CURRENT_TIMESTAMP":"")+" WHERE id=?",ok?null:"来源抓取失败，请检查 RSS 地址或访问限制",id);
+   String message=ok?null:result.path("stats").path("rejected_articles").asInt()>0?"部分报道未收录："+result.path("stats").path("rejected_articles").asInt()+" 篇":"订阅源或去重接口访问失败";
+   db.update("UPDATE news_sources SET last_crawled_at=CURRENT_TIMESTAMP,lease_until=NULL,last_error=?"+(ok?",last_success_at=CURRENT_TIMESTAMP":"")+" WHERE id=?",message,id);
+   if(result.has("stats"))db.update("UPDATE news_sources SET last_collection_stats=? WHERE id=?",collectionStats(result.path("stats")),id);
   }
   long runId=batch.path("run_id").asLong(0);
   if(runId>0){

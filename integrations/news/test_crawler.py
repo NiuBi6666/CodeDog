@@ -5,6 +5,11 @@ os.environ.setdefault('NEWS_WEBHOOK_SECRET','test-only-webhook-secret-at-least-3
 import crawler
 
 class CollectorTest(unittest.TestCase):
+ def setUp(self):
+  self.reader=patch.object(crawler,'jina_article',side_effect=ValueError('offline test'));self.reader.start();self.addCleanup(self.reader.stop)
+  self.mode=patch.object(crawler,'FAST',False);self.mode.start();self.addCleanup(self.mode.stop)
+  self.deadline=patch.object(crawler,'DEADLINE',float('inf'));self.deadline.start();self.addCleanup(self.deadline.stop)
+
  def test_chinese_content_uses_characters_not_english_word_count(self):
   self.assertTrue(crawler.enough_content('这是中文新闻正文。'*30,'zh'))
   self.assertFalse(crawler.enough_content('短新闻','zh'))
@@ -14,7 +19,7 @@ class CollectorTest(unittest.TestCase):
   with patch.object(crawler,'download',return_value=(b'html','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':text,'title':'中文原文标题'}):
    article=crawler.extract_article({'link':'https://example.com/a','title':'标题'},source)
   self.assertEqual(article['paragraphs_en'],[text])
-  self.assertEqual(article['title_en'],'中文原文标题')
+  self.assertEqual(article['title_en'],'标题')
 
  def test_explicit_rss_full_content_can_replace_unreachable_page_but_summary_cannot(self):
   text='An original report with facts and complete paragraphs. '*25
@@ -99,7 +104,9 @@ class CollectorTest(unittest.TestCase):
   with patch.object(crawler,'download',return_value=(b'feed','url')),patch.object(crawler.feedparser,'parse',return_value=SimpleNamespace(entries=list(range(6)))),patch.object(crawler,'unseen',side_effect=lambda e:e),patch.object(crawler,'article',side_effect=article),patch.object(crawler,'send',side_effect=send):
    crawler.collect_source(self.source())
   self.assertEqual(sorted(a['id'] for rows,_ in sent for a in rows),list(range(6)))
-  self.assertEqual(sent[-1],([],[{'source_id':1,'success':True}]))
+  self.assertEqual(sent[-1][0],[])
+  self.assertTrue(sent[-1][1][0]['success'])
+  self.assertEqual(sent[-1][1][0]['stats']['accepted_articles'],6)
   self.assertTrue(all(len(rows)<=3 for rows,_ in sent))
 
  def test_preflight_skips_existing_urls_and_duplicate_entries(self):
@@ -149,7 +156,8 @@ class CollectorTest(unittest.TestCase):
  def test_feed_failure_and_webhook_failure_are_distinct(self):
   with patch.object(crawler,'download',side_effect=ValueError()),patch.object(crawler,'send') as send:
    crawler.collect_source(self.source())
-   send.assert_called_once_with([],[{'source_id':1,'success':False}])
+   self.assertFalse(send.call_args.args[1][0]['success'])
+   self.assertEqual(send.call_args.args[1][0]['stats']['feed_error'],'feed_or_preflight_failed')
   with patch.object(crawler,'download',return_value=(b'feed','url')),patch.object(crawler.feedparser,'parse',return_value=SimpleNamespace(entries=[1])),patch.object(crawler,'unseen',side_effect=lambda e:e),patch.object(crawler,'article',return_value={'id':1}),patch.object(crawler,'send',side_effect=crawler.WebhookError()):
    with self.assertRaises(crawler.WebhookError):crawler.collect_source(self.source())
 
@@ -178,5 +186,38 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(bodies[0],bodies[1])
   self.assertEqual(bodies[0]['run_id'],123)
   self.assertTrue(bodies[0]['collection_finished'])
+
+ def test_entire_feed_is_checked_and_preflight_is_chunked(self):
+  entries=[{'link':'https://example.com/'+str(i)} for i in range(237)]
+  batches=[]
+  def post(url,**kw):
+   batches.append(kw['json']['urls']);return SimpleNamespace(raise_for_status=lambda:None,json=lambda:{'urls':[u for u in kw['json']['urls'] if u.endswith('/236')]})
+  with patch.object(crawler,'session',return_value=SimpleNamespace(post=post)):
+   self.assertEqual(crawler.unseen(entries+[entries[-1]]),[entries[-1]])
+  self.assertEqual([len(b) for b in batches],[100,100,37])
+  with patch.object(crawler,'download',return_value=(b'feed','url')),patch.object(crawler.feedparser,'parse',return_value=SimpleNamespace(entries=entries)),patch.object(crawler,'unseen',return_value=[]) as check,patch.object(crawler,'send') as send:
+   crawler.collect_source(self.source());self.assertEqual(len(check.call_args.args[0]),237)
+   self.assertEqual(send.call_args.args[1][0]['stats']['rss_entries'],237)
+
+ def test_verified_short_brief_and_full_feed_metadata(self):
+  entry={'link':'https://36kr.com/newsflashes/123','title':'官方快讯','summary':'<p>'+'最新官方消息已经确认发布，保留完整原文。'*2+'</p>','published':'Fri, 06 Nov 2026 18:00:00 +0800','media_thumbnail':[{'url':'https://example.com/image.jpg'}]}
+  with patch.object(crawler,'download') as download:
+   result=crawler.extract_article(entry,{'id':28,'rss_url':'https://36kr.com/feed','lang':'zh'})
+   self.assertEqual(result['content_kind'],'brief');self.assertEqual(result['published_at'],'2026-11-06T10:00:00Z')
+   self.assertEqual(result['cover_image'],'https://example.com/image.jpg');download.assert_not_called()
+  with patch.object(crawler,'download',side_effect=ConnectionError()):
+   self.assertIsNone(crawler.extract_article(entry,self.source()))
+  text=' '.join(['facts']*40)
+  self.assertTrue(crawler.enough_content(text,'en'))
+  self.assertTrue(crawler.enough_content('新闻事实'*16,'zh'))
+
+ def test_partial_extraction_reports_counts_and_reasons(self):
+  entries=[{'link':'https://example.com/'+str(i),'title':'Report'} for i in range(3)]
+  def inspect(e,s):return ({'id':1},None) if e==entries[0] else (None,'blocked')
+  with patch.object(crawler,'download',return_value=(b'feed','url')),patch.object(crawler.feedparser,'parse',return_value=SimpleNamespace(entries=entries)),patch.object(crawler,'unseen',side_effect=lambda e:e),patch.object(crawler,'inspect_article',side_effect=inspect),patch.object(crawler,'send') as send:
+   self.assertFalse(crawler.collect_source(self.source()))
+   report=send.call_args.args[1][0];self.assertFalse(report['success'])
+   self.assertEqual(report['stats']['accepted_articles'],1);self.assertEqual(report['stats']['rejected_articles'],2)
+   self.assertEqual(report['stats']['reasons'],{'blocked':2});self.assertEqual(len(report['stats']['rejected']),2)
 
 if __name__=='__main__':unittest.main()

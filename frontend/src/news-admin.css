@@ -59,3 +59,5 @@
 .news-admin .news-workspace-tabs button { flex: 0 0 auto; white-space: nowrap; }
 .news-admin .news-workspace-tabs button:focus-visible,
 .news-admin [role="tabpanel"]:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
+
+.news-coverage-counts{color:#475569!important;font-variant-numeric:tabular-nums}.news-coverage-details{margin-top:6px;font-size:12px}.news-coverage-details summary{cursor:pointer;color:#475569}.news-coverage-details ul{margin:8px 0;padding-left:16px;max-height:200px;overflow:auto}.news-coverage-details li{margin:6px 0}.news-coverage-details a{color:#334155;text-decoration:underline;text-underline-offset:3px}.news-coverage-details small{color:#9f3434!important}

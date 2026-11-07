@@ -10,6 +10,8 @@ public class NewsPipeline {
  private final NewsService news;
  public NewsPipeline(NewsService news){this.news=news;}
  private ThreadPoolTaskScheduler scheduler(String name){var s=new ThreadPoolTaskScheduler();s.setPoolSize(1);s.setThreadNamePrefix(name);s.setWaitForTasksToCompleteOnShutdown(false);s.setAwaitTerminationSeconds(15);return s;}
+ @Bean public ThreadPoolTaskScheduler newsAutoScheduler(){return scheduler("news-auto-");}
+ @Scheduled(fixedDelay=60000,initialDelay=45000,scheduler="newsAutoScheduler") public void scheduleCollection(){news.queueScheduledCollection();}
  @Bean public ThreadPoolTaskScheduler newsDispatchScheduler(){return scheduler("news-dispatch-");}
  @Bean public ThreadPoolTaskScheduler newsIngestScheduler(){return scheduler("news-ingest-");}
  @Bean public ThreadPoolTaskScheduler newsTitleScheduler(){var s=scheduler("news-title-");s.setPoolSize(5);return s;}
