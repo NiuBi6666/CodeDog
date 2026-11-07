@@ -61,6 +61,14 @@ const assert=require('node:assert/strict'),path=require('path');
  await Promise.all([p.waitForResponse(r=>r.url().includes('/articles/3')),p.getByRole('button',{name:'关联报道',exact:true}).click()]);await p.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='发布')?.disabled);assert.equal(associations,1);
  await Promise.all([p.waitForResponse(r=>r.url().endsWith('/status')),p.getByRole('button',{name:'发布',exact:true}).click()]);assert.equal(published,1);
  await p.screenshot({path:'/qa/news-events-admin-1440.png',fullPage:true});
- console.log('ADMIN_CORRECTION_AND_PUBLISH_OK');await c.close();
+ console.log('ADMIN_CORRECTION_AND_PUBLISH_OK');
+ for(const width of [375,390,430,1440]){
+ await p.setViewportSize({width,height:900});
+ assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ const controls=await p.locator('.news-event-editor select').evaluateAll(es=>es.map(e=>{const s=getComputedStyle(e);return {height:e.getBoundingClientRect().height,padding:s.paddingTop,line:s.lineHeight,background:s.backgroundPosition};}));
+ assert(controls.every(x=>x.height>=38&&x.height<=40));console.log('ADMIN_LAYOUT_OK',width,JSON.stringify(controls));
+ await p.screenshot({path:'/qa/news-events-admin-'+width+'.png',fullPage:true});
+ }
+ await c.close();
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
