@@ -45,15 +45,6 @@
     "is_active": true
   },
   {
-    "source_name": "中新网·国际",
-    "category": "国际",
-    "lang": "zh",
-    "priority": 80,
-    "rss_url": "https://www.chinanews.com.cn/rss/world.xml",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
     "source_name": "Defense News",
     "category": "军事",
     "lang": "en",
@@ -171,15 +162,6 @@
     "is_active": true
   },
   {
-    "source_name": "Yahoo Finance",
-    "category": "财经",
-    "lang": "en",
-    "priority": 90,
-    "rss_url": "https://finance.yahoo.com/news/rssindex",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
     "source_name": "Fortune",
     "category": "财经",
     "lang": "en",
@@ -198,15 +180,6 @@
     "is_active": true
   },
   {
-    "source_name": "中新网·财经",
-    "category": "财经",
-    "lang": "zh",
-    "priority": 80,
-    "rss_url": "https://www.chinanews.com.cn/rss/finance.xml",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
     "source_name": "EdSurge",
     "category": "教育",
     "lang": "en",
@@ -216,29 +189,11 @@
     "is_active": true
   },
   {
-    "source_name": "Times Higher Ed",
-    "category": "教育",
-    "lang": "en",
-    "priority": 90,
-    "rss_url": "https://www.timeshighereducation.com/Lists/News/rss.xml",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
     "source_name": "Guardian Education",
     "category": "教育",
     "lang": "en",
     "priority": 90,
     "rss_url": "https://www.theguardian.com/education/rss",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
-    "source_name": "Inside Higher Ed",
-    "category": "教育",
-    "lang": "en",
-    "priority": 85,
-    "rss_url": "https://www.insidehighered.com/rss/feed",
     "refresh_interval_min": 10,
     "is_active": true
   },
@@ -261,29 +216,11 @@
     "is_active": true
   },
   {
-    "source_name": "ESPN",
-    "category": "文娱",
-    "lang": "en",
-    "priority": 90,
-    "rss_url": "https://www.espn.com/espn/rss/news",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
     "source_name": "The Guardian Culture",
     "category": "文娱",
     "lang": "en",
     "priority": 90,
     "rss_url": "https://www.theguardian.com/culture/rss",
-    "refresh_interval_min": 10,
-    "is_active": true
-  },
-  {
-    "source_name": "Medical News Today",
-    "category": "生活",
-    "lang": "en",
-    "priority": 90,
-    "rss_url": "https://www.medicalnewstoday.com/rss",
     "refresh_interval_min": 10,
     "is_active": true
   },
