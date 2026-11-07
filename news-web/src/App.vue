@@ -3,10 +3,11 @@ import { computed,ref,watch,nextTick,onMounted,onBeforeUnmount } from 'vue';
 import { useRoute,useRouter } from 'vue-router';
 import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
+import BackToTop from './BackToTop.vue';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
-const feedPanel=ref(null),loadSentinel=ref(null),hasMore=ref(false),nextCursor=ref(''),loadingMore=ref(false),moreError=ref('');
+const readerPanel=ref(null),feedPanel=ref(null),loadSentinel=ref(null),hasMore=ref(false),nextCursor=ref(''),loadingMore=ref(false),moreError=ref('');
 const bodyError=ref(''),bodyWaiting=ref(false);
 const mode=ref('bilingual'),imageFailed=ref(false),loading=ref(true),error=ref('');
 const effectiveMode=computed(()=>selected.value?.lang==='zh'?'zh':mode.value),fontSize=ref(17),clock=ref(Date.now());
@@ -118,7 +119,7 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
           <div v-if="!loading && !error && !filtered.length" class="empty-state"><strong>暂时没有可阅读的报道</strong><span>调整筛选，或等待采集与标题翻译完成，打开报道后翻译全文。</span></div><div ref="loadSentinel" class="feed-load-status" role="status" aria-live="polite"><template v-if="loadingMore">正在加载更早的报道…</template><template v-else-if="moreError">加载失败，已保留当前列表。<button type="button" @click="retryMore">重试</button></template><template v-else-if="!loading&&articles.length">{{hasMore?'上滑继续阅读':'已浏览全部报道'}}</template></div>
         </div>
       </aside>
-      <article v-if="selected" class="reader-panel">
+      <article v-if="selected" ref="readerPanel" class="reader-panel">
         <div class="reader-toolbar"><span class="eyebrow">{{ selected.category_en }} / {{ selected.source_name }}</span><div class="reading-tools"><a :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原网页 ↗</a><button :disabled="fontSize<=15" aria-label="缩小正文字号" @click="fontSize=Math.max(15,fontSize-1)">A−</button><button :disabled="fontSize>=22" aria-label="放大正文字号" @click="fontSize=Math.min(22,fontSize+1)">A+</button></div></div>
         <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><span class="dot">·</span><span>{{ selected.author }}</span><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><p v-if="selected.lang!=='zh' && effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en" lang="en" data-selectable-original>{{ selected.title_en }}</p><h1 :data-selectable-original="effectiveMode==='en'?'':undefined" :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1>
           <section v-if="effectiveMode!=='en'&&selected.summary_zh.length" class="takeaways" aria-label="核心导读"><h2>核心导读</h2><ul><li v-for="point in selected.summary_zh.slice(0,3)" :key="point">{{ point }}</li></ul></section>
@@ -134,5 +135,8 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
         <SelectionTranslator v-if="selected.lang!=='zh'" :article-id="selected.id" />
       </article><section v-else class="reader-panel reader-empty"><span class="eyebrow">CDNews · GLOBAL EDITION</span><h2>选择一篇报道，开始阅读</h2><p>列表先翻译标题，打开报道后再翻译全文。</p></section>
     </main>
+    <BackToTop :target="feedPanel" label="新闻列表回到顶部" />
+    <BackToTop :target="readerPanel" label="正文回到顶部" />
+    <BackToTop viewport :reset-key="route.fullPath" />
   </div>
 </template>

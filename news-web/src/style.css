@@ -236,3 +236,9 @@
 
 .feed-load-status { min-height:48px; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px 0; color:#71828a; font-size:12px; text-align:center; }
 .feed-load-status button { border:0; background:transparent; color:#365b70; text-decoration:underline; text-underline-offset:3px; padding:6px; }
+
+.back-top{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:12;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid #d5dadd;border-radius:50%;background:#fffefa;color:#657583;box-shadow:0 3px 12px #28333d16;cursor:pointer}
+.back-top:hover{background:#eef2f2;color:#28333d}
+.back-top:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.back-top--viewport{display:none}
+@media(max-width:760px){.back-top--panel{display:none}.back-top--viewport{display:grid}}
