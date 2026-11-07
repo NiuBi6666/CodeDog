@@ -4,12 +4,13 @@ import { useRoute,useRouter } from 'vue-router';
 import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
 import BackToTop from './BackToTop.vue';
+import ArticleCover from './ArticleCover.vue';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
 const readerPanel=ref(null),feedPanel=ref(null),loadSentinel=ref(null),hasMore=ref(false),nextCursor=ref(''),loadingMore=ref(false),moreError=ref('');
 const bodyError=ref(''),bodyWaiting=ref(false);
-const mode=ref('bilingual'),imageFailed=ref(false),loading=ref(true),error=ref('');
+const mode=ref('bilingual'),loading=ref(true),error=ref('');
 const effectiveMode=computed(()=>selected.value?.lang==='zh'?'zh':mode.value),fontSize=ref(17),clock=ref(Date.now());
 function dateLabel(value){return relativeTime(value,clock.value);}
 function exactDate(value){return new Date(value).toLocaleString('zh-CN');}
@@ -23,7 +24,7 @@ async function detail(id){
  const g=++detailGeneration;stopDetail();bodyError.value='';selected.value=null;
  try{
   const a=await request('/news/'+id);if(g!==detailGeneration)return;
-  selected.value=normalize(a);imageFailed.value=false;
+  selected.value=normalize(a);
   if(a.translation_status==='ready')return;
   const csrf=await request('/auth/csrf');
   if(g!==detailGeneration)return;
@@ -91,7 +92,6 @@ function scrollListTop(){
  if(matchMedia('(max-width:760px)').matches)window.scrollTo({top:0,behavior:'instant'});
  else if(feedPanel.value)feedPanel.value.scrollTop=0;
 }
-function proxyImage(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
 watch([category,source],()=>{scrollListTop();load();});watch(query,()=>{clearTimeout(debounce);debounce=setTimeout(()=>{scrollListTop();load();},350);});watch(()=>route.params.id,id=>{if(id)detail(id);else {detailGeneration++;stopDetail();selected.value=null;}observeFeed();});
 onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);window.addEventListener('resize',observeFeed);});onBeforeUnmount(()=>{feedObserver?.disconnect();window.removeEventListener('resize',observeFeed);detailGeneration++;stopDetail();clearTimeout(debounce);clearInterval(clockTimer);});
 </script>
@@ -123,7 +123,7 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
         <div class="reader-toolbar"><span class="eyebrow">{{ selected.category_en }} / {{ selected.source_name }}</span><div class="reading-tools"><a :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原网页 ↗</a><button :disabled="fontSize<=15" aria-label="缩小正文字号" @click="fontSize=Math.max(15,fontSize-1)">A−</button><button :disabled="fontSize>=22" aria-label="放大正文字号" @click="fontSize=Math.min(22,fontSize+1)">A+</button></div></div>
         <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><span class="dot">·</span><span>{{ selected.author }}</span><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><p v-if="selected.lang!=='zh' && effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en" lang="en" data-selectable-original>{{ selected.title_en }}</p><h1 :data-selectable-original="effectiveMode==='en'?'':undefined" :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1>
           <section v-if="effectiveMode!=='en'&&selected.summary_zh.length" class="takeaways" aria-label="核心导读"><h2>核心导读</h2><ul><li v-for="point in selected.summary_zh.slice(0,3)" :key="point">{{ point }}</li></ul></section>
-          <div v-if="selected.cover_image" class="cover-wrap"><img v-if="selected.cover_image && !imageFailed" :src="proxyImage(selected.cover_image)" :alt="selected.title_en" @error="imageFailed = true" /><div v-else class="cover-fallback"><span>{{ selected.source_mark }}</span><small>IMAGE UNAVAILABLE</small></div></div>
+          <ArticleCover v-if="selected.cover_image" :src="selected.cover_image" :alt="selected.title_en" :source-mark="selected.source_mark" />
           <p v-if="selected.lang==='zh'" class="original-language-note">中文原稿 · 按来源原文展示，无英文译文</p>
           <div v-if="selected.translation_status!=='ready'" class="body-translation-status" role="status">
             <span>{{bodyError||(selected.translation_status==='failed'?'翻译暂不可用':selected.translation_stage==='retrying'?'稍后自动重试':selected.translation_stage==='processing'?'正在翻译':'排队中')}}<template v-if="selected.translation_total"> · {{selected.translation_completed||0}}/{{selected.translation_total}} 段</template></span>
