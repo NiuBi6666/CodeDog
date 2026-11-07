@@ -163,7 +163,7 @@ public final class PermissionCatalog {
             action(USERS_PERMISSIONS_MANAGE, "配置普通用户权限"),
             action(USERS_CRM_MANAGE, "配置 CRM 教师绑定")
         )),
-        new Group("news", "新闻聚合", List.of(page(NEWS_VIEW,"访问新闻管理"),data(NEWS_READ,"查看新闻和来源"),action(NEWS_SOURCES_CREATE,"添加订阅源"),action(NEWS_SOURCES_UPDATE,"修改订阅源"),action(NEWS_SOURCES_DELETE,"删除订阅源"),action(NEWS_REFRESH,"触发海外采集"),action(NEWS_RETRY,"重新编译文章")))
+        new Group("news", "新闻聚合", List.of(page(NEWS_VIEW,"访问新闻管理"),data(NEWS_READ,"查看新闻和来源"),action(NEWS_SOURCES_CREATE,"添加订阅源"),action(NEWS_SOURCES_UPDATE,"修改订阅源"),action(NEWS_SOURCES_DELETE,"删除订阅源"),action(NEWS_REFRESH,"触发海外采集"),action(NEWS_RETRY,"重新编译文章"),data("news.events.read","查看事件追踪"),action("news.events.create","创建事件"),action("news.events.update","编辑事件"),action("news.events.publish","发布与撤下事件"),action("news.events.associate","调整事件报道关联")))
     );
 
     private static final Set<String> ALL_CODES;

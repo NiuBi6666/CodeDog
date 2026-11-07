@@ -30,10 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NewsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;
- @Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
+ @Autowired cn.codedog.news.NewsEventService events;@Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  static final String SECRET="test-news-secret-at-least-32-characters";
- @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql")).execute(ds);}
- @BeforeEach void clean(){db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql"),new ClassPathResource("db/migration/V141__news_event_tracking.sql")).execute(ds);}
+ @BeforeEach void clean(){db.update("DELETE FROM news_event_articles");db.update("DELETE FROM news_event_nodes");db.update("DELETE FROM news_events");db.update("DELETE FROM news_event_scanned_articles");db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void historicalArticleResponseOmitsFooterAndKeepsStoredOriginal()throws Exception{
   String original="正文事实。\n\n经济新闻精选：\n\n- 2026年11月04日 11:06:43\n\n- 2026年11月03日 17:12:22";
@@ -162,4 +162,70 @@ class NewsIntegrationTest {
   mvc.perform(post("/api/crawler/filter").header("X-Webhook-Secret",SECRET).contentType(APPLICATION_JSON).content("{\"urls\":[\"http://invalid.example\"]}")).andExpect(status().isBadRequest());
  }
  static String sign(byte[] bytes,String ts)throws Exception{Mac m=Mac.getInstance("HmacSHA256");m.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8),"HmacSHA256"));m.update((ts+".").getBytes(StandardCharsets.UTF_8));return HexFormat.of().formatHex(m.doFinal(bytes));}
+
+ long eventArticle(String title,String date){
+  String url="https://example.com/events/"+UUID.randomUUID();
+  db.update("INSERT INTO news_articles(source_id,url_hash,origin_url,source_name,category,title_en,title_zh,content_en,content_zh,status,published_at) VALUES((SELECT MIN(id) FROM news_sources),?,?,'Event Test','科技',?,?,'Original paragraph','中文段落','ready',?)",NewsService.digest(url),url,title,"译文 "+title,java.sql.Timestamp.from(Instant.parse(date)));
+  return db.queryForObject("SELECT id FROM news_articles WHERE origin_url=?",Long.class,url);
+ }
+ @Test void eventTimelineIsDraftUntilConfirmedPublishedAndDistinguishesTimeBasis()throws Exception{
+  long a=eventArticle("Company Alpha announces satellite launch mission","2026-11-01T10:00:00Z"),b=eventArticle("Company Alpha completes satellite launch mission","2026-11-03T10:00:00Z");
+  long id=((Number)events.create(json.readTree("{\"title\":\"卫星发射任务\",\"category\":\"科技\"}")).get("id")).longValue();
+  mvc.perform(get("/api/news/events/"+id)).andExpect(status().isNotFound());
+  assertThatThrownBy(()->events.publish(id,json.readTree("{\"status\":\"published\"}"))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+  events.link(id,a,json.readTree("{\"stage\":\"background\"}"));
+  events.link(id,b,json.readTree("{\"stage\":\"outcome\",\"occurred_at\":\"2026-10-31T08:00:00Z\"}"));
+  events.publish(id,json.readTree("{\"status\":\"published\"}"));
+  mvc.perform(get("/api/news/events/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.article_count").value(2)).andExpect(jsonPath("$.nodes[0].time_basis").value("occurred")).andExpect(jsonPath("$.nodes[0].reports[0].article_id").value(b)).andExpect(jsonPath("$.nodes[1].time_basis").value("published"));
+  mvc.perform(get("/api/news/"+a)).andExpect(status().isOk()).andExpect(jsonPath("$.events[0].id").value(id));
+  long second=((Number)events.create(json.readTree("{\"title\":\"另一个事件\",\"category\":\"科技\"}")).get("id")).longValue();
+  events.link(second,a,json.readTree("{}"));
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM news_event_articles WHERE article_id=?",Long.class,a)).isEqualTo(2);
+  long node=((Number)((List<Map<String,Object>>)events.event(id,true).get("nodes")).getFirst().get("id")).longValue();
+  assertThatThrownBy(()->events.link(second,b,json.readTree("{\"node_id\":"+node+"}"))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+  events.link(id,a,json.readTree("{\"state\":\"excluded\"}"));
+  mvc.perform(get("/api/news/events/"+id)).andExpect(status().isNotFound());
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM news_articles WHERE id IN (?,?)",Long.class,a,b)).isEqualTo(2);
+ }
+ @Test void eventSuggestionsNeverPublishAndExcludedMatchesStayExcluded()throws Exception{
+  long a=eventArticle("Company Alpha announces satellite launch mission today","2026-11-01T10:00:00Z");
+  long b=eventArticle("Company Alpha announces satellite launch mission tomorrow","2026-11-02T10:00:00Z");
+  events.propose();
+  assertThat(events.list(false)).isEmpty();
+  long id=((Number)events.list(true).getFirst().get("id")).longValue();
+  assertThat((List<?>)events.event(id,true).get("suggestions")).hasSize(2);
+  events.link(id,b,json.readTree("{\"state\":\"excluded\"}"));
+  db.update("DELETE FROM news_event_scanned_articles WHERE article_id=?",b);
+  events.propose();
+  assertThat(db.queryForObject("SELECT state FROM news_event_articles WHERE event_id=? AND article_id=?",String.class,id,b)).isEqualTo("excluded");
+  events.propose();
+  assertThat(events.list(true)).hasSize(1);
+  // A pending title is scanned once it becomes available, even below the scan cursor.
+  db.update("DELETE FROM news_event_scanned_articles WHERE article_id=?",a);events.propose();
+  assertThat(events.list(false)).isEmpty();
+ }
+ @Test void eventPermissionsAreIndependentAndRevocationImmediate()throws Exception{
+  User u=users.findByUsername("event-test-user").orElseGet(User::new);u.setUsername("event-test-user");u.setPasswordHash(encoder.encode("event-test-password"));u.setPermissions(Set.of());u=users.saveAndFlush(u);
+  var session=login("event-test-user","event-test-password");
+  long article=eventArticle("Event permission original article report","2026-11-01T10:00:00Z");
+  long id=((Number)events.create(json.readTree("{\"title\":\"权限事件\",\"category\":\"科技\"}")).get("id")).longValue();
+  var endpoints=List.of(new String[]{"GET","/api/admin/news/events","news.events.read",""},
+   new String[]{"GET","/api/admin/news/event-articles?q=Event","news.events.read",""},
+   new String[]{"POST","/api/admin/news/events","news.events.create","{\"title\":\"新事件\",\"category\":\"科技\"}"},
+   new String[]{"PATCH","/api/admin/news/events/"+id,"news.events.update","{\"title\":\"修改事件\",\"category\":\"科技\"}"},
+   new String[]{"PUT","/api/admin/news/events/"+id+"/status","news.events.publish","{\"status\":\"draft\"}"},
+   new String[]{"PUT","/api/admin/news/events/"+id+"/articles/"+article,"news.events.associate","{}"});
+  for(var endpoint:endpoints){
+   u.setPermissions(Set.of());users.saveAndFlush(u);
+   mvc.perform(request(org.springframework.http.HttpMethod.valueOf(endpoint[0]),endpoint[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content(endpoint[3])).andExpect(status().isForbidden());
+   u.setPermissions(Set.of(endpoint[2]));users.saveAndFlush(u);
+   mvc.perform(request(org.springframework.http.HttpMethod.valueOf(endpoint[0]),endpoint[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content(endpoint[3])).andExpect(status().isOk());
+   u.setPermissions(Set.of());users.saveAndFlush(u);
+   mvc.perform(request(org.springframework.http.HttpMethod.valueOf(endpoint[0]),endpoint[1]).session(session).with(csrf()).contentType(APPLICATION_JSON).content(endpoint[3])).andExpect(status().isForbidden());
+  }
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE module='news' AND event_code='event_associate' AND result='success'",Long.class)).isPositive();
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM audit_log WHERE request_path LIKE '/api/admin/news/events%' AND status_code=403",Long.class)).isPositive();
+  mvc.perform(get("/api/admin/news/events")).andExpect(status().isUnauthorized());
+  mvc.perform(put("/api/admin/news/events/"+id+"/status").session(session).contentType(APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
+ }
 }

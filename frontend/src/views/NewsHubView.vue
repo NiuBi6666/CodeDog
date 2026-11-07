@@ -4,13 +4,14 @@ import { ref,computed,onMounted } from 'vue';
 import { Settings,Languages,Rss,History } from '@lucide/vue';
 import '../news-admin.css';
 import NewsCollectorSettings from '../components/NewsCollectorSettings.vue';
+import NewsEvents from '../components/NewsEvents.vue';
 import AdminLayout from '../components/AdminLayout.vue';
 import { api,jsonBody,notify } from '../api';
 import { auth,hasPermission } from '../auth';
-const selectedTab=ref('collector');
+const selectedTab=ref(!hasPermission('news.read')&&hasPermission('news.events.read')?'events':'collector');
 const tabs=computed(()=>[
   ...(auth.user?.admin?[{id:'collector',label:'采集配置',icon:Settings},{id:'translation',label:'翻译配置',icon:Languages}]:[]),
-  {id:'sources',label:'订阅源',icon:Rss},{id:'history',label:'采集记录',icon:History}
+  ...(hasPermission('news.events.read')?[{id:'events',label:'事件追踪',icon:History}]:[]),...(hasPermission('news.read')?[{id:'sources',label:'订阅源',icon:Rss},{id:'history',label:'采集记录',icon:History}]:[])
 ]);
 const activeTab=computed(()=>tabs.value.some(tab=>tab.id===selectedTab.value)?selectedTab.value:'sources');
 function moveTab(event,index){
@@ -31,7 +32,7 @@ async function testAi(){aiBusy.value=true;aiError.value='';aiTest.value='';try{c
 const newsCategories=['国际','军事','科技','财经','教育','文娱','生活'];
 const empty=()=>({source_name:'',rss_url:'',category:'科技',lang:'en',priority:80,refresh_interval_min:10,is_active:true});
 const form=ref(empty());
-async function load(){try{data.value=await api('/admin/news');error.value='';}catch(e){error.value=e.message;}}
+async function load(){try{data.value=hasPermission('news.read')?await api('/admin/news'):{configuration:{},sources:[],runs:[],batches:[]};error.value='';}catch(e){error.value=e.message;}}
 function edit(s){form.value={...s};editing.value=s.id;}
 function cancel(){form.value=empty();editing.value=null;}
 async function save(){busy.value=true;try{await api('/admin/sources'+(editing.value?'/'+editing.value:''),{method:editing.value?'PATCH':'POST',body:jsonBody(form.value)});notify('订阅源已保存');cancel();await load();}catch(e){error.value=e.message;}finally{busy.value=false;}}
@@ -101,6 +102,7 @@ onMounted(()=>{load();loadAi();});
           </div>
         </section>
 
+        <div v-if="hasPermission('news.events.read')&&activeTab==='events'" id="news-panel-events" role="tabpanel" aria-labelledby="news-tab-events"><NewsEvents /></div>
         <section v-show="activeTab==='sources'" id="news-panel-sources" role="tabpanel" aria-labelledby="news-tab-sources" tabindex="0" class="admin-panel news-section">
           <div class="panel-heading news-panel-heading"><div><h2>订阅源</h2></div><span class="status-badge status-offline">{{data.sources.length}} 个来源</span></div>
           <div class="document-table-wrap news-table-wrap"><table class="document-table"><thead><tr><th>媒体 / RSS</th><th>分类</th><th>频率 / 权重</th><th>最近抓取</th><th>最近成功</th><th>状态</th><th>操作</th></tr></thead><tbody>

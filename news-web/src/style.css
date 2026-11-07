@@ -242,3 +242,18 @@
 .back-top:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .back-top--viewport{display:none}
 @media(max-width:760px){.back-top--panel{display:none}.back-top--viewport{display:grid}}
+
+.events-nav{font-size:13px;color:#365b70;white-space:nowrap;text-decoration:none;padding:8px 0}
+.story-events{display:flex;gap:10px;flex-wrap:wrap;padding:8px 12px}.story-events a{color:#365b70;text-decoration:none;font-size:12px}
+.events-page{max-width:960px;margin:0 auto;padding:28px 24px 72px;overflow-wrap:anywhere}
+.events-heading,.event-meta,.event-node-meta{display:flex;gap:14px;align-items:center;flex-wrap:wrap;color:#64748b;font-size:12px}
+.events-heading a{color:#365b70}.events-page h1{font-size:26px;line-height:1.4;margin:20px 0}
+.event-meta{justify-content:space-between}.event-meta button{background:transparent;border:1px solid var(--line);border-radius:5px;padding:7px 12px;color:var(--ink)}
+.event-timeline{list-style:none;margin:28px 0 0;padding:0 0 0 24px;border-left:1px solid #c6d1d5}
+.event-timeline>li{position:relative;margin:0 0 34px}.event-timeline>li:before{content:'';position:absolute;left:-29px;top:3px;width:9px;height:9px;border-radius:50%;background:#4c7187;box-shadow:0 0 0 4px #f4f1ea}
+.event-timeline h2,.event-card h2{font-size:18px;line-height:1.5}
+.event-report{padding:12px 14px;margin-top:10px;background:#fffefa;border:1px solid var(--line);border-radius:6px}
+.event-report>p{font:14px/1.5 Georgia,serif;color:#64748b;margin:0 0 6px}.event-report>a{color:var(--ink);text-decoration:none;line-height:1.6}
+.event-report>div{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap;font-size:11px;color:#64748b;margin-top:10px}.event-report a{color:#365b70}
+.event-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.event-card{display:block;padding:18px;border:1px solid var(--line);border-radius:6px;background:#fffefa;color:var(--ink);text-decoration:none}.event-card>span,.event-card time{font-size:12px;color:#64748b}
+@media(max-width:760px){.events-page{padding:18px 16px 60px}.event-grid{grid-template-columns:1fr}.events-page h1{font-size:24px}.event-timeline{padding-left:18px}.event-timeline>li:before{left:-23px}}
