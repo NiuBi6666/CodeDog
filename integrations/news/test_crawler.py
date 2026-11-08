@@ -94,6 +94,14 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(crawler.article_images(raw,'https://publisher.example/story'),['https://img.example.com/lead.jpg?w=1800','https://publisher.example/second.jpg'])
   self.assertEqual(crawler.merge_images(['https://img.example.com/a.jpg?w=1800'],['https://img.example.com/a.jpg?w=100','https://img.example.com/b.jpg']),['https://img.example.com/a.jpg?w=1800','https://img.example.com/b.jpg'])
 
+ def test_picture_uses_high_resolution_sources_and_skips_video_previews(self):
+  raw='<article><figure><picture><source srcset="https://img.example.com/full.jpg 1800w"><img src="https://img.example.com/thumb.jpg"></picture></figure><figure><video></video><img src="/video.jpg"></figure></article>'
+  self.assertEqual(crawler.article_images(raw,'https://example.com/news'),['https://img.example.com/full.jpg'])
+  raw='<article><figure><img src="https://i.guim.co.uk/img/media/'+'a'*40+'/0_0_2000_2666/master/2000.jpg?width=445&amp;crop=none"></figure></article>'
+  value=crawler.article_images(raw,'https://www.theguardian.com/a')[0]
+  self.assertIn('width=1800',value)
+  self.assertIn('crop=none',value)
+
  def test_guardian_crop_and_social_overlay_are_one_original_asset(self):
   asset='a'*40
   self.assertEqual(crawler.image_identity('https://i.guim.co.uk/img/media/'+asset+'/0_0_100_100/master/100.jpg?w=1200'),crawler.image_identity('https://i.guim.co.uk/img/media/'+asset+'/467_97_1218_975/master/1218.jpg?overlay=test'))

@@ -157,13 +157,17 @@ def article_images(raw,url):
   excluded=False
   for parent in parents:
    label=' '.join(parent.get(k,'') for k in ('class','id','data-component','data-gu-name','role')).lower()
-   if parent.tag in ('aside','nav','footer') or any(x in label for x in ('related','recommend','most-viewed','mostpopular','avatar','author-image','advert','promo','onward','newsletter')):
+   if parent.tag in ('aside','nav','footer') or any(x in label for x in ('related','recommend','most-viewed','mostpopular','avatar','author-image','advert','promo','onward','newsletter','video-player')):
     excluded=True;break
   if excluded:continue
+  if any(parent.tag=='figure' and parent.xpath('.//video|.//iframe') for parent in parents):continue
   if not node.xpath('ancestor::figure') and not any(parent in scopes for parent in parents):continue
   if any(node.get(k,'').isdigit() and int(node.get(k))<100 for k in ('width','height')):continue
   candidates=[]
-  for value in (node.get('srcset',''),node.get('data-srcset','')):
+  responsive=[node.get('srcset',''),node.get('data-srcset','')]
+  pictures=node.xpath('ancestor::picture')
+  if pictures:responsive.extend(pictures[0].xpath('.//source/@srcset'))
+  for value in responsive:
    for part in value.split(','):
     bits=part.strip().split()
     if bits:
@@ -176,7 +180,10 @@ def article_images(raw,url):
    value=urllib.parse.urljoin(url,candidate)
    u=urllib.parse.urlsplit(value)
    if u.scheme!='https' or not u.hostname or u.username or u.password:continue
-   if any(x in u.path.lower() for x in ('/avatar','/logo','/icon','/pixel','/tracking')):continue
+   if any(x in u.path.lower() for x in ('/avatar','/logo','/icon','/pixel','/tracking','cinemagraph--')):continue
+   if u.hostname=='i.guim.co.uk':
+    query=dict(urllib.parse.parse_qsl(u.query));query.update(width='1800',dpr='1');query.pop('height',None)
+    value=urllib.parse.urlunsplit(u._replace(query=urllib.parse.urlencode(query)))
    key=image_identity(value)
    if key not in seen:seen.add(key);images.append(value)
    break
@@ -187,6 +194,10 @@ def merge_images(*groups):
  for group in groups:
   for value in group:
    if not isinstance(value,str) or not value.startswith('https://') or len(value)>8000:continue
+   u=urllib.parse.urlsplit(value)
+   if u.hostname=='i.guim.co.uk':
+    query=dict(urllib.parse.parse_qsl(u.query));query.update(width='1800',dpr='1');query.pop('height',None)
+    value=urllib.parse.urlunsplit(u._replace(query=urllib.parse.urlencode(query)))
    key=image_identity(value)
    if key not in seen:seen.add(key);result.append(value)
  return result
