@@ -31,7 +31,11 @@ const assert=require('node:assert/strict'),path=require('path');
   for(const [i,[w,h]] of shapes.entries()){
    const img=p.locator('.article-cover-stage img');
    await p.waitForFunction(expected=>document.querySelector('.article-cover-stage img')?.naturalWidth===expected,w);
-   const box=await img.boundingBox();assert(Math.abs(box.width/box.height-w/h)<.02);
+   const box=await p.locator('.article-cover-media').boundingBox();assert(Math.abs(box.width/box.height-16/9)<.02);
+   const arrows=await p.locator('.gallery-controls button').all();
+   for(const arrow of arrows){const a=await arrow.boundingBox();assert(a.x>=box.x&&a.x+a.width<=box.x+box.width+1);assert(Math.abs(a.y+a.height/2-box.y-box.height/2)<2);}
+   if(i===0)globalThis.initialFrame=box;
+   else assert(Math.abs(box.height-globalThis.initialFrame.height)<1,'switching image must not change frame height');
    await p.getByText((i+1)+' / 3',{exact:true}).waitFor();
    const before=await p.locator('.article-cover-stage img').getAttribute('src');
    await p.getByRole('button',{name:'下一张图片',exact:true}).click();
@@ -57,7 +61,7 @@ const assert=require('node:assert/strict'),path=require('path');
    assert.equal(await img.evaluate(e=>getComputedStyle(e).objectFit),'contain');
    const fitted=await img.boundingBox(),frame=await p.locator('.article-cover-stage').boundingBox();
    assert(Math.abs(fitted.width-frame.width)<2&&Math.abs(fitted.height-frame.height)<2);
-   assert(Math.abs(fitted.width/fitted.height-w/h)<.02);
+   assert(Math.abs(frame.width/frame.height-16/9)<.02);
    await p.getByRole('button',{name:'放大新闻图片',exact:true}).click();
    const dialog=p.getByRole('dialog',{name:'新闻图片大图'});await dialog.waitFor();
    assert(await dialog.evaluate(e=>e.open));

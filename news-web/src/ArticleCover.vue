@@ -25,11 +25,11 @@ onBeforeUnmount(()=>close());
     <img :src="imageUrl()" :alt="alt" decoding="async" @load="neighbors" @error="failed=true" />
    </button>
    <div v-else class="article-cover-unavailable" role="status"><span>{{sourceMark}}</span><small>图片暂不可用</small></div>
-  </div>
   <div v-if="slides.length>1" class="gallery-controls" role="group" aria-label="图片切换">
    <button type="button" aria-label="上一张图片" @click="move(-1)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 5-5 5 5 5"/></svg></button>
    <span :aria-busy="switching" aria-live="polite" aria-atomic="true">{{index+1}} / {{slides.length}}</span>
    <button type="button" aria-label="下一张图片" @click="move(1)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg></button>
+  </div>
   </div>
   <small v-if="switching||switchError" class="gallery-status" role="status">{{switchError||'正在加载图片…'}}</small>
   <dialog ref="dialog" class="article-cover-dialog" aria-label="新闻图片大图" @keydown.tab.prevent="closeButton?.focus()" @keydown.left.prevent="slides.length>1&&move(-1)" @keydown.right.prevent="slides.length>1&&move(1)" @close="closed" @click="e=>{if(e.target===dialog)close();}">
@@ -39,13 +39,13 @@ onBeforeUnmount(()=>close());
  </figure>
 </template>
 <style scoped>
-.article-cover{margin:0 0 20px;width:100%;min-width:0}
-.article-cover-media{width:fit-content;max-width:100%;margin-inline:auto}
-.article-cover-stage{display:block;width:fit-content;max-width:100%;height:auto;margin:0;padding:0;border:0;border-radius:18px;background:#ffffff40;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3;overflow:hidden;cursor:zoom-in}
-.article-cover-stage img{display:block;width:auto;height:auto;max-width:100%;max-height:min(48dvh,420px);object-fit:contain}
+.article-cover{position:relative;margin:0 0 20px;width:100%;min-width:0}
+.article-cover-media{position:relative;width:100%;aspect-ratio:16/9;border-radius:18px;overflow:hidden;background:#ffffff30;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3}
+.article-cover-stage{display:block;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:18px;background:#ffffff40;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3;overflow:hidden;cursor:zoom-in}
+.article-cover-stage img{display:block;width:100%;height:100%;object-fit:contain}
 .article-cover :is(button,dialog):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .article-cover-media.is-unavailable{width:100%}
-.article-cover-unavailable{display:grid;place-items:center;align-content:center;height:180px;gap:8px;background:linear-gradient(135deg,#dfeafa88,#ece5fb88);border:1px solid #ffffffc9;border-radius:18px;color:#64748b}
+.article-cover-unavailable{display:grid;place-items:center;align-content:center;height:100%;gap:8px;background:linear-gradient(135deg,#dfeafa88,#ece5fb88);border:1px solid #ffffffc9;border-radius:18px;color:#64748b}
 .article-cover-unavailable span{font:48px var(--serif)}
 .article-cover-unavailable small{font-size:12px}
 .article-cover-dialog{position:fixed;inset:0;max-width:none;max-height:none;width:100vw;height:100dvh;margin:0;padding:54px 20px 20px;border:0;background:#17212aee;overflow:auto;overscroll-behavior:contain;color:#fff}
@@ -53,10 +53,14 @@ onBeforeUnmount(()=>close());
 .article-cover-dialog::backdrop{background:#17212aee}
 .article-cover-dialog img{display:block;max-width:100%;max-height:calc(100dvh - 74px);width:auto;height:auto;object-fit:contain}
 .article-cover-close{position:fixed;right:16px;top:12px;display:grid;place-items:center;width:40px;height:40px;border:1px solid #ffffff40;border-radius:50%;color:#fff;background:#ffffff24;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:inset 0 1px 1px #ffffff40;z-index:1}
-@media(max-width:760px){.article-cover-stage img{max-height:min(48dvh,360px)}.article-cover-dialog{padding:60px 10px 20px}.article-cover-dialog img{max-height:calc(100dvh - 80px)}}
-.gallery-controls{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
-.gallery-controls button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #ffffff99;border-radius:50%;background:#ffffff55;box-shadow:inset 0 1px 1px #ffffffaa;color:var(--ink)}
-.gallery-controls svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.gallery-controls span{min-width:42px;text-align:center}
-.gallery-status{display:block;text-align:center;margin-top:6px;color:var(--muted);font-size:11px}
+@media(max-width:760px){.article-cover-dialog{padding:60px 10px 20px}.article-cover-dialog img{max-height:calc(100dvh - 80px)}}
+ .gallery-controls{position:absolute;inset:0;pointer-events:none;color:#fff;font-size:11px;font-variant-numeric:tabular-nums}
+.gallery-controls button{position:absolute;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid #ffffff80;border-radius:50%;background:#17212a66;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 10px #17212a18,inset 0 1px 1px #ffffff55;color:#fff;pointer-events:auto;cursor:pointer}
+.gallery-controls button:first-child{left:12px}
+.gallery-controls button:last-child{right:12px}
+.gallery-controls button:hover{background:#17212a99}
+.gallery-controls svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.gallery-controls span{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);min-width:44px;padding:4px 9px;border-radius:20px;text-align:center;background:#17212a77;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.gallery-status{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);max-width:90%;padding:4px 9px;border-radius:12px;background:#17212abb;color:#fff;font-size:11px;pointer-events:none}
+@media(max-width:760px){.gallery-controls button{width:32px;height:32px}.gallery-controls button:first-child{left:8px}.gallery-controls button:last-child{right:8px}}
 </style>
