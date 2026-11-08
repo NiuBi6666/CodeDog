@@ -5,6 +5,7 @@ const assert=require('node:assert/strict'),path=require('node:path');
  try{
  for(const width of [390,1440]){
   const c=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'}),p=await c.newPage(),errors=[];
+  let attempts=0;
   p.on('pageerror',e=>errors.push(e.message));
   await p.emulateMedia({reducedMotion:'reduce'});
   await c.route('http://cdnews.test/**',async r=>{
@@ -13,7 +14,7 @@ const assert=require('node:assert/strict'),path=require('node:path');
     const a={id:999,source_name:'News QA',category:'科技',lang:'en',title_en:'Independent reporting from around the world',title_zh:'来自全球的独立报道',content_en:'Original reporting with complete facts and quotations.',content_zh:'新闻原文的中文译文，包含事实和完整引述。',translation_status:'ready',published_at:'2026-11-08T02:00:00Z'};
     if(u.pathname==='/api/news')return r.fulfill({json:{articles:[a],sources:[],total:1,has_more:false}});
     if(u.pathname==='/api/auth/csrf')return r.fulfill({json:{token:'fixture'}});
-    if(u.pathname==='/api/news/translate')return r.fulfill({json:{translation:'原始报道'}});
+    if(u.pathname==='/api/news/translate'){attempts++;if(attempts<=2)return r.fulfill({status:429,json:{error:'翻译正在处理中，请稍后再试'}});return r.fulfill({json:{translation:'原始报道'}});}
     return r.fulfill({json:a});
    }
    const rel=u.pathname.replace(/^\/news\/?/,'');
@@ -45,7 +46,7 @@ const assert=require('node:assert/strict'),path=require('node:path');
   }
   await p.locator('.story-card').first().click();await p.locator('.en-paragraph').waitFor();
   await p.locator('.en-paragraph').first().evaluate(e=>{const r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,8);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));});
-  await p.getByText('原始报道',{exact:true}).waitFor();
+  await p.getByText('原始报道',{exact:true}).waitFor({timeout:20000});assert.equal(attempts,3);
   const box=await p.getByRole('dialog',{name:'划词翻译'}).boundingBox();assert(box.x>=0&&box.x+box.width<=width+1);
   await p.keyboard.press('Escape');await p.getByRole('dialog',{name:'划词翻译'}).waitFor({state:'hidden'});
   await p.keyboard.press('Tab');

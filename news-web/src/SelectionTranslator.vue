@@ -2,10 +2,10 @@
 import { ref,nextTick,watch,onMounted,onBeforeUnmount } from 'vue';
 const props=defineProps({articleId:{type:Number,required:true}});
 const panel=ref(null),text=ref(''),translation=ref(''),state=ref('idle'),error=ref(''),position=ref({left:'8px',top:'8px'});
-let anchor,controller,ticket=0,debounce,timer;
+let anchor,controller,ticket=0,debounce,timer,busyRetry;
 const cache=new Map();
 function close(clear=false){
- ticket++;controller?.abort();clearTimeout(timer);clearTimeout(debounce);text.value='';translation.value='';error.value='';state.value='idle';
+ ticket++;controller?.abort();clearTimeout(timer);clearTimeout(debounce);clearTimeout(busyRetry);text.value='';translation.value='';error.value='';state.value='idle';
  if(clear)window.getSelection()?.removeAllRanges();
 }
 async function place(){
@@ -36,13 +36,13 @@ function selectionChanged(){
  if(panel.value?.contains(selection?.anchorNode))return;
  const value=selection?.toString().replace(/\s+/g,' ').trim()||'';
  if(value!==text.value)close();
- clearTimeout(debounce);debounce=setTimeout(readSelection,180);
+ clearTimeout(debounce);debounce=setTimeout(readSelection,450);
 }
 function pointerUp(event){if(!panel.value?.contains(event.target))selectionChanged();}
 function pointerDown(event){if(text.value&&!panel.value?.contains(event.target))close();}
 function keyDown(event){if(event.key==='Escape'&&text.value){close(true);}}
 function scrolled(event){if(text.value&&!panel.value?.contains(event.target))close();}
-async function translate(){
+async function translate(attempt=0){
  if(!text.value||text.value.length>1000||state.value==='loading')return;
  const selectedText=text.value,articleId=props.articleId,key=articleId+':'+selectedText;
  if(cache.has(key)){translation.value=cache.get(key);state.value='done';error.value='';place();return;}
@@ -57,6 +57,9 @@ async function translate(){
   if(current!==ticket)return;
   const response=await fetch('/api/news/translate',{method:'POST',signal,credentials:'same-origin',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':csrf.token},body:JSON.stringify({article_id:articleId,text:selectedText})});
   let body;try{body=await response.json();}catch(_){throw Error('翻译服务暂不可用，请稍后重试');}
+  if(response.status===429&&attempt<3){
+   clearTimeout(timer);state.value='loading';busyRetry=setTimeout(()=>{if(current!==ticket)return;state.value='idle';translate(attempt+1);},[2000,5000,10000][attempt]);return;
+  }
   if(!response.ok)throw Error(body.error||(response.status===429?'翻译过于频繁，请稍后再试':'翻译暂未完成，请重试'));
   if(!body.translation)throw Error('没有收到译文，请重试');
   if(current!==ticket)return;
@@ -96,7 +99,7 @@ onBeforeUnmount(()=>{
     <p v-if="state==='done'" class="selection-result" lang="zh-CN">{{translation}}</p>
     <p v-if="state==='error'" class="selection-error" role="alert">{{error}}</p>
    </div>
-   <button v-if="state==='error'&&text.length<=1000" class="selection-translate" type="button" @pointerdown.prevent @click="translate">重新翻译</button>
+   <button v-if="state==='error'&&text.length<=1000" class="selection-translate" type="button" @pointerdown.prevent @click="translate()">重新翻译</button>
   </section>
  </Teleport>
 </template>

@@ -86,8 +86,18 @@ class NewsSelectionTranslationIntegrationTest {
  }
  @Test void limitsRepeatedPublicRequestsWithoutCallingProviderAgain()throws Exception{
   var request=request("Artificial intelligence");request.header("X-Real-IP","192.0.2.7");
-  for(int n=0;n<10;n++)mvc.perform(request).andExpect(status().isOk());
-  mvc.perform(request).andExpect(status().isTooManyRequests());
+  for(int n=0;n<65;n++)mvc.perform(request).andExpect(status().isOk());
+  mvc.perform(request).andExpect(status().isOk()).andExpect(jsonPath("$.cached").value(true));
+ }
+ @Test void readerSessionAllowsContinuousSelectionsButStillBoundsUncachedCalls()throws Exception{
+  String words=java.util.stream.IntStream.range(0,63).mapToObj(n->"word"+n+"end").collect(java.util.stream.Collectors.joining(" "));
+  db.update("UPDATE news_articles SET content_en=? WHERE id=?",words,id);
+  var session=new org.springframework.mock.web.MockHttpSession();
+  for(int n=0;n<60;n++)mvc.perform(request("word"+n+"end").session(session)).andExpect(status().isOk());
+  mvc.perform(request("word60end").session(session)).andExpect(status().isTooManyRequests());
+  mvc.perform(request("word0end").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$.cached").value(true));
+  // Another reader on the same network has a separate allowance.
+  mvc.perform(request("word61end").session(new org.springframework.mock.web.MockHttpSession()).header("X-Real-IP","192.0.2.7")).andExpect(status().isOk());
  }
  @Test void concurrentSelectionsAreBoundedAndCapacityIsReleased()throws Exception{
   db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");

@@ -26,7 +26,7 @@ public class NewsSelectionController {
   if(!clients.containsKey(client)&&clients.size()>=2048)throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"翻译请求较多，请稍后再试");
   Window w=clients.computeIfAbsent(client,k->new Window(now));
   if(w.minute!=now){w.minute=now;w.count=0;}
-  if(w.count>=10||total>=80)throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"翻译过于频繁，请稍后再试");
+  if(w.count>=60||total>=240)throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"翻译过于频繁，请稍后再试");
   w.count++;total++;
  }
  @PostMapping(value="/api/news/translate",consumes="application/json")
@@ -47,12 +47,12 @@ public class NewsSelectionController {
   if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"文章不可用");
   var article=rows.getFirst();
   if(!normalize(Objects.toString(article.get("content_en"),"")).contains(text)&&!normalize(Objects.toString(article.get("title_en"),"")).contains(text))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请从当前文章的英文原文中选择内容");
-  // The public edge overwrites X-Real-IP; the backend has no public port.
-  String client=Objects.toString(request.getHeader("X-Real-IP"),request.getRemoteAddr());
-  if(client.length()>100)client=request.getRemoteAddr();
-  limit(client);
+  // Shared networks must not share a reader allowance; cached results consume no provider quota.
+  String client=request.getSession(true).getId();
+  var cached=translation.cachedSelection(text,Objects.toString(article.get("category"),"国际"));
+  if(cached!=null)return cached;
   if(!active.tryAcquire())throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"翻译正在处理中，请稍后再试");
-  try{return translation.translateSelection(text,Objects.toString(article.get("category"),"国际"));}
+  try{limit(client);return translation.translateSelection(text,Objects.toString(article.get("category"),"国际"));}
   finally{active.release();}
  }
 }

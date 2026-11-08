@@ -89,6 +89,14 @@ public class NewsTranslation {
   texts.set(index,value);
  }
 
+ public Map<String,Object> cachedSelection(String text,String category){
+  var selected=config();
+  if(selected.mode().equals("api")&&!ai.configured())return null;
+  var runtime=selected.mode().equals("api")?ai.runtime():null;
+  String key=NewsService.digest(runtime!=null?"selection-api:"+runtime.baseUrl()+":"+runtime.model()+":"+category+":zh:selection-v1:"+text:cacheIdentity(selected)+text);
+  var rows=db.queryForList("SELECT translated_text FROM news_translation_cache WHERE cache_key=?",key);
+  return rows.isEmpty()?null:Map.of("translation",rows.getFirst().get("translated_text"),"provider",runtime!=null?"大模型 API":"translators / "+selected.engine(),"cached",true);
+ }
  public Map<String,Object> translateSelection(String text,String category){
   var selected=config();
   if(selected.mode().equals("api")&&!ai.configured())throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"翻译服务尚未配置");

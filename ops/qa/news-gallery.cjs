@@ -14,8 +14,9 @@ const assert=require('node:assert/strict'),path=require('path');
   await c.route('https://wsrv.nl/**',async r=>{
    const src=new URL(r.request().url()).searchParams.get('url');
    if(src.endsWith('fail.svg'))return r.fulfill({status:404,body:'Not found'});
+   await new Promise(resolve=>setTimeout(resolve,700));
    const [w,h]=shapes[Number(src.match(/(\d+)\.svg$/)[1])-1];
-   return r.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#c8d4d5"/><rect x="24" y="24" width="${w-48}" height="${h-48}" fill="none" stroke="#385c6f" stroke-width="16"/><circle cx="${w/2}" cy="${h*.28}" r="${Math.min(w,h)*.14}" fill="#688d9a"/><path d="M${w*.15} ${h*.9} Q${w/2} ${h*.2} ${w*.85} ${h*.9}" fill="#486d79"/><text x="${w/2}" y="${h-60}" text-anchor="middle" font-family="Georgia" font-size="40" fill="#fff">CDNews / Full frame</text></svg>`});
+   return r.fulfill({headers:{'Cache-Control':'public,max-age=3600'},contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#c8d4d5"/><rect x="24" y="24" width="${w-48}" height="${h-48}" fill="none" stroke="#385c6f" stroke-width="16"/><circle cx="${w/2}" cy="${h*.28}" r="${Math.min(w,h)*.14}" fill="#688d9a"/><path d="M${w*.15} ${h*.9} Q${w/2} ${h*.2} ${w*.85} ${h*.9}" fill="#486d79"/><text x="${w/2}" y="${h-60}" text-anchor="middle" font-family="Georgia" font-size="40" fill="#fff">CDNews / Full frame</text></svg>`});
   });
   await c.route('http://cdnews.test/**',async r=>{
    const u=new URL(r.request().url());let data;
@@ -32,7 +33,9 @@ const assert=require('node:assert/strict'),path=require('path');
    await p.waitForFunction(expected=>document.querySelector('.article-cover-stage img')?.naturalWidth===expected,w);
    const box=await img.boundingBox();assert(Math.abs(box.width/box.height-w/h)<.02);
    await p.getByText((i+1)+' / 3',{exact:true}).waitFor();
+   const before=await p.locator('.article-cover-stage img').getAttribute('src');
    await p.getByRole('button',{name:'下一张图片',exact:true}).click();
+   assert(await p.locator('.article-cover-stage img').evaluate(e=>e.clientWidth>0&&e.clientHeight>0),'image must stay visible while switching');
   }
   await p.getByText('1 / 3',{exact:true}).waitFor();
   await p.getByRole('button',{name:'上一张图片',exact:true}).click();
