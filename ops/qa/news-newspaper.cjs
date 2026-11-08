@@ -12,7 +12,7 @@ const {chromium}=require('/qa/node_modules/playwright'),assert=require('node:ass
    if(u.pathname==='/api/news'){
     let filtered=rows.filter(a=>!u.searchParams.get('category')||a.category===u.searchParams.get('category'));
     if(u.searchParams.get('q')==='empty')filtered=[];
-    data={articles:filtered,total:filtered.length,has_more:false,sources:[]};
+    data={articles:filtered.map(({content_en,content_zh,...card})=>card),total:filtered.length,has_more:false,sources:[]};
    }else if(/^\/api\/news\/\d+$/.test(u.pathname))data=rows.find(a=>a.id===Number(u.pathname.split('/').pop()));
    else if(u.pathname==='/api/auth/csrf')data={token:'test'};
    else if(u.pathname==='/api/news/translate'){posts.push(u.pathname);data={translation:'世界',cached:true};}
@@ -27,6 +27,16 @@ const {chromium}=require('/qa/node_modules/playwright'),assert=require('node:ass
   assert.equal(posts.length,0,'homepage must not enqueue body translation');
   assert.equal(await p.locator('.press-news-grid .press-story').count(),15);
   await p.screenshot({path:'/qa/newspaper-home-'+width+'.png',fullPage:false});
+  const textCard=p.locator('.press-news-grid .press-story-text').first();await textCard.scrollIntoViewIfNeeded();
+  await textCard.locator('.press-card-excerpt p[lang="zh-CN"]').waitFor();
+  assert.equal(await textCard.locator('.press-thumb').count(),0);
+  assert((await textCard.locator('.press-card-excerpt p[lang="zh-CN"]').textContent()).length<=101);
+  assert.equal(await textCard.locator('.press-card-excerpt p').first().getAttribute('lang'),'en');
+  assert.equal(await textCard.locator('.press-card-excerpt').evaluate(e=>getComputedStyle(e).textAlign),'justify');
+  const imageCard=p.locator('.press-news-grid .press-story').filter({has:p.locator('.press-thumb')}).first();
+  assert.equal(await imageCard.locator('.press-card-excerpt').count(),0);
+  assert.equal(posts.length,0,'card excerpts must not enqueue translation');
+  await p.screenshot({path:'/qa/newspaper-text-cards-'+width+'.png',fullPage:false});
   const link=p.locator('.press-news-grid .press-story a').nth(4);await link.scrollIntoViewIfNeeded();const before=await p.evaluate(()=>scrollY);
   await link.click();await p.locator('.press-dialog[open] .press-article').waitFor();
   assert(new URL(p.url()).searchParams.has('article'));
