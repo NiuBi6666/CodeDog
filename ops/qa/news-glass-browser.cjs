@@ -29,6 +29,17 @@ const assert=require('node:assert/strict'),path=require('node:path');
   await p.waitForFunction(()=>getComputedStyle(document.querySelector('.ambient-background'),'::before').animationName==='none');
   await p.locator('.story-card').first().click();
   await p.locator('.paragraphs').waitFor();
+  const original=p.getByRole('link',{name:'查看原文',exact:true});
+  assert.equal(await original.count(),1);
+  assert.equal(await p.locator('.original-link').count(),0);
+  if(width<=760){
+   assert.equal(await p.locator('.topbar').evaluate(e=>getComputedStyle(e).position),'relative');
+   await p.locator('.paragraphs').evaluate(e=>e.style.minHeight='2000px');
+   await p.evaluate(()=>window.scrollTo(0,700));
+   await p.waitForFunction(()=>document.querySelector('.topbar').getBoundingClientRect().bottom<0);
+   await p.evaluate(()=>window.scrollTo(0,0));
+   await p.locator('.paragraphs').evaluate(e=>e.style.minHeight='');
+  }
   assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'reader overflow '+width);
   await p.getByRole('button',{name:'EN',exact:true}).click();
   if(!await p.locator('.original-language-note').count()) await p.waitForFunction(()=>document.querySelectorAll('.zh-paragraph').length===0);
