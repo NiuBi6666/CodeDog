@@ -28,17 +28,17 @@ onBeforeUnmount(()=>{close();});
 <style scoped>
 .article-cover{margin:0 0 20px;width:100%;min-width:0}
 .article-cover-media{width:fit-content;max-width:100%;margin-inline:auto}
-.article-cover-stage{display:block;width:fit-content;max-width:100%;height:auto;margin:0;padding:0;border:0;border-radius:5px;background:transparent;overflow:hidden;cursor:zoom-in}
+.article-cover-stage{display:block;width:fit-content;max-width:100%;height:auto;margin:0;padding:0;border:0;border-radius:18px;background:#ffffff40;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3;overflow:hidden;cursor:zoom-in}
 .article-cover-stage img{display:block;width:auto;height:auto;max-width:100%;max-height:min(48dvh,420px);object-fit:contain}
 .article-cover :is(button,dialog):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .article-cover-media.is-unavailable{width:100%}
-.article-cover-unavailable{display:grid;place-items:center;align-content:center;height:180px;gap:8px;background:#eeede7;border:1px solid var(--line);border-radius:8px;color:#64748b}
+.article-cover-unavailable{display:grid;place-items:center;align-content:center;height:180px;gap:8px;background:linear-gradient(135deg,#dfeafa88,#ece5fb88);border:1px solid #ffffffc9;border-radius:18px;color:#64748b}
 .article-cover-unavailable span{font:48px var(--serif)}
 .article-cover-unavailable small{font-size:12px}
 .article-cover-dialog{position:fixed;inset:0;max-width:none;max-height:none;width:100vw;height:100dvh;margin:0;padding:54px 20px 20px;border:0;background:#17212aee;overflow:auto;overscroll-behavior:contain;color:#fff}
 .article-cover-dialog[open]{display:flex;align-items:center;justify-content:center}
 .article-cover-dialog::backdrop{background:#17212aee}
 .article-cover-dialog img{display:block;max-width:100%;max-height:calc(100dvh - 74px);width:auto;height:auto;object-fit:contain}
-.article-cover-close{position:fixed;right:16px;top:12px;display:grid;place-items:center;width:40px;height:40px;border:1px solid #ffffff40;border-radius:50%;color:#fff;background:#26343f;z-index:1}
+.article-cover-close{position:fixed;right:16px;top:12px;display:grid;place-items:center;width:40px;height:40px;border:1px solid #ffffff40;border-radius:50%;color:#fff;background:#ffffff24;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:inset 0 1px 1px #ffffff40;z-index:1}
 @media(max-width:760px){.article-cover-stage img{max-height:min(48dvh,360px)}.article-cover-dialog{padding:60px 10px 20px}.article-cover-dialog img{max-height:calc(100dvh - 80px)}}
 </style>

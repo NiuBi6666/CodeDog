@@ -98,13 +98,14 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
 
 <template>
   <div class="site-shell" :class="{'article-open':route.params.id}">
-    <header class="topbar">
+    <div class="ambient-background" aria-hidden="true"><span class="ambient-orb"></span></div>
+    <header class="topbar liquid-glass">
       <div class="brand"><img class="brand-mark" src="/cdnews.svg" alt="" width="36" height="36" /><div><strong>CDNews</strong><small>全球双语新闻<span class="brand-edition"> · GLOBAL EDITION</span></small></div></div>
-      <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" @click="selectCategory(item)">{{ item }}</button></nav>
+      <div class="global-modes" aria-label="全局阅读模式"><button v-for="m in [{id:'zh',label:'中文'},{id:'bilingual',label:'双语'},{id:'en',label:'EN'}]" :key="m.id" :class="{active:mode===m.id}" :aria-pressed="mode===m.id" @click="mode=m.id">{{m.label}}</button></div><nav class="category-nav" aria-label="领域分类"><button v-for="item in categories" :key="item" :class="{ active: category === item }" :aria-pressed="category===item" @click="selectCategory(item)">{{ item }}</button></nav>
       <div class="top-actions"><label class="search"><svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input v-model="query" placeholder="搜索报道" aria-label="搜索报道" /></label><button class="mode-mini" @click="mode = mode === 'bilingual' ? 'zh' : mode === 'zh' ? 'en' : 'bilingual'">{{ mode === "bilingual" ? "中英" : mode === "zh" ? "中文" : "EN" }}</button></div>
     </header>
     <main class="workspace">
-      <aside ref="feedPanel" class="feed-panel">
+      <aside ref="feedPanel" class="feed-panel liquid-glass">
         <div class="feed-heading"><h1>今日简报 <span class="count">({{ total }})</span></h1><select v-model="source" aria-label="按来源筛选"><option v-for="item in sources" :key="item">{{ item }}</option></select></div>
         <p v-if="error" class="feed-error" role="alert">{{error}} <button @click="load()">重试</button></p><p v-if="loading" class="feed-state" role="status">正在读取报道…</p><div class="feed-list">
           <div v-for="article in filtered" :key="article.id" class="story-group" :class="{selected:selected?.id===article.id||article.folded.some(item=>item.id===selected?.id)}">
@@ -116,24 +117,24 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
             </button>
             <div v-if="article.folded.length" class="folded-sources"><span>同题报道</span><button v-for="item in article.folded" :key="item.id" :aria-current="selected?.id===item.id?'true':undefined" @click="selectArticle(item.id)">{{ item.source_name }} · {{ mode==='en'?item.title_en:(item.title_zh||item.title_en) }} ↗</button></div>
           </div>
-          <div v-if="!loading && !error && !filtered.length" class="empty-state"><strong>暂时没有可阅读的报道</strong><span>调整筛选，或等待采集与标题翻译完成，打开报道后翻译全文。</span></div><div ref="loadSentinel" class="feed-load-status" role="status" aria-live="polite"><template v-if="loadingMore">正在加载更早的报道…</template><template v-else-if="moreError">加载失败，已保留当前列表。<button type="button" @click="retryMore">重试</button></template><template v-else-if="!loading&&articles.length">{{hasMore?'上滑继续阅读':'已浏览全部报道'}}</template></div>
+          <div v-if="!loading && !error && !filtered.length" class="empty-state"><strong>暂时没有可阅读的报道</strong><span>试试其他分类或关键词。</span></div><div ref="loadSentinel" class="feed-load-status" role="status" aria-live="polite"><template v-if="loadingMore">正在加载更早的报道…</template><template v-else-if="moreError">加载失败，已保留当前列表。<button type="button" @click="retryMore">重试</button></template><template v-else-if="!loading&&articles.length">{{hasMore?'上滑继续阅读':'已浏览全部报道'}}</template></div>
         </div>
       </aside>
-      <article v-if="selected" ref="readerPanel" class="reader-panel">
+      <article v-if="selected" ref="readerPanel" class="reader-panel liquid-glass">
         <div class="reader-toolbar"><span class="eyebrow">{{ selected.category_en }} / {{ selected.source_name }}</span><div class="reading-tools"><a :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原网页 ↗</a><button :disabled="fontSize<=15" aria-label="缩小正文字号" @click="fontSize=Math.max(15,fontSize-1)">A−</button><button :disabled="fontSize>=22" aria-label="放大正文字号" @click="fontSize=Math.min(22,fontSize+1)">A+</button></div></div>
-        <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><span class="dot">·</span><span>{{ selected.author }}</span><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><p v-if="selected.lang!=='zh' && effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en" lang="en" data-selectable-original>{{ selected.title_en }}</p><h1 :data-selectable-original="effectiveMode==='en'?'':undefined" :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1>
+        <div class="reader-content"><div class="article-kicker"><span class="source-mark large">{{ selected.source_mark }}</span><span>{{ selected.source_name }}</span><template v-if="selected.author"><span class="dot">·</span><span>{{ selected.author }}</span></template><span class="dot">·</span><time :datetime="selected.published_at" :title="exactDate(selected.published_at)">{{ dateLabel(selected.published_at) }}</time></div><p v-if="selected.lang!=='zh' && effectiveMode==='bilingual' && selected.title_zh && selected.title_zh!==selected.title_en" class="headline-en" lang="en" data-selectable-original>{{ selected.title_en }}</p><h1 :data-selectable-original="effectiveMode==='en'?'':undefined" :class="{'title-zh':effectiveMode!=='en'}">{{ effectiveMode==='en' ? selected.title_en : (selected.title_zh || selected.title_en) }}</h1>
           <section v-if="effectiveMode!=='en'&&selected.summary_zh.length" class="takeaways" aria-label="核心导读"><h2>核心导读</h2><ul><li v-for="point in selected.summary_zh.slice(0,3)" :key="point">{{ point }}</li></ul></section>
           <ArticleCover v-if="selected.cover_image" :src="selected.cover_image" :alt="selected.title_en" :source-mark="selected.source_mark" />
-          <p v-if="selected.lang==='zh'" class="original-language-note">中文原稿 · 按来源原文展示，无英文译文</p>
+          <p v-if="selected.lang==='zh'" class="original-language-note">中文原稿</p>
           <div v-if="selected.translation_status!=='ready'" class="body-translation-status" role="status">
             <span>{{bodyError||(selected.translation_status==='failed'?'翻译暂不可用':selected.translation_stage==='retrying'?'稍后自动重试':selected.translation_stage==='processing'?'正在翻译':'排队中')}}<template v-if="selected.translation_total"> · {{selected.translation_completed||0}}/{{selected.translation_total}} 段</template></span>
             <button v-if="bodyError||selected.translation_status==='failed'" type="button" @click="detail(selected.id)">重试翻译</button>
           </div>
           <div class="paragraphs" :style="{'--reading-size':fontSize+'px'}"><div v-for="(paragraph, index) in selected.content_en" :key="index" class="paragraph-pair" tabindex="0"><p v-if="effectiveMode !== 'zh'||!selected.content_zh[index]" class="en-paragraph" data-selectable-original lang="en">{{ paragraph }}</p><p v-if="effectiveMode !== 'en'&&selected.content_zh[index]" class="zh-paragraph">{{ selected.content_zh[index] }}</p></div></div>
-          <footer class="article-footer"><div><span class="eyebrow">RELATED COVERAGE</span><div class="related"><a v-for="item in selected.related_sources" :key="item.origin_url" :href="item.origin_url" target="_blank" rel="noopener noreferrer">{{ item.source_name }} ↗</a></div></div><a class="original-link" :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原文 ↗</a></footer>
+          <footer class="article-footer"><div v-if="selected.related_sources.length"><span class="eyebrow">相关报道</span><div class="related"><a v-for="item in selected.related_sources" :key="item.origin_url" :href="item.origin_url" target="_blank" rel="noopener noreferrer">{{ item.source_name }} ↗</a></div></div><a class="original-link" :href="selected.origin_url" target="_blank" rel="noopener noreferrer">查看原文 ↗</a></footer>
         </div>
         <SelectionTranslator v-if="selected.lang!=='zh'" :article-id="selected.id" />
-      </article><section v-else class="reader-panel reader-empty"><span class="eyebrow">CDNews · GLOBAL EDITION</span><h2>选择一篇报道，开始阅读</h2><p>列表先翻译标题，打开报道后再翻译全文。</p></section>
+      </article><section v-else class="reader-panel reader-empty liquid-glass"><span class="eyebrow">CDNews · GLOBAL EDITION</span><h2>选择一篇报道，开始阅读</h2></section>
     </main>
     <BackToTop :target="feedPanel" label="新闻列表回到顶部" />
     <BackToTop :target="readerPanel" label="正文回到顶部" />
