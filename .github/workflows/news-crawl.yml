@@ -9,6 +9,10 @@ on:
         description: Ignore per-source refresh interval
         type: boolean
         default: false
+      article_url:
+        description: Refill images for one article on a configured source host
+        type: string
+        default: ''
       run_id:
         description: News sync task identifier
         type: string
@@ -38,6 +42,7 @@ jobs:
         env:
           NEWS_API_URL: ${{ vars.NEWS_API_URL || 'https://codedog.online' }}
           NEWS_WEBHOOK_SECRET: ${{ secrets.NEWS_WEBHOOK_SECRET }}
+          NEWS_ARTICLE_URL: ${{ inputs.article_url || '' }}
           NEWS_RUN_ID: ${{ inputs.run_id || '' }}
           FORCE_ALL: ${{ inputs.force_all && 'true' || 'false' }}
         run: python integrations/news/crawler.py

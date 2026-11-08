@@ -131,6 +131,7 @@ public class NewsService {
  }
  public Map<String,Object> article(long id,boolean admin){
   var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
+  a.put("images",imageList(a.get("images_json"),a.get("cover_image")));a.remove("images_json");
   NewsContentCleaner.cleanArticle(a);a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));
   var original=Arrays.asList(((String)a.get("content_en")).split("\n\n"));
   List<String> partial;
@@ -146,6 +147,22 @@ public class NewsService {
   a.put("translation_stage",stage);
   if(!admin){a.remove("last_error");a.remove("url_hash");}
   return a;
+ }
+ private List<String> imageList(Object stored,Object cover){
+  var images=new LinkedHashMap<String,String>();
+  try{JsonNode values=stored instanceof JsonNode node?node:json.readTree(Objects.toString(stored,"[]"));
+   if(values!=null&&values.isArray())for(var item:values){
+    if(!item.isTextual())continue;String value=item.asText();
+    if(value.length()>8000)continue;
+    try{URI u=URI.create(canonical(value));if(u.getPort()!=-1&&u.getPort()!=443)continue;
+     String host=u.getHost().toLowerCase(Locale.ROOT);
+     if(host.equals("localhost")||host.contains(":")||host.matches("[0-9.]+")||!host.contains("."))continue;
+     images.putIfAbsent(host+u.getRawPath(),value);
+    }catch(Exception ignored){}
+   }
+  }catch(Exception ignored){}
+  if(images.isEmpty()&&cover instanceof String value&&!value.isBlank())return imageList(json.valueToTree(List.of(value)),null);
+  return new ArrayList<>(images.values());
  }
  public void retry(long id){require(db.update("UPDATE news_articles SET status='pending',attempts=0,next_attempt_at=NULL,last_error=NULL WHERE id=? AND status!='processing'",id)>0,HttpStatus.CONFLICT,"文章正在处理或不存在");}
  @jakarta.annotation.PreDestroy public void stop(){stopping.set(true);}
@@ -286,8 +303,9 @@ public class NewsService {
    require(title.length()>0&&title.length()<=1000&&text.length()<=100000&&url.length()<=2000,HttpStatus.BAD_REQUEST,"正文超限");
    Instant published;try{published=Instant.parse(a.path("published_at").asText());}catch(Exception e){published=Instant.now();}if(published.isAfter(Instant.now().plusSeconds(3600)))published=Instant.now();
    String cover=a.path("cover_image").asText("");if(!cover.isBlank()){try{canonical(cover);}catch(Exception e){cover="";}}
+   var images=imageList(a.path("images"),cover);String imagesJson=json.writeValueAsString(images);if(!images.isEmpty())cover=images.getFirst();
    boolean chinese="zh".equals(src.get("lang"));
-   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,lang,title_zh,content_zh,status,translated_at,content_kind) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null,brief?"brief":"article");}catch(org.springframework.dao.DuplicateKeyException ignored){}
+   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,lang,title_zh,content_zh,status,translated_at,content_kind,images_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null,brief?"brief":"article",imagesJson);}catch(org.springframework.dao.DuplicateKeyException ignored){if(!images.isEmpty())db.update("UPDATE news_articles SET images_json=?,cover_image=? WHERE url_hash=? AND source_id=?",imagesJson,cover,digest(url),sourceId);}
   }
   for(JsonNode result:batch.path("source_results")){
    boolean ok=result.path("success").asBoolean();long id=result.path("source_id").asLong();

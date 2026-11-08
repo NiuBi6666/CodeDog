@@ -54,7 +54,9 @@ def jina_article(url):
  if data.get('code')!=200 or not isinstance(data.get('data'),dict):raise ValueError('Reader unavailable')
  data=data['data'];text=data.get('content','')
  if not text or any(x in text[:1000].lower() for x in ('access denied','captcha','verify you are human','subscribe to continue')):raise ValueError('Reader blocked')
- return {'text':text,'title':data.get('title','')}
+ images=[match.group(1) for match in re.finditer(r'!\[[^\]]*\]\((https://[^\s)]+)(?:\s+[^)]*)?\)',text)]
+ text=re.sub(r'!\[[^\]]*\]\([^)]*\)','',text)
+ return {'text':text,'title':data.get('title',''),'images':images}
 
 def article(entry,source):
  with _article_slots:
@@ -129,6 +131,62 @@ def feed_image(entry):
   if url.startswith('https://') and (item.get('medium')=='image' or item.get('type','').startswith('image/') or not item.get('type')):return url
  return ''
 
+def image_identity(url):
+ u=urllib.parse.urlsplit(url)
+ # Responsive renditions share the same asset path; retain the largest candidate.
+ return (u.hostname or '').lower()+u.path
+
+def article_images(raw,url):
+ from lxml import html
+ if not raw:return []
+ try:root=html.fromstring(raw)
+ except Exception:return []
+ scopes=root.xpath('//*[@itemprop="articleBody"]|//*[@data-gu-name="body"]|//*[contains(concat(" ",normalize-space(@class)," ")," article-body ")]')
+ if not scopes:scopes=root.xpath('//article')
+ if not scopes:scopes=root.xpath('//main')
+ if not scopes:return []
+ # Include the lead figure in the article, followed by body figures in document order.
+ scope=root.xpath('//article')[0] if root.xpath('//article') else scopes[0]
+ images=[];seen=set()
+ for node in scope.xpath('.//img'):
+  parents=[node]+list(node.iterancestors())
+  excluded=False
+  for parent in parents:
+   label=' '.join(parent.get(k,'') for k in ('class','id','data-component','data-gu-name','role')).lower()
+   if parent.tag in ('aside','nav','footer') or any(x in label for x in ('related','recommend','most-viewed','mostpopular','avatar','author-image','advert','promo','onward','newsletter')):
+    excluded=True;break
+  if excluded:continue
+  if not node.xpath('ancestor::figure') and not any(parent in scopes for parent in parents):continue
+  if any(node.get(k,'').isdigit() and int(node.get(k))<100 for k in ('width','height')):continue
+  candidates=[]
+  for value in (node.get('srcset',''),node.get('data-srcset','')):
+   for part in value.split(','):
+    bits=part.strip().split()
+    if bits:
+     try:rank=float(bits[1].rstrip('wx')) if len(bits)>1 else 1
+     except ValueError:rank=1
+     candidates.append((rank,bits[0]))
+  for value in (node.get('data-src'),node.get('src')):
+   if value:candidates.append((0,value))
+  for _,candidate in sorted(candidates,reverse=True):
+   value=urllib.parse.urljoin(url,candidate)
+   u=urllib.parse.urlsplit(value)
+   if u.scheme!='https' or not u.hostname or u.username or u.password:continue
+   if any(x in u.path.lower() for x in ('/avatar','/logo','/icon','/pixel','/tracking')):continue
+   key=image_identity(value)
+   if key not in seen:seen.add(key);images.append(value)
+   break
+ return images
+
+def merge_images(*groups):
+ result=[];seen=set()
+ for group in groups:
+  for value in group:
+   if not isinstance(value,str) or not value.startswith('https://') or len(value)>8000:continue
+   key=image_identity(value)
+   if key not in seen:seen.add(key);result.append(value)
+ return result
+
 def publication_date(entry,result):
  for value in (entry.get('published'),entry.get('updated'),result.get('date')):
   if not value:continue
@@ -144,14 +202,18 @@ def publication_date(entry,result):
 
 def extract_article(entry,source):
  try:
-  url=entry.get('link','');brief=brief_entry(entry,source)
+  url=entry.get('link','');brief=brief_entry(entry,source);images=[]
   result=rss_fulltext(entry,source)
+  if result:
+   for content in entry.get('content',[]):images.extend(article_images('<article>'+content.get('value','')+'</article>',url))
+   if publisher_full_feed(entry,source):images.extend(article_images('<article>'+entry.get('summary','')+'</article>',url))
   if result and not has_body(result.get('text') or '',source,brief):result=None
   failure='empty_body'
   if result is None:
    try:
     page_url=urllib.parse.urlparse(url)._replace(netloc='www.36kr.com').geturl() if publisher_full_feed(entry,source) else url
     raw,final_url=download(page_url)
+    images=article_images(raw,final_url)
     result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
    except Exception as e:
     failure='deadline' if isinstance(e,TimeoutError) else 'blocked' if isinstance(e,requests.HTTPError) and e.response is not None and e.response.status_code in (401,403,429) else 'download_failed'
@@ -167,7 +229,7 @@ def extract_article(entry,source):
   if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading','you have reached your article limit','verify you are human','access denied')) for p in paragraphs):return reject('restricted_content')
   if not has_body(text,source,brief):return reject('too_short')
   return {'source_id':source['id'],'origin_url':url,'title_en':(entry.get('title') or result.get('title',''))[:1000],
-          'author':result.get('author') or '', 'published_at':publication_date(entry,result),'cover_image':result.get('image') or feed_image(entry), 'paragraphs_en':paragraphs,'content_kind':'brief' if brief else 'article'}
+          'author':result.get('author') or '', 'published_at':publication_date(entry,result),'cover_image':(merge_images(images,result.get('images',[]),[result.get('image'),feed_image(entry)]) or [''])[0], 'images':merge_images(images,result.get('images',[]),[result.get('image'),feed_image(entry)]), 'paragraphs_en':paragraphs,'content_kind':'brief' if brief else 'article'}
  except Exception:
   return reject('extraction_failed')
 
@@ -263,4 +325,19 @@ def run(internal=False):
  if not fallback:send([],[],completed=True)
  return fallback
 
-if __name__=='__main__':run()
+def refill_article(url):
+ public_url(url)
+ response=session().get(API+'/api/crawler/tasks',params={'fast':'true'},headers={'X-Webhook-Secret':SECRET},timeout=(10,30))
+ response.raise_for_status()
+ host=urllib.parse.urlparse(url).hostname
+ source=next((s for s in response.json()['sources'] if urllib.parse.urlparse(s['rss_url']).hostname==host),None)
+ if source is None:raise ValueError('Article host must match an active configured source')
+ result=extract_article({'link':url},source)
+ if not result or not result['images']:raise ValueError('No article images extracted')
+ send([result],[])
+ print('Article image refill submitted: %s images'%len(result['images']),flush=True)
+
+if __name__=='__main__':
+ target=os.environ.get('NEWS_ARTICLE_URL','').strip()
+ if target:refill_article(target)
+ else:run()

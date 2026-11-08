@@ -32,7 +32,7 @@ class NewsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired DataSource ds;
  @Autowired ObjectMapper json;@Autowired NewsService news;@Autowired UserRepository users;@Autowired PasswordEncoder encoder;
  static final String SECRET="test-news-secret-at-least-32-characters";
- @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql"),new ClassPathResource("db/migration/V142__news_collection_coverage.sql")).execute(ds);}
+ @BeforeAll void schema()throws Exception{new ResourceDatabasePopulator(new ClassPathResource("db/migration/V132__lens_news.sql"),new ClassPathResource("db/migration/V133__lens_ai_settings.sql"),new ClassPathResource("db/migration/V134__lens_translation_mode.sql"),new ClassPathResource("db/migration/V135__lens_collector_settings.sql"),new ClassPathResource("db/migration/V136__lens_pipeline_speed.sql"),new ClassPathResource("db/migration/V137__lens_on_demand_translation.sql")).execute(ds);try(var connection=ds.getConnection()){new cn.codedog.news.migration.V138__news_namespace(new cn.codedog.service.PasswordRecoveryCipher("")).migrateConnection(connection);}new ResourceDatabasePopulator(new ClassPathResource("db/migration/V139__news_taxonomy.sql"),new ClassPathResource("db/migration/V140__remove_news_secondary_categories.sql"),new ClassPathResource("db/migration/V142__news_collection_coverage.sql"),new ClassPathResource("db/migration/V143__news_article_images.sql")).execute(ds);}
  @BeforeEach void clean(){db.update("DELETE FROM news_translation_settings");db.update("INSERT INTO news_translation_settings(id,mode,engine) VALUES(1,'api','bing')");db.update("DELETE FROM news_translation_cache");db.update("DELETE FROM news_articles");db.update("DELETE FROM news_batches");db.update("UPDATE news_sources SET lease_until=NULL,last_crawled_at=NULL");}
  MockHttpSession login(String name,String password)throws Exception{return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType(APPLICATION_JSON).content(json.writeValueAsString(Map.of("username",name,"password",password)))).andExpect(status().isOk()).andReturn().getRequest().getSession(false);}
  @Test void historicalArticleResponseOmitsFooterAndKeepsStoredOriginal()throws Exception{
@@ -138,6 +138,20 @@ class NewsIntegrationTest {
   long id=db.queryForObject("SELECT id FROM news_articles LIMIT 1",Long.class);
   db.update("UPDATE news_articles SET status='ready',title_zh='测试标题',summary_zh='一\n二\n三',content_zh='正文' WHERE id=?",id);
   mvc.perform(get("/api/news/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.origin_url").value("https://example.com/news"));
+ }
+ @Test void galleryIsSanitizedReturnedAndBackfilledWithoutChangingTranslation()throws Exception{
+  long source=db.queryForObject("SELECT id FROM news_sources LIMIT 1",Long.class);
+  var item=new HashMap<String,Object>();item.put("source_id",source);item.put("origin_url","https://example.com/gallery");item.put("title_en","Photo report");item.put("paragraphs_en",List.of("Original facts and quotations. ".repeat(50)));
+  item.put("images",List.of("https://images.example.com/one.jpg?w=1800","https://images.example.com/one.jpg?w=400","http://bad.example/a.jpg","https://127.0.0.1/a.jpg","javascript:alert(1)","https://images.example.com/two.jpg"));
+  news.accept(json.writeValueAsBytes(Map.of("batch_id","gallery-test-first","articles",List.of(item))));news.ingestBatches();
+  long id=db.queryForObject("SELECT id FROM news_articles",Long.class);
+  db.update("UPDATE news_articles SET status='ready',title_zh='图片新闻',content_zh='已有译文' WHERE id=?",id);
+  mvc.perform(get("/api/news/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.images.length()").value(2)).andExpect(jsonPath("$.images[0]").value("https://images.example.com/one.jpg?w=1800")).andExpect(jsonPath("$.images_json").doesNotExist());
+  item.put("images",List.of("https://images.example.com/one.jpg?w=1800","https://images.example.com/two.jpg","https://images.example.com/three.jpg"));
+  news.accept(json.writeValueAsBytes(Map.of("batch_id","gallery-test-refill","articles",List.of(item))));news.ingestBatches();
+  assertThat(db.queryForObject("SELECT COUNT(*) FROM news_articles",Long.class)).isEqualTo(1);
+  assertThat(db.queryForObject("SELECT content_zh FROM news_articles",String.class)).isEqualTo("已有译文");
+  mvc.perform(get("/api/news/"+id)).andExpect(jsonPath("$.images.length()").value(3));
  }
  @Test void expiredLargePacketsAndInvalidTranslationAreRejected()throws Exception{
   byte[] b="{}".getBytes(StandardCharsets.UTF_8);String old=String.valueOf(Instant.now().minusSeconds(600).getEpochSecond());

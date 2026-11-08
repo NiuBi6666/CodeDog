@@ -89,6 +89,21 @@ class CollectorTest(unittest.TestCase):
   with patch.object(crawler,'download',side_effect=ConnectionError()),patch.object(crawler,'FAST',False):
    self.assertEqual(crawler.extract_article(entry,self.source())['paragraphs_en'],[body.strip()])
 
+ def test_gallery_keeps_article_figures_deduplicates_renditions_and_excludes_promos(self):
+  raw='''<main><article><figure><img src="https://img.example.com/lead.jpg?w=300" srcset="https://img.example.com/lead.jpg?w=600 600w, https://img.example.com/lead.jpg?w=1800 1800w"></figure><div itemprop="articleBody"><figure><img src="/second.jpg"></figure><figure><img src="https://img.example.com/lead.jpg?w=100"></figure><img width="32" src="/avatar.jpg"><figure><img src="data:image/png,abc"></figure></div><aside><figure><img src="/related.jpg"></figure></aside><div class="onward"><figure><img src="/recommend.jpg"></figure></div></article><figure><img src="/outside.jpg"></figure></main>'''
+  self.assertEqual(crawler.article_images(raw,'https://publisher.example/story'),['https://img.example.com/lead.jpg?w=1800','https://publisher.example/second.jpg'])
+  self.assertEqual(crawler.merge_images(['https://img.example.com/a.jpg?w=1800'],['https://img.example.com/a.jpg?w=100','https://img.example.com/b.jpg']),['https://img.example.com/a.jpg?w=1800','https://img.example.com/b.jpg'])
+
+ def test_gallery_survives_feed_and_direct_extraction(self):
+  text='Original facts and quotations. '*30
+  entry={'link':'https://example.com/a','title':'News','content':[{'value':'<p>'+text+'</p><figure><img src="/first.jpg"></figure><figure><img src="/second.jpg"></figure>'}]}
+  result=crawler.extract_article(entry,self.source())
+  self.assertEqual(result['images'],['https://example.com/first.jpg','https://example.com/second.jpg'])
+  self.assertEqual(result['cover_image'],result['images'][0])
+  with patch.object(crawler,'download',return_value=(b'<article><figure><img src="/first.jpg"></figure><figure><img src="/second.jpg"></figure></article>','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':text,'image':'https://example.com/first.jpg'}):
+   result=crawler.extract_article({'link':'https://example.com/a'},self.source())
+   self.assertEqual(result['images'],['https://example.com/first.jpg','https://example.com/second.jpg'])
+
  def source(self,n=1):return {'id':n,'rss_url':'https://example.com/rss'}
  def test_batches_arrive_before_slow_article_and_completion_is_last(self):
   slow=threading.Event();first_push=threading.Event();sent=[]
