@@ -5,6 +5,7 @@ import ArticleCover from './ArticleCover.vue';
 import SelectionTranslator from './SelectionTranslator.vue';
 import NewspaperStory from './NewspaperStory.vue';
 import './newspaper.css';
+import {leadExcerpt} from './newspaper-layout.js';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
 const category=ref('全部'),query=ref(''),mode=ref('bilingual'),articles=ref([]),loading=ref(true),error=ref(''),hasMore=ref(false),cursor=ref(''),loadingMore=ref(false),moreError=ref(''),total=ref(0);
@@ -18,8 +19,8 @@ const originals=computed(()=>paragraphs(selected.value?.content_original||select
 const translations=computed(()=>paragraphs(selected.value?.paragraphs_zh||selected.value?.content_zh));
 const date=ref(new Date());
 const edition=computed(()=>date.value.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'}));
-const leadOriginal=computed(()=>paragraphs(preview.value?.content_original||preview.value?.content_en)[0]||'');
-const leadChinese=computed(()=>paragraphs(preview.value?.paragraphs_zh||preview.value?.content_zh)[0]||'');
+const leadParagraphs=computed(()=>leadExcerpt(preview.value));
+const leadMode=computed(()=>lead.value?.lang==='zh'?'zh':mode.value);
 let listTicket=0,detailTicket=0,previewTicket=0,debounce,poll,refreshTimer,observer,returnFocus,scrollY=0,priorOverflow='',disposed=false;
 async function api(path,options={}){
  const c=new AbortController(),timeout=setTimeout(()=>c.abort(),20000);
@@ -94,10 +95,17 @@ onBeforeUnmount(()=>{disposed=true;listTicket++;detailTicket++;previewTicket++;c
        <h2>{{mode==='en'?(lead.title_original||lead.title_en):(lead.title_zh||lead.title_en)}}</h2>
       </a>
       <div class="press-lead-meta"><time :datetime="lead.published_at">{{new Date(lead.published_at).toLocaleString('zh-CN',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}}</time><span v-if="preview?.author">{{preview.author}}</span></div>
-      <a v-if="lead.cover_image" :href="'/newspaper?article='+lead.id" @click.prevent="open(lead.id)" class="press-lead-photo"><span v-if="leadFailed" class="press-photo-fallback">{{lead.source_name}} · 图片暂不可用</span><img v-else :src="'https://wsrv.nl/?url='+encodeURIComponent(lead.cover_image)" :alt="lead.title_zh||lead.title_en" @error="leadFailed=true"></a>
-      <div v-if="leadOriginal||leadChinese" class="press-lead-excerpt">
-       <p v-if="mode!=='zh'||!leadChinese" lang="en" class="press-excerpt-original">{{leadOriginal.slice(0,450)}}{{leadOriginal.length>450?'…':''}}</p>
-       <p v-if="mode!=='en'&&leadChinese" class="press-dropcap">{{leadChinese.slice(0,220)}}{{leadChinese.length>220?'…':''}}</p>
+      <div class="press-lead-body" :class="{'has-copy':leadParagraphs.length}">
+       <figure v-if="lead.cover_image" class="press-lead-figure">
+        <a :href="'/newspaper?article='+lead.id" @click.prevent="open(lead.id)" class="press-lead-photo"><span v-if="leadFailed" class="press-photo-fallback">{{lead.source_name}} · 图片暂不可用</span><img v-else :src="'https://wsrv.nl/?url='+encodeURIComponent(lead.cover_image)" :alt="lead.title_zh||lead.title_en" @error="leadFailed=true"></a>
+        <figcaption>{{lead.source_name}}</figcaption>
+       </figure>
+       <div v-if="leadParagraphs.length" class="press-lead-excerpt">
+        <div v-for="(p,i) in leadParagraphs" :key="i" class="press-excerpt-pair">
+         <p v-if="leadMode!=='zh'||!p.translation" :lang="lead.lang==='zh'?'zh-CN':'en'" :class="{'press-excerpt-original':lead.lang!=='zh'}">{{p.original}}</p>
+         <p v-if="leadMode!=='en'&&p.translation" lang="zh-CN" :class="{'press-dropcap':i===0}">{{p.translation}}</p>
+        </div>
+       </div>
       </div>
       <a :href="'/newspaper?article='+lead.id" class="press-read" @click.prevent="open(lead.id)">阅读全文 <span aria-hidden="true">→</span></a>
      </article>

@@ -5,7 +5,8 @@ const {chromium}=require('/qa/node_modules/playwright'),assert=require('node:ass
   const context=await browser.newContext({viewport:{width,height:1000}}),p=await context.newPage(),errors=[],posts=[];
   const rows=Array.from({length:24},(_,i)=>({id:i+1,title_en:['A new chapter for cities and the people who shape them','Scientists trace the changing rhythms of our planet','Markets respond to a new generation of clean energy'][i%3],title_zh:['城市与居民共同书写绿色转型新篇章','科学家追踪地球生态节律的变化','新一代清洁能源引发全球市场关注'][i%3]+' · '+(i+1),source_name:['The Guardian','BBC News','Reuters'][i%3],category:['国际','科技','财经'][i%3],lang:'en',published_at:'2026-11-08T08:00:00Z',cover_image:i%3===0?'https://image.test/landscape.svg':'',origin_url:'https://example.com/story/'+i,translation_status:'ready',content_en:'The world is changing around us, and local communities are finding new ways to respond.\n\nResearchers are working across borders to understand the challenges facing our cities.\n\nThe findings offer a new perspective on the future.',content_zh:'世界正在发生变化，当地社区正在寻找新的应对方式。\n\n研究人员正跨越国界，研究城市面临的挑战。\n\n这些发现为未来提供了全新的视角。'}));
   p.on('pageerror',e=>errors.push(e.message));
-  await context.route('https://wsrv.nl/**',r=>r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#9faaa6"/><path d="M0 900 500 200 1200 900" fill="#485c55"/><path d="M600 900 1200 300 1600 900" fill="#788b80"/></svg>'}));
+  let dimensions=[1600,900];
+  await context.route('https://wsrv.nl/**',r=>r.fulfill({contentType:'image/svg+xml',body:dimensions?'<svg xmlns="http://www.w3.org/2000/svg" width="'+dimensions[0]+'" height="'+dimensions[1]+'"><rect width="100%" height="100%" fill="#9faaa6"/></svg>':'invalid-image'}));
   await context.route('http://cdnews.test/**',async r=>{
    const u=new URL(r.request().url());let data;
    if(u.pathname==='/api/news'){
@@ -73,6 +74,31 @@ const {chromium}=require('/qa/node_modules/playwright'),assert=require('node:ass
    failList=false;await p.getByRole('button',{name:'重试',exact:true}).click();await p.locator('.press-lead h2').waitFor();
    console.log('NEWSPAPER_PAGINATION_TRANSLATION_ERROR_RECOVERY_OK');
   }
+
+  await p.getByRole('button',{name:'全部',exact:true}).click();
+  for(const shape of [[600,1000],[900,900],[1600,900]]){
+   dimensions=shape;
+   await p.goto('http://cdnews.test/newspaper');await p.locator('.press-lead-excerpt').waitFor();
+   await p.waitForFunction(()=>document.querySelector('.press-lead-photo img')?.naturalWidth>0);
+   const image=await p.locator('.press-lead-photo img').boundingBox(),body=await p.locator('.press-lead-body').boundingBox(),figure=await p.locator('.press-lead-figure').boundingBox();
+   assert(Math.abs(image.width/image.height-shape[0]/shape[1])<.02,'natural image ratio must be preserved');
+   if(width>=768){
+    assert(Math.abs(figure.width/body.width-.48)<.01,'photo occupies 48% of lead width');
+    const text=await p.locator('.press-lead-excerpt p').first().evaluate(e=>{const r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,1);return r.getBoundingClientRect().x;});
+    assert(text>=figure.x+figure.width+15,'real excerpt must fill the space to the right');
+   }else assert(Math.abs(figure.width-body.width)<1,'mobile uses a full-width image');
+   assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await p.screenshot({path:'/qa/newspaper-wrap-'+width+'-'+shape.join('x')+'.png',fullPage:false});
+  }
+  dimensions=null;await p.reload();await p.getByText('The Guardian · 图片暂不可用',{exact:true}).waitFor();
+  dimensions=[600,1000];
+  rows[0].content_en=rows[0].title_en+'\n\n- Published\n\n'+rows[0].content_en;
+  rows[0].content_zh=rows[0].title_zh+'\n\n- 已发布\n\n'+rows[0].content_zh;
+  await p.reload();await p.locator('.press-lead-excerpt').waitFor();
+  assert(!(await p.locator('.press-lead-excerpt').textContent()).includes('Published'));
+  assert(!(await p.locator('.press-lead-excerpt').textContent()).includes(rows[0].title_en));
+  assert((await p.locator('.press-lead-excerpt').textContent()).includes('The world is changing'));
+  console.log('NEWSPAPER_NATURAL_IMAGES_WRAP_AND_CLEAN_EXCERPT_OK',width);
   assert.deepEqual(errors,[]);console.log('NEWSPAPER_LAYOUT_MODAL_SELECTION_FILTERS_OK',width);await context.close();
  }}finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
