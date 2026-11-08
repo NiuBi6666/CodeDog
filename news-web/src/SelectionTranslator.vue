@@ -1,6 +1,6 @@
 <script setup>
 import { ref,nextTick,watch,onMounted,onBeforeUnmount } from 'vue';
-const props=defineProps({articleId:{type:Number,required:true}});
+const props=defineProps({articleId:{type:Number,required:true},teleportTarget:{type:[String,Object],default:'body'}});
 const panel=ref(null),text=ref(''),translation=ref(''),state=ref('idle'),error=ref(''),position=ref({left:'8px',top:'8px'});
 let anchor,controller,ticket=0,debounce,timer,busyRetry;
 const cache=new Map();
@@ -90,7 +90,7 @@ onBeforeUnmount(()=>{
 });
 </script>
 <template>
- <Teleport to="body">
+ <Teleport :to="teleportTarget">
   <section v-if="text" ref="panel" class="selection-translator" :style="position" role="dialog" aria-label="划词翻译" :aria-busy="state==='loading'">
    <header><strong>划词翻译</strong><button type="button" class="selection-close" aria-label="关闭划词翻译" @pointerdown.prevent @click="close(true)">×</button></header>
    <p class="selection-original" lang="en">{{text}}</p>
