@@ -17,7 +17,7 @@ const assert=require('node:assert/strict'),path=require('node:path');
    const f=rel.startsWith('assets/')||rel==='cdnews.svg'?path.join('/site',rel):'/site/index.html';
    return r.fulfill({path:f,contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.svg')?'image/svg+xml':'text/html'});
   });
-  await p.goto('http://cdnews.test/news/');
+  await p.goto((process.env.QA_ORIGIN||'http://cdnews.test')+'/news/');
   await p.locator('.story-card').first().waitFor();
   assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'feed overflow '+width);
   const nav=p.getByRole('navigation',{name:'领域分类'});
