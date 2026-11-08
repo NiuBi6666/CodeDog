@@ -134,7 +134,11 @@ def feed_image(entry):
 def image_identity(url):
  u=urllib.parse.urlsplit(url)
  # Responsive renditions share the same asset path; retain the largest candidate.
- return (u.hostname or '').lower()+u.path
+ host=(u.hostname or '').lower()
+ if host=='i.guim.co.uk':
+  match=re.search(r'/img/media/([a-f0-9]{40})/',u.path)
+  if match:return host+'/'+match.group(1)
+ return host+u.path
 
 def article_images(raw,url):
  from lxml import html
@@ -336,6 +340,7 @@ def refill_article(url):
  if not result or not result['images']:raise ValueError('No article images extracted')
  send([result],[])
  print('Article image refill submitted: %s images'%len(result['images']),flush=True)
+ print(json.dumps({'source_id':source['id'],'images':result['images']},ensure_ascii=False),flush=True)
 
 if __name__=='__main__':
  target=os.environ.get('NEWS_ARTICLE_URL','').strip()

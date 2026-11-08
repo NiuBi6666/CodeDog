@@ -148,6 +148,7 @@ class NewsIntegrationTest {
   db.update("UPDATE news_articles SET status='ready',title_zh='图片新闻',content_zh='已有译文' WHERE id=?",id);
   mvc.perform(get("/api/news/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.images.length()").value(2)).andExpect(jsonPath("$.images[0]").value("https://images.example.com/one.jpg?w=1800")).andExpect(jsonPath("$.images_json").doesNotExist());
   item.put("images",List.of("https://images.example.com/one.jpg?w=1800","https://images.example.com/two.jpg","https://images.example.com/three.jpg"));
+  long otherSource=db.queryForObject("SELECT id FROM news_sources WHERE id<>? LIMIT 1",Long.class,source);item.put("source_id",otherSource);
   news.accept(json.writeValueAsBytes(Map.of("batch_id","gallery-test-refill","articles",List.of(item))));news.ingestBatches();
   assertThat(db.queryForObject("SELECT COUNT(*) FROM news_articles",Long.class)).isEqualTo(1);
   assertThat(db.queryForObject("SELECT content_zh FROM news_articles",String.class)).isEqualTo("已有译文");

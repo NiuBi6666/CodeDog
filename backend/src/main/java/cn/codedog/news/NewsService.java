@@ -157,7 +157,8 @@ public class NewsService {
     try{URI u=URI.create(canonical(value));if(u.getPort()!=-1&&u.getPort()!=443)continue;
      String host=u.getHost().toLowerCase(Locale.ROOT);
      if(host.equals("localhost")||host.contains(":")||host.matches("[0-9.]+")||!host.contains("."))continue;
-     images.putIfAbsent(host+u.getRawPath(),value);
+     String key=host+u.getRawPath();if(host.equals("i.guim.co.uk")){var m=java.util.regex.Pattern.compile("/img/media/([a-f0-9]{40})/").matcher(u.getRawPath());if(m.find())key=host+"/"+m.group(1);}
+     images.putIfAbsent(key,value);
     }catch(Exception ignored){}
    }
   }catch(Exception ignored){}
@@ -305,7 +306,7 @@ public class NewsService {
    String cover=a.path("cover_image").asText("");if(!cover.isBlank()){try{canonical(cover);}catch(Exception e){cover="";}}
    var images=imageList(a.path("images"),cover);String imagesJson=json.writeValueAsString(images);if(!images.isEmpty())cover=images.getFirst();
    boolean chinese="zh".equals(src.get("lang"));
-   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,lang,title_zh,content_zh,status,translated_at,content_kind,images_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null,brief?"brief":"article",imagesJson);}catch(org.springframework.dao.DuplicateKeyException ignored){if(!images.isEmpty())db.update("UPDATE news_articles SET images_json=?,cover_image=? WHERE url_hash=? AND source_id=?",imagesJson,cover,digest(url),sourceId);}
+   try{db.update("INSERT INTO news_articles(url_hash,origin_url,source_id,source_name,category,priority,title_en,author,cover_image,content_en,published_at,lang,title_zh,content_zh,status,translated_at,content_kind,images_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",digest(url),url,sourceId,src.get("source_name"),src.get("category"),src.get("priority"),title,a.path("author").asText("").substring(0,Math.min(200,a.path("author").asText("").length())),cover,text,Timestamp.from(published),src.get("lang"),chinese?title:null,chinese?text:null,chinese?"ready":"pending",chinese?Timestamp.from(Instant.now()):null,brief?"brief":"article",imagesJson);}catch(org.springframework.dao.DuplicateKeyException ignored){if(!images.isEmpty())db.update("UPDATE news_articles SET images_json=?,cover_image=? WHERE url_hash=?",imagesJson,cover,digest(url));}
   }
   for(JsonNode result:batch.path("source_results")){
    boolean ok=result.path("success").asBoolean();long id=result.path("source_id").asLong();

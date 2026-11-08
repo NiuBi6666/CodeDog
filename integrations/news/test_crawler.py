@@ -94,6 +94,10 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(crawler.article_images(raw,'https://publisher.example/story'),['https://img.example.com/lead.jpg?w=1800','https://publisher.example/second.jpg'])
   self.assertEqual(crawler.merge_images(['https://img.example.com/a.jpg?w=1800'],['https://img.example.com/a.jpg?w=100','https://img.example.com/b.jpg']),['https://img.example.com/a.jpg?w=1800','https://img.example.com/b.jpg'])
 
+ def test_guardian_crop_and_social_overlay_are_one_original_asset(self):
+  asset='a'*40
+  self.assertEqual(crawler.image_identity('https://i.guim.co.uk/img/media/'+asset+'/0_0_100_100/master/100.jpg?w=1200'),crawler.image_identity('https://i.guim.co.uk/img/media/'+asset+'/467_97_1218_975/master/1218.jpg?overlay=test'))
+
  def test_gallery_survives_feed_and_direct_extraction(self):
   text='Original facts and quotations. '*30
   entry={'link':'https://example.com/a','title':'News','content':[{'value':'<p>'+text+'</p><figure><img src="/first.jpg"></figure><figure><img src="/second.jpg"></figure>'}]}
