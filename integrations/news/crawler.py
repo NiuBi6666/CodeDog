@@ -140,6 +140,25 @@ def image_identity(url):
   if match:return host+'/'+match.group(1)
  return host+u.path
 
+def srcset_candidates(value):
+ # Commas are valid inside signed image URLs; only descriptor delimiters separate candidates.
+ result=[];rest=value
+ while rest:
+  rest=rest.lstrip(' ,\t\r\n')
+  if not rest:break
+  match=re.search(r'\s',rest)
+  if not match:
+   result.append((1,rest.rstrip(',')));break
+  candidate=rest[:match.start()];rest=rest[match.end():]
+  if candidate.endswith(','):
+   result.append((1,candidate.rstrip(',')));continue
+  descriptor,separator,rest=rest.partition(',')
+  try:rank=float(descriptor.strip().rstrip('wx')) if descriptor.strip() else 1
+  except ValueError:rank=1
+  result.append((rank,candidate))
+  if not separator:break
+ return result
+
 def article_images(raw,url):
  from lxml import html
  if not raw:return []
@@ -167,13 +186,7 @@ def article_images(raw,url):
   responsive=[node.get('srcset',''),node.get('data-srcset','')]
   pictures=node.xpath('ancestor::picture')
   if pictures:responsive.extend(pictures[0].xpath('.//source/@srcset'))
-  for value in responsive:
-   for part in value.split(','):
-    bits=part.strip().split()
-    if bits:
-     try:rank=float(bits[1].rstrip('wx')) if len(bits)>1 else 1
-     except ValueError:rank=1
-     candidates.append((rank,bits[0]))
+  for value in responsive:candidates.extend(srcset_candidates(value))
   for value in (node.get('data-src'),node.get('src')):
    if value:candidates.append((0,value))
   for _,candidate in sorted(candidates,reverse=True):
@@ -181,9 +194,6 @@ def article_images(raw,url):
    u=urllib.parse.urlsplit(value)
    if u.scheme!='https' or not u.hostname or u.username or u.password:continue
    if any(x in u.path.lower() for x in ('/avatar','/logo','/icon','/pixel','/tracking','cinemagraph--')):continue
-   if u.hostname=='i.guim.co.uk':
-    query=dict(urllib.parse.parse_qsl(u.query));query.update(width='1800',dpr='1');query.pop('height',None)
-    value=urllib.parse.urlunsplit(u._replace(query=urllib.parse.urlencode(query)))
    key=image_identity(value)
    if key not in seen:seen.add(key);images.append(value)
    break
@@ -195,9 +205,6 @@ def merge_images(*groups):
   for value in group:
    if not isinstance(value,str) or not value.startswith('https://') or len(value)>8000:continue
    u=urllib.parse.urlsplit(value)
-   if u.hostname=='i.guim.co.uk':
-    query=dict(urllib.parse.parse_qsl(u.query));query.update(width='1800',dpr='1');query.pop('height',None)
-    value=urllib.parse.urlunsplit(u._replace(query=urllib.parse.urlencode(query)))
    key=image_identity(value)
    if key not in seen:seen.add(key);result.append(value)
  return result

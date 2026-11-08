@@ -99,7 +99,7 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(crawler.article_images(raw,'https://example.com/news'),['https://img.example.com/full.jpg'])
   raw='<article><figure><img src="https://i.guim.co.uk/img/media/'+'a'*40+'/0_0_2000_2666/master/2000.jpg?width=445&amp;crop=none"></figure></article>'
   value=crawler.article_images(raw,'https://www.theguardian.com/a')[0]
-  self.assertIn('width=1800',value)
+  self.assertIn('width=445',value)
   self.assertIn('crop=none',value)
 
  def test_guardian_crop_and_social_overlay_are_one_original_asset(self):
@@ -115,6 +115,29 @@ class CollectorTest(unittest.TestCase):
   with patch.object(crawler,'download',return_value=(b'<article><figure><img src="/first.jpg"></figure><figure><img src="/second.jpg"></figure></article>','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':text,'image':'https://example.com/first.jpg'}):
    result=crawler.extract_article({'link':'https://example.com/a'},self.source())
    self.assertEqual(result['images'],['https://example.com/first.jpg','https://example.com/second.jpg'])
+
+ def test_signed_image_urls_remain_byte_for_byte_intact(self):
+  signed='https://i.guim.co.uk/img/media/'+'b'*40+'/0_0_1200_800/master/1200.jpg?width=620&height=400&precrop=40:21,offset-x50,offset-y0&overlay-base64=a%2Fb%3D&s=signature&dpr=2'
+  second=signed.replace('width=620','width=1200').replace('s=signature','s=another-signature')
+  raw='<article><figure><img src="'+signed.replace('&','&amp;')+'" srcset="'+signed.replace('&','&amp;')+' 620w, '+second.replace('&','&amp;')+' 1200w"></figure></article>'
+  self.assertEqual(crawler.article_images(raw,'https://www.theguardian.com/a'),[second])
+  self.assertEqual(crawler.merge_images([signed],[second]),[signed])
+  other='https://images.example.com/photo.jpg?width=300&Signature=abc%2Fdef&Expires=42'
+  self.assertEqual(crawler.merge_images([other]),[other])
+
+ def test_srcset_preserves_query_commas_and_supports_density_descriptors(self):
+  self.assertEqual(crawler.srcset_candidates('https://example.com/a?crop=1,2,3 600w, https://example.com/b 1200w'),[(600,'https://example.com/a?crop=1,2,3'),(1200,'https://example.com/b')])
+  self.assertEqual(crawler.srcset_candidates('https://example.com/a 1x, https://example.com/b 2x'),[(1,'https://example.com/a'),(2,'https://example.com/b')])
+
+ def test_historical_image_repair_matches_assets_and_retains_unresolved_images(self):
+  from repair_images import restore_images
+  base='https://i.guim.co.uk/img/media/'
+  old=base+'a'*40+'/master.jpg?width=1800&s=broken'
+  original=base+'a'*40+'/master.jpg?width=620&s=valid'
+  unrelated=base+'b'*40+'/other.jpg?s=valid'
+  self.assertEqual(restore_images([old],[unrelated,original],lambda u:u==original),([original],True,0))
+  self.assertEqual(restore_images([old],[unrelated],lambda u:False),([old],False,1))
+  self.assertEqual(restore_images([original],[old],lambda u:u==original),([original],False,0))
 
  def source(self,n=1):return {'id':n,'rss_url':'https://example.com/rss'}
  def test_batches_arrive_before_slow_article_and_completion_is_last(self):
