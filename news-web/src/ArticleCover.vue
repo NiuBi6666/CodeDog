@@ -21,6 +21,7 @@ onBeforeUnmount(()=>close());
 <template>
  <figure v-if="slides.length" class="article-cover" :aria-label="slides.length>1?'新闻图片轮播':'新闻图片'">
   <div class="article-cover-media" :class="{'is-unavailable':failed}" @touchstart.passive="e=>touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}" @touchend.passive="touchEnd">
+   <img v-if="!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async" />
    <button v-if="!failed" ref="trigger" type="button" class="article-cover-stage" aria-label="放大新闻图片" @click="enlarge">
     <img :src="imageUrl()" :alt="alt" decoding="async" @load="neighbors" @error="failed=true" />
    </button>
@@ -40,8 +41,9 @@ onBeforeUnmount(()=>close());
 </template>
 <style scoped>
 .article-cover{position:relative;margin:0 0 20px;width:100%;min-width:0}
-.article-cover-media{position:relative;width:100%;aspect-ratio:16/9;border-radius:18px;overflow:hidden;background:#ffffff30;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3}
-.article-cover-stage{display:block;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:18px;background:#ffffff40;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3;overflow:hidden;cursor:zoom-in}
+.article-cover-media{position:relative;width:100%;aspect-ratio:16/9;border-radius:18px;isolation:isolate;overflow:hidden;background:#17212a;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3}
+.article-cover-backdrop{position:absolute;inset:-10%;width:120%;height:120%;object-fit:cover;filter:blur(30px) brightness(.7);transform:scale(1.1);pointer-events:none;user-select:none}
+.article-cover-stage{position:relative;z-index:1;display:block;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:18px;background:transparent;box-shadow:none;overflow:hidden;cursor:zoom-in}
 .article-cover-stage img{display:block;width:100%;height:100%;object-fit:contain}
 .article-cover :is(button,dialog):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .article-cover-media.is-unavailable{width:100%}
@@ -54,7 +56,7 @@ onBeforeUnmount(()=>close());
 .article-cover-dialog img{display:block;max-width:100%;max-height:calc(100dvh - 74px);width:auto;height:auto;object-fit:contain}
 .article-cover-close{position:fixed;right:16px;top:12px;display:grid;place-items:center;width:40px;height:40px;border:1px solid #ffffff40;border-radius:50%;color:#fff;background:#ffffff24;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:inset 0 1px 1px #ffffff40;z-index:1}
 @media(max-width:760px){.article-cover-dialog{padding:60px 10px 20px}.article-cover-dialog img{max-height:calc(100dvh - 80px)}}
- .gallery-controls{position:absolute;inset:0;pointer-events:none;color:#fff;font-size:11px;font-variant-numeric:tabular-nums}
+ .gallery-controls{z-index:2;position:absolute;inset:0;pointer-events:none;color:#fff;font-size:11px;font-variant-numeric:tabular-nums}
 .gallery-controls button{position:absolute;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid #ffffff80;border-radius:50%;background:#17212a66;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 10px #17212a18,inset 0 1px 1px #ffffff55;color:#fff;pointer-events:auto;cursor:pointer}
 .gallery-controls button:first-child{left:12px}
 .gallery-controls button:last-child{right:12px}

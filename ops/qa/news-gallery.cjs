@@ -31,7 +31,14 @@ const assert=require('node:assert/strict'),path=require('path');
   for(const [i,[w,h]] of shapes.entries()){
    const img=p.locator('.article-cover-stage img');
    await p.waitForFunction(expected=>document.querySelector('.article-cover-stage img')?.naturalWidth===expected,w);
-   const box=await p.locator('.article-cover-media').boundingBox();assert(Math.abs(box.width/box.height-16/9)<.02);
+   const background=p.locator('.article-cover-backdrop');
+   assert.equal(await background.getAttribute('src'),await img.getAttribute('src'));
+   assert.equal(await background.getAttribute('aria-hidden'),'true');
+   const material=await background.evaluate(e=>({fit:getComputedStyle(e).objectFit,filter:getComputedStyle(e).filter,pointer:getComputedStyle(e).pointerEvents}));
+   assert.equal(material.fit,'cover');assert(material.filter.includes('blur(30px)'));assert.equal(material.pointer,'none');
+   assert.equal(await img.evaluate(e=>getComputedStyle(e).objectFit),'contain');
+   const box=await p.locator('.article-cover-media').boundingBox();
+   const bgBox=await background.boundingBox();assert(bgBox.width>box.width&&bgBox.height>box.height);assert(Math.abs(box.width/box.height-16/9)<.02);
    const arrows=await p.locator('.gallery-controls button').all();
    for(const arrow of arrows){const a=await arrow.boundingBox();assert(a.x>=box.x&&a.x+a.width<=box.x+box.width+1);assert(Math.abs(a.y+a.height/2-box.y-box.height/2)<2);}
    if(i===0)globalThis.initialFrame=box;
