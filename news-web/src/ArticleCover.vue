@@ -41,8 +41,9 @@ onBeforeUnmount(()=>close());
 </template>
 <style scoped>
 .article-cover{position:relative;margin:0 0 20px;width:100%;min-width:0}
-.article-cover-media{position:relative;width:100%;aspect-ratio:16/9;border-radius:18px;isolation:isolate;overflow:hidden;background:#17212a;box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3}
-.article-cover-backdrop{position:absolute;inset:-10%;width:120%;height:120%;object-fit:cover;filter:blur(30px) brightness(.7);transform:scale(1.1);pointer-events:none;user-select:none}
+.article-cover-media{position:relative;width:100%;aspect-ratio:16/9;border-radius:18px;isolation:isolate;overflow:hidden;background:rgba(255,255,255,.5);box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3}
+.article-cover-backdrop{position:absolute;inset:-10%;width:120%;height:120%;object-fit:cover;filter:blur(30px) saturate(.8);opacity:.6;transform:scale(1.1);pointer-events:none;user-select:none}
+.article-cover-media::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.24);pointer-events:none}
 .article-cover-stage{position:relative;z-index:1;display:block;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:18px;background:transparent;box-shadow:none;overflow:hidden;cursor:zoom-in}
 .article-cover-stage img{display:block;width:100%;height:100%;object-fit:contain}
 .article-cover :is(button,dialog):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
@@ -57,12 +58,12 @@ onBeforeUnmount(()=>close());
 .article-cover-close{position:fixed;right:16px;top:12px;display:grid;place-items:center;width:40px;height:40px;border:1px solid #ffffff40;border-radius:50%;color:#fff;background:#ffffff24;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:inset 0 1px 1px #ffffff40;z-index:1}
 @media(max-width:760px){.article-cover-dialog{padding:60px 10px 20px}.article-cover-dialog img{max-height:calc(100dvh - 80px)}}
  .gallery-controls{z-index:2;position:absolute;inset:0;pointer-events:none;color:#fff;font-size:11px;font-variant-numeric:tabular-nums}
-.gallery-controls button{position:absolute;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid #ffffff80;border-radius:50%;background:#17212a66;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 10px #17212a18,inset 0 1px 1px #ffffff55;color:#fff;pointer-events:auto;cursor:pointer}
+.gallery-controls button{position:absolute;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid #ffffff80;border-radius:50%;background:rgba(255,255,255,.3);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 3px 12px #17212a26,inset 0 1px 1px #ffffff80;text-shadow:0 1px 3px #17212a80;color:#fff;pointer-events:auto;cursor:pointer}
 .gallery-controls button:first-child{left:12px}
 .gallery-controls button:last-child{right:12px}
-.gallery-controls button:hover{background:#17212a99}
+.gallery-controls button:hover{background:rgba(255,255,255,.46)}
 .gallery-controls svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
-.gallery-controls span{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);min-width:44px;padding:4px 9px;border-radius:20px;text-align:center;background:#17212a77;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.gallery-controls span{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);min-width:44px;padding:4px 10px;border-radius:999px;text-align:center;font-size:12px;background:rgba(0,0,0,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .gallery-status{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);max-width:90%;padding:4px 9px;border-radius:12px;background:#17212abb;color:#fff;font-size:11px;pointer-events:none}
 @media(max-width:760px){.gallery-controls button{width:32px;height:32px}.gallery-controls button:first-child{left:8px}.gallery-controls button:last-child{right:8px}}
 </style>

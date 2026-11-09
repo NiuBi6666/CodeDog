@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),path=require('path');
 (async()=>{
  const browser=await chromium.connectOverCDP('http://127.0.0.1:9223');
  const shapes=[[1600,900],[900,1400],[1000,1000]];
- const rows=shapes.map(([w,h],i)=>({id:i+1,title_en:['A photographer at work','The complete portrait','A square image'][i],title_zh:['摄影师的新作','完整的人物肖像','方形新闻图片'][i],category:'科技',source_name:'Test News',published_at:'2026-11-07T01:00:00Z',lang:'en',translation_status:'ready',cover_image:'https://image.test/'+(i+1)+'.svg',content_en:'The original reporting begins here.',content_zh:'新闻正文从这里开始。'}));
+ const rows=shapes.map(([w,h],i)=>({id:i+1,origin_url:'https://publisher.test/article/'+(i+1),title_en:['A photographer at work','The complete portrait','A square image'][i],title_zh:['摄影师的新作','完整的人物肖像','方形新闻图片'][i],category:'科技',source_name:'Test News',published_at:'2026-11-07T01:00:00Z',lang:'en',translation_status:'ready',cover_image:'https://image.test/'+(i+1)+'.svg',content_en:'The original reporting begins here.',content_zh:'新闻正文从这里开始。'}));
  rows.push({...rows[0],id:6,images:shapes.map((_,i)=>'https://image.test/'+(i+1)+'.svg')});
  rows.push({...rows[0],id:4,cover_image:'https://image.test/fail.svg'},{...rows[0],id:5,cover_image:null});
  try{
@@ -66,6 +66,12 @@ const assert=require('node:assert/strict'),path=require('path');
    await img.waitFor();await p.waitForFunction(()=>document.querySelector('.article-cover-stage img')?.naturalWidth>0);
    assert.equal(await cover.locator('select,.article-cover-tools,.article-cover-expand').count(),0);
    assert.equal(await img.evaluate(e=>getComputedStyle(e).objectFit),'contain');
+   assert.equal(await p.locator('.reader-toolbar .reader-category').innerText(),'科技');
+   assert.equal(await p.locator('.reader-toolbar .reader-source').innerText(),'Test News');
+   assert.equal(await p.locator('.reader-toolbar time').count(),1);
+   assert.equal(await p.getByRole('link',{name:'查看原文',exact:true}).count(),1);
+   const tools=await p.locator('.reading-tools').boundingBox();
+   assert(tools.x>=0&&tools.x+tools.width<=width,'tools must fit the viewport');
    const fitted=await img.boundingBox(),frame=await p.locator('.article-cover-stage').boundingBox();
    assert(Math.abs(fitted.width-frame.width)<2&&Math.abs(fitted.height-frame.height)<2);
    assert(Math.abs(frame.width/frame.height-16/9)<.02);
