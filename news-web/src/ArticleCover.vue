@@ -6,9 +6,14 @@ const index=ref(0),failed=ref(false),dialog=ref(null),trigger=ref(null),closeBut
 const current=computed(()=>slides.value[index.value]||'');
 let previousOverflow=null,touchStart=null,switchTicket=0,targetIndex=0;
 const decoded=new Map();
-function preload(i){const url=slides.value[i];if(!url)return Promise.resolve();if(!decoded.has(url)){const image=new Image();image.src='https://wsrv.nl/?url='+encodeURIComponent(url);const ready=image.decode().catch(e=>{decoded.delete(url);throw e;});decoded.set(url,ready);}return decoded.get(url);}
+function proxyUrl(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
+function loadCandidate(url){return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve();image.onerror=()=>reject(new Error('image'));image.src=url;});}
+function preload(i){const url=slides.value[i];if(!url)return Promise.resolve();if(!decoded.has(url)){const ready=loadCandidate(url).catch(()=>loadCandidate(proxyUrl(url)));decoded.set(url,ready.catch(e=>{decoded.delete(url);throw e;}));}return decoded.get(url);}
+
 function neighbors(){if(slides.value.length>1)for(const i of [(index.value+1)%slides.value.length,(index.value+slides.value.length-1)%slides.value.length])preload(i).catch(()=>{});}
-function imageUrl(){return 'https://wsrv.nl/?url='+encodeURIComponent(current.value);}
+function imageUrl(){return current.value;}
+function handleImageError(event){if(event.target.dataset.proxyTried==='1'){failed.value=true;return;}event.target.dataset.proxyTried='1';event.target.src=proxyUrl(current.value);}
+function handleBackdropError(event){if(event.target.dataset.proxyTried==='1')return;event.target.dataset.proxyTried='1';event.target.src=proxyUrl(current.value);}
 async function move(delta){targetIndex=(targetIndex+delta+slides.value.length)%slides.value.length;const next=targetIndex,ticket=++switchTicket;switching.value=true;switchError.value='';try{await preload(next);if(ticket!==switchTicket)return;index.value=next;failed.value=false;neighbors();}catch(e){if(ticket===switchTicket){targetIndex=index.value;switchError.value='图片加载失败，请重试';}}finally{if(ticket===switchTicket)switching.value=false;}}
 function touchEnd(event){if(touchStart===null)return;const t=event.changedTouches[0],dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;if(slides.value.length>1&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)move(dx<0?1:-1);touchStart=null;}
 function enlarge(){if(failed.value||!dialog.value||dialog.value.open)return;dialog.value.showModal();previousOverflow=document.documentElement.style.overflow;document.documentElement.style.overflow='hidden';}
@@ -21,9 +26,9 @@ onBeforeUnmount(()=>close());
 <template>
  <figure v-if="slides.length" class="article-cover" :aria-label="slides.length>1?'新闻图片轮播':'新闻图片'">
   <div class="article-cover-media" :class="{'is-unavailable':failed}" @touchstart.passive="e=>touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}" @touchend.passive="touchEnd">
-   <img v-if="!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async" />
+   <img v-if="!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async" @error="handleBackdropError" />
    <button v-if="!failed" ref="trigger" type="button" class="article-cover-stage" aria-label="放大新闻图片" @click="enlarge">
-    <img :src="imageUrl()" :alt="alt" decoding="async" @load="neighbors" @error="failed=true" />
+    <img :src="imageUrl()" :alt="alt" decoding="async" @load="neighbors" @error="handleImageError" />
    </button>
    <div v-else class="article-cover-unavailable" role="status"><span>{{sourceMark}}</span><small>图片暂不可用</small></div>
   <div v-if="slides.length>1" class="gallery-controls" role="group" aria-label="图片切换">
@@ -35,7 +40,7 @@ onBeforeUnmount(()=>close());
   <small v-if="switching||switchError" class="gallery-status" role="status">{{switchError||'正在加载图片…'}}</small>
   <dialog ref="dialog" class="article-cover-dialog" aria-label="新闻图片大图" @keydown.tab.prevent="closeButton?.focus()" @keydown.left.prevent="slides.length>1&&move(-1)" @keydown.right.prevent="slides.length>1&&move(1)" @close="closed" @click="e=>{if(e.target===dialog)close();}">
    <button ref="closeButton" type="button" class="article-cover-close" aria-label="关闭大图" autofocus @click="close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
-   <img v-if="!failed" :src="imageUrl()" :alt="alt" decoding="async" />
+   <img v-if="!failed" :src="imageUrl()" :alt="alt" decoding="async" @error="handleImageError" />
   </dialog>
  </figure>
 </template>
