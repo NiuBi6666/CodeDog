@@ -5,28 +5,28 @@ const slides=computed(()=>[...new Set((props.images.length?props.images:[props.s
 const index=ref(0),failed=ref(false),dialog=ref(null),trigger=ref(null),closeButton=ref(null),switching=ref(false),switchError=ref('');
 const current=computed(()=>slides.value[index.value]||'');
 let previousOverflow=null,touchStart=null,switchTicket=0,targetIndex=0;
-const decoded=new Map();
+const decoded=new Map(),resolved=ref({});
 function proxyUrl(url){return 'https://wsrv.nl/?url='+encodeURIComponent(url);}
-function loadCandidate(url){return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve();image.onerror=()=>reject(new Error('image'));image.src=url;});}
-function preload(i){const url=slides.value[i];if(!url)return Promise.resolve();if(!decoded.has(url)){const ready=loadCandidate(url).catch(()=>loadCandidate(proxyUrl(url)));decoded.set(url,ready.catch(e=>{decoded.delete(url);throw e;}));}return decoded.get(url);}
+function loadCandidate(url){return new Promise((resolve,reject)=>{const image=new Image();const timer=setTimeout(()=>finish(new Error('timeout')),10000);function finish(error){clearTimeout(timer);image.onload=image.onerror=null;error?reject(error):resolve(url);}image.onload=()=>finish();image.onerror=()=>finish(new Error('image'));image.src=url;});}
+function preload(i){const url=slides.value[i];if(!url)return Promise.resolve();if(!decoded.has(url)){const ready=loadCandidate(url).catch(()=>loadCandidate(proxyUrl(url))).then(value=>{resolved.value={...resolved.value,[url]:value};return value;});decoded.set(url,ready.catch(e=>{decoded.delete(url);throw e;}));}return decoded.get(url);}
 
 function neighbors(){if(slides.value.length>1)for(const i of [(index.value+1)%slides.value.length,(index.value+slides.value.length-1)%slides.value.length])preload(i).catch(()=>{});}
-function imageUrl(){return current.value;}
-function handleImageError(event){if(event.target.dataset.proxyTried==='1'){failed.value=true;return;}event.target.dataset.proxyTried='1';event.target.src=proxyUrl(current.value);}
-function handleBackdropError(event){if(event.target.dataset.proxyTried==='1')return;event.target.dataset.proxyTried='1';event.target.src=proxyUrl(current.value);}
+function imageUrl(){return resolved.value[current.value]||current.value;}
+async function handleImageError(event){const url=current.value;if(event.target.getAttribute('src')!==imageUrl())return;try{await preload(index.value);}catch(e){if(current.value===url)failed.value=true;}}
+
 async function move(delta){targetIndex=(targetIndex+delta+slides.value.length)%slides.value.length;const next=targetIndex,ticket=++switchTicket;switching.value=true;switchError.value='';try{await preload(next);if(ticket!==switchTicket)return;index.value=next;failed.value=false;neighbors();}catch(e){if(ticket===switchTicket){targetIndex=index.value;switchError.value='图片加载失败，请重试';}}finally{if(ticket===switchTicket)switching.value=false;}}
 function touchEnd(event){if(touchStart===null)return;const t=event.changedTouches[0],dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;if(slides.value.length>1&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)move(dx<0?1:-1);touchStart=null;}
 function enlarge(){if(failed.value||!dialog.value||dialog.value.open)return;dialog.value.showModal();previousOverflow=document.documentElement.style.overflow;document.documentElement.style.overflow='hidden';}
 function restoreScroll(){if(previousOverflow!==null){document.documentElement.style.overflow=previousOverflow;previousOverflow=null;}}
 function close(){dialog.value?.close();restoreScroll();}
 function closed(){restoreScroll();trigger.value?.focus({preventScroll:true});}
-watch(()=>slides.value.join('|'),()=>{close();switchTicket++;targetIndex=0;index.value=0;failed.value=false;switching.value=false;switchError.value='';decoded.clear();},{immediate:true});
+watch(()=>slides.value.join('|'),()=>{close();switchTicket++;targetIndex=0;index.value=0;failed.value=false;switching.value=false;switchError.value='';decoded.clear();resolved.value={};},{immediate:true});
 onBeforeUnmount(()=>close());
 </script>
 <template>
  <figure v-if="slides.length" class="article-cover" :aria-label="slides.length>1?'新闻图片轮播':'新闻图片'">
   <div class="article-cover-media" :class="{'is-unavailable':failed}" @touchstart.passive="e=>touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}" @touchend.passive="touchEnd">
-   <img v-if="!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async" @error="handleBackdropError" />
+   <img v-if="!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async"  />
    <button v-if="!failed" ref="trigger" type="button" class="article-cover-stage" aria-label="放大新闻图片" @click="enlarge">
     <img :src="imageUrl()" :alt="alt" decoding="async" @load="neighbors" @error="handleImageError" />
    </button>

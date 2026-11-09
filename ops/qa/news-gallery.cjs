@@ -11,6 +11,7 @@ const assert=require('node:assert/strict'),path=require('path');
   const c=await browser.newContext({viewport:{width,height:900}}),p=await c.newPage(),errors=[];
   p.on('pageerror',e=>errors.push(e.message));
   await c.addInitScript(()=>localStorage.setItem('cdnews.cover-mode','compact'));
+  await c.route('https://image.test/**',r=>r.abort());
   await c.route('https://wsrv.nl/**',async r=>{
    const src=new URL(r.request().url()).searchParams.get('url');
    if(src.endsWith('fail.svg'))return r.fulfill({status:404,body:'Not found'});
