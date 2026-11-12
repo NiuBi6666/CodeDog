@@ -169,6 +169,14 @@ def feed_image(entry):
   if url.startswith('https://') and (item.get('medium')=='image' or item.get('type','').startswith('image/') or not item.get('type')):return url
  return ''
 
+def usable_image_url(url):
+ if not isinstance(url,str) or not url.startswith('https://') or len(url)>8000:return False
+ u=urllib.parse.urlsplit(url)
+ if not u.hostname or u.username or u.password:return False
+ # Exact technical asset filenames, not all GIFs or editorial image descriptions.
+ name=u.path.rsplit('/',1)[-1].lower()
+ return name not in ('lazyload-fallback.gif','lazyload-placeholder.gif','transparent.gif','spacer.gif','blank.gif','1x1.gif')
+
 def image_identity(url):
  u=urllib.parse.urlsplit(url)
  # Responsive renditions share the same asset path; retain the largest candidate.
@@ -237,11 +245,11 @@ def article_images(raw,url):
   if pictures:responsive.extend(pictures[0].xpath('.//source/@srcset'))
   for value in responsive:candidates.extend(srcset_candidates(value))
   for value in (node.get('data-src'),node.get('src')):
-   if value:candidates.append((0,value))
+   if value:candidates.append((1 if value==node.get('data-src') else 0,value))
   for _,candidate in sorted(candidates,reverse=True):
    value=urllib.parse.urljoin(url,candidate)
    u=urllib.parse.urlsplit(value)
-   if u.scheme!='https' or not u.hostname or u.username or u.password:continue
+   if not usable_image_url(value):continue
    if any(x in u.path.lower() for x in ('/avatar','/logo','/icon','/pixel','/tracking','cinemagraph--')):continue
    key=image_identity(value)
    if key not in seen:seen.add(key);images.append(value)
@@ -252,7 +260,7 @@ def merge_images(*groups):
  result=[];seen=set()
  for group in groups:
   for value in group:
-   if not isinstance(value,str) or not value.startswith('https://') or len(value)>8000:continue
+   if not usable_image_url(value):continue
    u=urllib.parse.urlsplit(value)
    key=image_identity(value)
    if key not in seen:seen.add(key);result.append(value)

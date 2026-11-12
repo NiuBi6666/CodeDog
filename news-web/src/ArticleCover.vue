@@ -1,8 +1,8 @@
 <script setup>
 import { ref,computed,watch,onBeforeUnmount } from 'vue';
-import { loadNewsImage } from './news-images.js';
+import { loadNewsImage,isNewsImage } from './news-images.js';
 const props=defineProps({src:{type:String,default:''},images:{type:Array,default:()=>[]},alt:{type:String,default:''},sourceMark:{type:String,default:'C'}});
-const slides=computed(()=>[...new Set((props.images.length?props.images:[props.src]).filter(v=>typeof v==='string'&&v.startsWith('https://')))]);
+const slides=computed(()=>[...new Set((props.images.length?props.images:[props.src]).filter(isNewsImage))]);
 const index=ref(0),failed=ref(false),dialog=ref(null),trigger=ref(null),closeButton=ref(null),switching=ref(false),switchError=ref('');
 const current=computed(()=>slides.value[index.value]||'');
 let previousOverflow=null,touchStart=null,switchTicket=0,targetIndex=0;

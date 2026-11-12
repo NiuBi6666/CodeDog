@@ -346,4 +346,14 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(crawler.article_images(raw,'https://www.bbc.co.uk/news/articles/test'),[photo])
   self.assertEqual(crawler.article_images(raw.replace('A billboard with the school name','Protesters holding a banner outside BBC News headquarters'),'https://www.bbc.co.uk/news/articles/test'),[photo])
 
+
+ def test_lazyload_placeholder_is_not_a_news_image(self):
+  placeholder='https://variety.com/wp-content/themes/pmc-variety-2020/assets/public/lazyload-fallback.gif'
+  real='https://variety.com/wp-content/uploads/2026/11/ghost-soldier.webp?w=1000&h=667&crop=1&resize=1000%2C667'
+  raw='<article><figure><img src="'+placeholder+'" data-src="'+real.replace('&','&amp;')+'"></figure><figure><img src="'+placeholder+'"></figure></article>'
+  self.assertEqual(crawler.article_images(raw,'https://variety.com/story'),[real])
+  self.assertEqual(crawler.merge_images([real,placeholder],[placeholder+'?v=1']),[real])
+  self.assertTrue(crawler.usable_image_url('https://publisher.test/news/animated-map.gif'))
+  self.assertTrue(crawler.usable_image_url(real))
+
 if __name__=='__main__':unittest.main()

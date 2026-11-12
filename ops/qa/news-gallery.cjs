@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),path=require('path');
  const browser=await chromium.connectOverCDP('http://127.0.0.1:9223');
  const shapes=[[1600,900],[900,1400],[1000,1000]];
  const rows=shapes.map(([w,h],i)=>({id:i+1,origin_url:'https://publisher.test/article/'+(i+1),title_en:['A photographer at work','The complete portrait','A square image'][i],title_zh:['摄影师的新作','完整的人物肖像','方形新闻图片'][i],category:'科技',source_name:'Test News',published_at:'2026-11-07T01:00:00Z',lang:'en',translation_status:'ready',cover_image:'https://image.test/'+(i+1)+'.svg',content_en:'The original reporting begins here.',content_zh:'新闻正文从这里开始。'}));
- rows.push({...rows[0],id:6,images:shapes.map((_,i)=>'https://image.test/'+(i+1)+'.svg')});
+ rows.push({...rows[0],id:6,images:[...shapes.map((_,i)=>'https://image.test/'+(i+1)+'.svg'),'https://variety.com/wp-content/themes/pmc-variety-2020/assets/public/lazyload-fallback.gif']});
  rows.push({...rows[0],id:4,cover_image:'https://image.test/fail.svg'},{...rows[0],id:5,cover_image:null});
  try{
  for(const width of [375,390,430,1440]){

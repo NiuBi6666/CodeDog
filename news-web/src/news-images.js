@@ -1,3 +1,10 @@
+export function isNewsImage(url){
+ if(typeof url!=='string'||!url.startsWith('https://'))return false;
+ try{
+ const parsed=new URL(url),name=parsed.pathname.split('/').pop().toLowerCase();
+ return !parsed.username&&!parsed.password&&!['lazyload-fallback.gif','lazyload-placeholder.gif','transparent.gif','spacer.gif','blank.gif','1x1.gif'].includes(name);
+ }catch{return false;}
+}
 
 const cache=new Map();
 let active=0;
