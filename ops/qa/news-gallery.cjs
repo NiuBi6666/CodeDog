@@ -34,11 +34,16 @@ const assert=require('node:assert/strict'),path=require('path');
   await p.getByRole('status',{name:'图片正在加载中'}).waitFor();
   assert.equal(await p.locator('.article-cover-stage img').count(),0,'no broken image before decode');
   assert.equal(await p.locator('.image-skeleton').innerText(),'图片正在加载中');
+  // A decoded preloader does not prove the rendered img will load: simulate a DOM error.
+
   for(const [i,[w,h]] of shapes.entries()){
    const img=p.locator('.article-cover-stage img');
    await p.waitForFunction(expected=>document.querySelector('.article-cover-stage img')?.naturalWidth===expected,w);
    assert.equal(await p.locator('.article-cover-backdrop').count(),0);
    assert.equal(await img.evaluate(e=>getComputedStyle(e).objectFit),'cover');
+   await img.waitFor({state:'visible'});
+   assert.equal(await img.getAttribute('alt'),'','preview never exposes title as broken-image text');
+   assert.equal(await p.locator('.image-skeleton').count(),0);
    const box=await p.locator('.article-cover-media').boundingBox();
    const preview=await img.boundingBox();
    assert(Math.abs(box.width/box.height-16/9)<.02);
@@ -50,7 +55,7 @@ const assert=require('node:assert/strict'),path=require('path');
    await p.getByText((i+1)+' / 3',{exact:true}).waitFor();
    const before=await p.locator('.article-cover-stage img').getAttribute('src');
    await p.getByRole('button',{name:'下一张图片',exact:true}).click();
-   assert(await p.locator('.article-cover-stage img').evaluate(e=>e.clientWidth>0&&e.clientHeight>0),'image must stay visible while switching');
+   assert(await p.evaluate(()=>{const img=document.querySelector('.article-cover-stage img');return (img&&img.clientWidth>0&&img.clientHeight>0)||document.querySelector('.image-skeleton')?.textContent==='图片正在加载中';}),'switching shows a loaded image or the loading message');
   }
   await p.getByText('1 / 3',{exact:true}).waitFor();
   await p.getByRole('button',{name:'上一张图片',exact:true}).click();
@@ -107,6 +112,11 @@ const assert=require('node:assert/strict'),path=require('path');
    if(i===1)await p.screenshot({path:'/qa/news-image-modes-'+width+'.png',fullPage:true});
    console.log('ADAPTIVE_IMAGE_OK',width,w+'x'+h);
   }
+  await p.goto('http://cdnews.test/news/article/1');
+  await p.locator('.article-cover-stage img').waitFor({state:'visible'});
+  await p.locator('.article-cover-stage img').dispatchEvent('error');
+  await p.getByText('图片暂不可用',{exact:true}).waitFor();
+  assert.equal(await p.locator('.article-cover-stage img').count(),0,'failed rendered image is removed');
   await p.goto('http://cdnews.test/news/article/4');await p.getByText('图片暂不可用',{exact:true}).waitFor();assert.equal(await p.locator('.article-cover-tools').count(),0);assert((await p.locator('.article-cover-media').boundingBox()).height<120);await p.getByRole('button',{name:'重试',exact:true}).waitFor();
   await p.goto('http://cdnews.test/news/article/5');await p.locator('.paragraphs').waitFor();assert.equal(await p.locator('.article-cover').count(),0);
   assert.deepEqual(errors,[]);console.log('FALLBACK_AND_NO_COVER_OK',width);await c.close();
