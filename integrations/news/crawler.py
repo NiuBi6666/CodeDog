@@ -176,6 +176,9 @@ def image_identity(url):
  if host=='i.guim.co.uk':
   match=re.search(r'/img/media/([a-f0-9]{40})/',u.path)
   if match:return host+'/'+match.group(1)
+ if host=='ichef.bbci.co.uk':
+  match=re.search(r'/cpsprodpb/(.+)',u.path)
+  if match:return host+'/'+re.sub(r'\.(?:webp|avif)$','',match.group(1))
  return host+u.path
 
 def srcset_candidates(value):
@@ -209,7 +212,9 @@ def article_images(raw,url):
  # Include the lead figure in the article, followed by body figures in document order.
  scope=root.xpath('//article')[0] if root.xpath('//article') else scopes[0]
  images=[];seen=set()
+ bbc=(urllib.parse.urlsplit(url).hostname or '').lower() in ('bbc.com','www.bbc.com','bbc.co.uk','www.bbc.co.uk')
  for node in scope.xpath('.//img'):
+  if bbc and not node.xpath('ancestor::*[@data-component="image-block"]'):continue
   parents=[node]+list(node.iterancestors())
   excluded=False
   for parent in parents:
@@ -246,6 +251,13 @@ def merge_images(*groups):
    key=image_identity(value)
    if key not in seen:seen.add(key);result.append(value)
  return result
+
+def selected_article_images(images,result,entry,url):
+ # Confirmed body figures are authoritative; metadata and reader pages can include promos.
+ if images:return merge_images(images)
+ if (urllib.parse.urlsplit(url).hostname or '').lower() in ('bbc.com','www.bbc.com','bbc.co.uk','www.bbc.co.uk'):
+  return merge_images([feed_image(entry)])
+ return merge_images(result.get('images',[]),[result.get('image'),feed_image(entry)])
 
 def publication_date(entry,result):
  for value in (entry.get('published'),entry.get('updated'),result.get('date')):
@@ -309,8 +321,9 @@ def extract_article(entry,source):
   if not has_body(text,source,brief):return reject('too_short')
   try:title=article_title(entry,result,url)
   except Exception:return reject('encoding_error')
+  images=selected_article_images(images,result,entry,url)
   return {'source_id':source['id'],'origin_url':url,'title_en':title,
-          'author':result.get('author') or '', 'published_at':publication_date(entry,result),'cover_image':(merge_images(images,result.get('images',[]),[result.get('image'),feed_image(entry)]) or [''])[0], 'images':merge_images(images,result.get('images',[]),[result.get('image'),feed_image(entry)]), 'paragraphs_en':paragraphs,'content_kind':'brief' if brief else 'article'}
+          'author':result.get('author') or '', 'published_at':publication_date(entry,result),'cover_image':(images or [''])[0], 'images':images, 'paragraphs_en':paragraphs,'content_kind':'brief' if brief else 'article'}
  except Exception:
   return reject('extraction_failed')
 
@@ -411,7 +424,9 @@ def refill_article(url):
  response=session().get(API+'/api/crawler/tasks',params={'fast':'true'},headers={'X-Webhook-Secret':SECRET},timeout=(10,30))
  response.raise_for_status()
  host=urllib.parse.urlparse(url).hostname
- source=next((s for s in response.json()['sources'] if urllib.parse.urlparse(s['rss_url']).hostname==host),None)
+ allowed_hosts={host}
+ if host in ('bbc.com','www.bbc.com','bbc.co.uk','www.bbc.co.uk'):allowed_hosts.add('feeds.bbci.co.uk')
+ source=next((s for s in response.json()['sources'] if urllib.parse.urlparse(s['rss_url']).hostname in allowed_hosts),None)
  if source is None:raise ValueError('Article host must match an active configured source')
  result=extract_article({'link':url},source)
  if not result or not result['images']:raise ValueError('No article images extracted')

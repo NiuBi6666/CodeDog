@@ -309,4 +309,31 @@ class CollectorTest(unittest.TestCase):
    self.assertEqual(report['stats']['accepted_articles'],1);self.assertEqual(report['stats']['rejected_articles'],2)
    self.assertEqual(report['stats']['reasons'],{'blocked':2});self.assertEqual(len(report['stats']['rejected']),2)
 
+
+ def test_bbc_gallery_excludes_non_body_assets_and_deduplicates_sizes(self):
+  base='https://ichef.bbci.co.uk/ace/'
+  path='cpsprodpb/7574/live/asset.jpg'
+  first=base+'standard/976/'+path+'.webp'
+  duplicate=base+'branded_news/1200/'+path
+  second=base+'standard/976/cpsprodpb/1234/live/other.jpg'
+  raw='<main><article><div data-component="image-block"><figure><img src="'+first+'"></figure></div><div data-component="text-block">Body</div><div data-component="links-block"><figure><img src="'+second+'"></figure></div><figure><img src="'+duplicate+'"></figure></article></main>'
+  self.assertEqual(crawler.article_images(raw,'https://www.bbc.co.uk/news/articles/test'),[first])
+  self.assertEqual(crawler.merge_images([first],[duplicate]),[first])
+  raw=raw.replace('<div data-component="text-block">Body</div>','<div data-component="image-block"><figure><img src="'+second+'"></figure></div>')
+  self.assertEqual(crawler.article_images(raw,'https://www.bbc.com/news/articles/test'),[first,second])
+  self.assertEqual(crawler.selected_article_images([first],{'images':[second]}, {'media_thumbnail':[{'url':duplicate}]},'https://www.bbc.co.uk/news/articles/test'),[first])
+  self.assertEqual(crawler.selected_article_images([],{'images':[second]}, {'media_thumbnail':[{'url':duplicate}]},'https://www.bbc.co.uk/news/articles/test'),[duplicate])
+
+ def test_confirmed_body_images_do_not_merge_unrelated_metadata(self):
+  self.assertEqual(crawler.selected_article_images(['https://example.com/body.jpg'],{'images':['https://example.com/promo.jpg'],'image':'https://example.com/social.jpg'}, {},'https://example.com/a'),['https://example.com/body.jpg'])
+
+
+ def test_bbc_refill_matches_configured_publisher_feed_host(self):
+  source=dict(self.source(),rss_url='https://feeds.bbci.co.uk/news/world/rss.xml')
+  response=SimpleNamespace(raise_for_status=lambda:None,json=lambda:{'sources':[source]})
+  with patch.object(crawler,'public_url'),patch.object(crawler,'session',return_value=SimpleNamespace(get=lambda *a,**kw:response)),patch.object(crawler,'extract_article',return_value={'images':['https://example.com/photo.jpg']}) as extract,patch.object(crawler,'send') as send:
+   crawler.refill_article('https://www.bbc.co.uk/news/articles/test')
+   self.assertEqual(extract.call_args.args[1],source)
+   send.assert_called_once()
+
 if __name__=='__main__':unittest.main()

@@ -9,12 +9,13 @@ let previousOverflow=null,touchStart=null,switchTicket=0,targetIndex=0;
 const resolved=ref(''),original=ref(''),loaded=ref(false),zoomFailed=ref(false),zoom=ref(1),pan=ref({x:0,y:0});
 let drag=null;
 let imageTicket=0;
+function resetArticle(){imageTicket++;resolved.value='';loaded.value=false;}
 function preload(i){const url=slides.value[i];return url?loadNewsImage(url):Promise.resolve('');}
 function neighbors(){if(slides.value.length>1)for(const i of [(index.value+1)%slides.value.length,(index.value+slides.value.length-1)%slides.value.length])preload(i).catch(()=>{});}
 function imageUrl(){return resolved.value;}
 async function prepare(){const ticket=++imageTicket;if(!resolved.value)loaded.value=false;failed.value=false;original.value='';zoomFailed.value=false;resetZoom();try{const url=await preload(index.value);if(ticket!==imageTicket)return;resolved.value=url;if(dialog.value?.open)loadOriginal();}catch(e){if(ticket===imageTicket)failed.value=true;}}
-function imageLoaded(){loaded.value=true;neighbors();}
-function handleImageError(){failed.value=true;loaded.value=false;}
+function imageLoaded(event){if(event.target.currentSrc!==new URL(resolved.value,location.href).href)return;loaded.value=true;neighbors();}
+function handleImageError(event){if(event.target.currentSrc!==new URL(resolved.value,location.href).href)return;failed.value=true;loaded.value=false;}
 watch(current,prepare,{immediate:true});
 async function move(delta){targetIndex=(targetIndex+delta+slides.value.length)%slides.value.length;const next=targetIndex,ticket=++switchTicket;switching.value=true;switchError.value='';try{await preload(next);if(ticket!==switchTicket)return;index.value=next;failed.value=false;neighbors();}catch(e){if(ticket===switchTicket){targetIndex=index.value;switchError.value='图片加载失败，请重试';}}finally{if(ticket===switchTicket)switching.value=false;}}
 function touchEnd(event){if(touchStart===null)return;const t=event.changedTouches[0],dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;if(slides.value.length>1&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)move(dx<0?1:-1);touchStart=null;}
@@ -29,16 +30,16 @@ async function enlarge(){if(failed.value||!loaded.value||!dialog.value||dialog.v
 function restoreScroll(){if(previousOverflow!==null){document.documentElement.style.overflow=previousOverflow;previousOverflow=null;}}
 function close(){dialog.value?.close();resetZoom();restoreScroll();}
 function closed(){restoreScroll();trigger.value?.focus({preventScroll:true});}
-watch(()=>slides.value.join('|'),()=>{close();switchTicket++;targetIndex=0;index.value=0;failed.value=false;switching.value=false;switchError.value='';},{immediate:true});
+watch(()=>slides.value.join('|'),()=>{close();resetArticle();switchTicket++;targetIndex=0;index.value=0;failed.value=false;switching.value=false;switchError.value='';prepare();},{immediate:true});
 onBeforeUnmount(()=>{imageTicket++;close();});
 </script>
 <template>
  <figure v-if="slides.length" class="article-cover" :aria-label="slides.length>1?'新闻图片轮播':'新闻图片'">
   <div class="article-cover-media" :class="{'is-unavailable':failed,'is-single':slides.length===1,'has-image':loaded}" @touchstart.passive="e=>touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}" @touchend.passive="touchEnd">
    <img v-if="slides.length>1&&resolved&&!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async"  />
-   <div v-if="!loaded&&!failed" class="image-skeleton" role="status" aria-label="图片加载中"></div>
+   <div v-if="!loaded&&!failed" class="image-skeleton" role="status" aria-label="图片正在加载中"><span>图片正在加载中</span></div>
    <button v-if="!failed" ref="trigger" type="button" class="article-cover-stage" aria-label="放大新闻图片" @click="enlarge">
-    <img v-if="resolved" :src="imageUrl()" :alt="alt" :class="{'image-ready':loaded}" decoding="async" @load="imageLoaded" @error="handleImageError" />
+    <img v-if="resolved" :src="imageUrl()" :alt="loaded?alt:''" :class="{'image-ready':loaded}" decoding="async" @load="imageLoaded" @error="handleImageError" />
    </button>
    <div v-else class="article-cover-unavailable" role="status"><small>图片暂不可用</small><button type="button" @click="prepare">重试</button></div>
   <div v-if="slides.length>1" class="gallery-controls" role="group" aria-label="图片切换">
@@ -69,7 +70,7 @@ onBeforeUnmount(()=>{imageTicket++;close();});
 .is-single.has-image .article-cover-stage{height:auto;overflow:visible}
 .is-single.has-image .article-cover-stage img{max-height:480px;border-radius:12px}
 .article-cover-stage img.image-ready{opacity:1}
-.image-skeleton{position:absolute;inset:0;background:linear-gradient(100deg,#ffffff30 20%,#ffffffa0 48%,#ffffff30 76%);background-size:200% 100%;animation:image-shimmer 1.5s linear infinite}
+.image-skeleton{position:absolute;inset:0;display:grid;place-items:center;color:#526174;font-size:13px;background:linear-gradient(100deg,#ffffff30 20%,#ffffffa0 48%,#ffffff30 76%);background-size:200% 100%;animation:image-shimmer 1.5s linear infinite}
 @keyframes image-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.image-skeleton{animation:none}.article-cover-stage img{transition:none}}
 .article-cover :is(button,dialog):focus-visible{outline:2px solid var(--blue);outline-offset:3px}

@@ -31,8 +31,9 @@ const assert=require('node:assert/strict'),path=require('path');
    return r.fulfill({path:file,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'text/html'});
   });
   await p.goto('http://cdnews.test/news/article/6');
-  await p.getByRole('status',{name:'图片加载中'}).waitFor();
+  await p.getByRole('status',{name:'图片正在加载中'}).waitFor();
   assert.equal(await p.locator('.article-cover-stage img').count(),0,'no broken image before decode');
+  assert.equal(await p.locator('.image-skeleton').innerText(),'图片正在加载中');
   for(const [i,[w,h]] of shapes.entries()){
    const img=p.locator('.article-cover-stage img');
    await p.waitForFunction(expected=>document.querySelector('.article-cover-stage img')?.naturalWidth===expected,w);
