@@ -36,7 +36,6 @@ onBeforeUnmount(()=>{imageTicket++;close();});
 <template>
  <figure v-if="slides.length" class="article-cover" :aria-label="slides.length>1?'新闻图片轮播':'新闻图片'">
   <div class="article-cover-media" :class="{'is-unavailable':failed,'is-single':slides.length===1,'has-image':loaded}" @touchstart.passive="e=>touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}" @touchend.passive="touchEnd">
-   <img v-if="slides.length>1&&resolved&&!failed" class="article-cover-backdrop" :src="imageUrl()" alt="" aria-hidden="true" decoding="async"  />
    <div v-if="!loaded&&!failed" class="image-skeleton" role="status" aria-label="图片正在加载中"><span>图片正在加载中</span></div>
    <button v-if="!failed" ref="trigger" type="button" class="article-cover-stage" aria-label="放大新闻图片" @click="enlarge">
     <img v-if="resolved" :src="imageUrl()" :alt="loaded?alt:''" :class="{'image-ready':loaded}" decoding="async" @load="imageLoaded" @error="handleImageError" />
@@ -61,14 +60,8 @@ onBeforeUnmount(()=>{imageTicket++;close();});
 <style scoped>
 .article-cover{position:relative;margin:0 0 20px;width:100%;min-width:0}
 .article-cover-media{position:relative;width:100%;aspect-ratio:16/9;border-radius:18px;isolation:isolate;overflow:hidden;background:rgba(255,255,255,.5);box-shadow:0 8px 28px #31476b0a,inset 0 1px 1px #ffffffb3}
-.article-cover-backdrop{position:absolute;inset:-10%;width:120%;height:120%;object-fit:cover;filter:blur(30px) brightness(.8) saturate(1.1);opacity:.9;transform:scale(1.1);pointer-events:none;user-select:none}
-.article-cover-media::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,23,42,.28),transparent 28%,transparent 72%,rgba(15,23,42,.28));pointer-events:none}
 .article-cover-stage{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:18px;background:transparent;box-shadow:none;overflow:hidden;cursor:zoom-in}
-.article-cover-stage img{opacity:0;transition:opacity .2s;display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;border:1px solid rgba(255,255,255,.25);box-shadow:0 8px 24px rgba(0,0,0,.18)}
-.article-cover-media.is-single.has-image{aspect-ratio:auto;background:transparent;box-shadow:none;overflow:visible}
-.is-single.has-image::after{display:none}
-.is-single.has-image .article-cover-stage{height:auto;overflow:visible}
-.is-single.has-image .article-cover-stage img{max-height:480px;border-radius:12px}
+.article-cover-stage img{opacity:0;transition:opacity .2s;display:block;width:100%;height:100%;object-fit:cover;object-position:center}
 .article-cover-stage img.image-ready{opacity:1}
 .image-skeleton{position:absolute;inset:0;display:grid;place-items:center;color:#526174;font-size:13px;background:linear-gradient(100deg,#ffffff30 20%,#ffffffa0 48%,#ffffff30 76%);background-size:200% 100%;animation:image-shimmer 1.5s linear infinite}
 @keyframes image-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}

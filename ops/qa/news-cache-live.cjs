@@ -11,13 +11,14 @@ const assert=require('node:assert/strict');
    await p.waitForFunction(()=>document.querySelector('.article-cover-stage img')?.naturalWidth>0,null,{timeout:45000});
    const img=p.locator('.article-cover-stage img');
    assert((await img.getAttribute('src')).startsWith('/news/media/'));
-   if(await p.locator('.article-cover-backdrop').count())assert.equal(await p.locator('.article-cover-backdrop').getAttribute('src'),await img.getAttribute('src'));
+   assert.equal(await p.locator('.article-cover-backdrop').count(),0);
+   assert.equal(await img.evaluate(e=>getComputedStyle(e).objectFit),'cover');
    assert.equal(await p.getByText('图片暂不可用',{exact:true}).count(),0);
    const box=await p.locator('.article-cover-media').boundingBox();
    if(await p.locator('.article-cover-media.is-single').count()){
     assert.equal(await p.locator('.article-cover-backdrop,.gallery-controls').count(),0);
-    assert((await img.boundingBox()).height<=480.1);
-   }else assert(Math.abs(box.width/box.height-16/9)<.02);
+   }
+   assert(Math.abs(box.width/box.height-16/9)<.02);
    await p.getByRole('button',{name:'放大新闻图片',exact:true}).click();
    await p.getByRole('dialog',{name:'新闻图片大图'}).waitFor();
    await p.waitForFunction(()=>document.querySelector('dialog img')?.naturalWidth>0);
