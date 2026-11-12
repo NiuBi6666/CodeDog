@@ -321,6 +321,8 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(crawler.merge_images([first],[duplicate]),[first])
   raw=raw.replace('<div data-component="text-block">Body</div>','<div data-component="image-block"><figure><img src="'+second+'"></figure></div>')
   self.assertEqual(crawler.article_images(raw,'https://www.bbc.com/news/articles/test'),[first,second])
+  raw=raw.replace('<main>','<main><article data-component="links-block"><img src="https://example.com/promo.jpg"></article>')
+  self.assertEqual(crawler.article_images(raw,'https://www.bbc.com/news/articles/test'),[first,second])
   self.assertEqual(crawler.selected_article_images([first],{'images':[second]}, {'media_thumbnail':[{'url':duplicate}]},'https://www.bbc.co.uk/news/articles/test'),[first])
   self.assertEqual(crawler.selected_article_images([],{'images':[second]}, {'media_thumbnail':[{'url':duplicate}]},'https://www.bbc.co.uk/news/articles/test'),[duplicate])
 

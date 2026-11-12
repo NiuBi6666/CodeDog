@@ -213,6 +213,7 @@ def article_images(raw,url):
  scope=root.xpath('//article')[0] if root.xpath('//article') else scopes[0]
  images=[];seen=set()
  bbc=(urllib.parse.urlsplit(url).hostname or '').lower() in ('bbc.com','www.bbc.com','bbc.co.uk','www.bbc.co.uk')
+ if bbc:scope=(root.xpath('//main') or [scope])[0]
  for node in scope.xpath('.//img'):
   if bbc and not node.xpath('ancestor::*[@data-component="image-block"]'):continue
   parents=[node]+list(node.iterancestors())
@@ -429,7 +430,13 @@ def refill_article(url):
  source=next((s for s in response.json()['sources'] if urllib.parse.urlparse(s['rss_url']).hostname in allowed_hosts),None)
  if source is None:raise ValueError('Article host must match an active configured source')
  result=extract_article({'link':url},source)
- if not result or not result['images']:raise ValueError('No article images extracted')
+ if not result or not result['images']:
+  try:
+   from lxml import html
+   raw,final=download(url);root=html.fromstring(raw)
+   print('Image scope diagnostic: '+json.dumps({'main':len(root.xpath('//main')),'article':len(root.xpath('//article')),'images':[{'src':n.get('src'),'components':[p.get('data-component') for p in n.iterancestors() if p.get('data-component')]} for n in root.xpath('//main//img')]}),flush=True)
+  except Exception as error:print('Image scope unavailable: '+type(error).__name__,flush=True)
+  raise ValueError('No article images extracted')
  send([result],[])
  print('Article image refill submitted: %s images'%len(result['images']),flush=True)
  print(json.dumps({'source_id':source['id'],'images':result['images']},ensure_ascii=False),flush=True)
