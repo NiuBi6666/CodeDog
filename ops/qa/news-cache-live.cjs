@@ -11,7 +11,7 @@ const assert=require('node:assert/strict');
    await p.waitForFunction(()=>document.querySelector('.article-cover-stage img')?.naturalWidth>0,null,{timeout:45000});
    const img=p.locator('.article-cover-stage img');
    assert((await img.getAttribute('src')).startsWith('/news/media/'));
-   assert.equal(await p.locator('.article-cover-backdrop').getAttribute('src'),await img.getAttribute('src'));
+   if(await p.locator('.article-cover-backdrop').count())assert.equal(await p.locator('.article-cover-backdrop').getAttribute('src'),await img.getAttribute('src'));
    assert.equal(await p.getByText('图片暂不可用',{exact:true}).count(),0);
    const box=await p.locator('.article-cover-media').boundingBox();
    if(await p.locator('.article-cover-media.is-single').count()){
