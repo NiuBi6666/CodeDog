@@ -215,7 +215,12 @@ def article_images(raw,url):
  bbc=(urllib.parse.urlsplit(url).hostname or '').lower() in ('bbc.com','www.bbc.com','bbc.co.uk','www.bbc.co.uk')
  if bbc:scope=(root.xpath('//main') or [scope])[0]
  for node in scope.xpath('.//img'):
-  if bbc and not node.xpath('ancestor::*[@data-component="image-block"]'):continue
+  if bbc:
+   # BBC .com and .co.uk serve different component markup.
+   if not node.xpath('ancestor::*[@data-component="image-block" or @data-testid="image"]'):continue
+   alt=node.get('alt','').lower()
+   # Editorial photos can show real banners; require explicit BBC promotion wording.
+   if ('banner' in alt and 'graphic for bbc news' in alt) or ('bbc news' in alt and any(x in alt for x in ('whatsapp channel','newsletter sign','follow us','subscribe to'))):continue
   parents=[node]+list(node.iterancestors())
   excluded=False
   for parent in parents:

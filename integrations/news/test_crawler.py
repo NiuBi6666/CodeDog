@@ -338,4 +338,12 @@ class CollectorTest(unittest.TestCase):
    self.assertEqual(extract.call_args.args[1],source)
    send.assert_called_once()
 
+
+ def test_bbc_uk_legacy_images_exclude_brand_promotion_without_dropping_real_banners(self):
+  photo='https://ichef.bbci.co.uk/ace/standard/780/cpsprodpb/7574/live/photo.jpg'
+  banner='https://ichef.bbci.co.uk/ace/standard/976/cpsprodpb/a743/live/brand.png'
+  raw='<main><article><div data-testid="image"><figure><img alt="A billboard with the school name" src="'+photo+'"></figure></div><div data-testid="image"><figure><img alt="To the right of the banner a woman looks at her phone. A graphic for BBC News Africa is on the left." src="'+banner+'"></figure></div></article></main>'
+  self.assertEqual(crawler.article_images(raw,'https://www.bbc.co.uk/news/articles/test'),[photo])
+  self.assertEqual(crawler.article_images(raw.replace('A billboard with the school name','Protesters holding a banner outside BBC News headquarters'),'https://www.bbc.co.uk/news/articles/test'),[photo])
+
 if __name__=='__main__':unittest.main()
