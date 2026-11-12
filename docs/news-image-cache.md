@@ -22,3 +22,10 @@ No new object storage, paid CDN or external credentials are required.
 
 Validation: news-images.test.js; ops/qa/news-gallery.cjs (mock image routes);
 ops/qa/news-cache-live.cjs (real production articles).
+
+Single-image articles render at natural aspect ratio with a maximum height of 480px and no blurred side fill or carousel controls.
+Multiple-image articles retain the fixed 16:9 stage. A dimmed blurred background and side vignette
+improve white control contrast; the fitted foreground image carries its own highlight border and shadow.
+The fullscreen lightbox supports wheel zoom (1x–4x), pointer dragging, double-click zoom,
+plus/minus and zero reset. Arrow keys navigate and reset zoom; Escape and the close button exit.
+The original-size image is loaded on opening or changing an image inside the lightbox.

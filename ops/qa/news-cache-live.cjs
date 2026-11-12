@@ -14,10 +14,17 @@ const assert=require('node:assert/strict');
    assert.equal(await p.locator('.article-cover-backdrop').getAttribute('src'),await img.getAttribute('src'));
    assert.equal(await p.getByText('图片暂不可用',{exact:true}).count(),0);
    const box=await p.locator('.article-cover-media').boundingBox();
-   assert(Math.abs(box.width/box.height-16/9)<.02);
+   if(await p.locator('.article-cover-media.is-single').count()){
+    assert.equal(await p.locator('.article-cover-backdrop,.gallery-controls').count(),0);
+    assert((await img.boundingBox()).height<=480.1);
+   }else assert(Math.abs(box.width/box.height-16/9)<.02);
    await p.getByRole('button',{name:'放大新闻图片',exact:true}).click();
    await p.getByRole('dialog',{name:'新闻图片大图'}).waitFor();
    await p.waitForFunction(()=>document.querySelector('dialog img')?.naturalWidth>0);
+   await p.locator('.lightbox-canvas').dispatchEvent('wheel',{deltaY:-100});
+   assert.equal(await p.locator('.lightbox-canvas.is-zoomed').count(),1);
+   await p.keyboard.press('0');
+   assert.equal(await p.locator('.lightbox-canvas.is-zoomed').count(),0);
    await p.keyboard.press('Escape');
    await p.getByRole('dialog',{name:'新闻图片大图'}).waitFor({state:'hidden'});
    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
