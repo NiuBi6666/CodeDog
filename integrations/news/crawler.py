@@ -434,7 +434,7 @@ def refill_article(url):
   try:
    from lxml import html
    raw,final=download(url);root=html.fromstring(raw)
-   print('Image scope diagnostic: '+json.dumps({'main':len(root.xpath('//main')),'article':len(root.xpath('//article')),'images':[{'src':n.get('src'),'components':[p.get('data-component') for p in n.iterancestors() if p.get('data-component')]} for n in root.xpath('//main//img')]}),flush=True)
+   print('Image scope diagnostic: '+json.dumps({'main':len(root.xpath('//main')),'article':len(root.xpath('//article')),'images':[{'src':n.get('src'),'alt':n.get('alt'),'parents':[{'tag':p.tag,**{k:p.get(k) for k in ('class','id','data-testid','data-component') if p.get(k)}} for p in n.iterancestors()]} for n in root.xpath('//main//img')]}),flush=True)
   except Exception as error:print('Image scope unavailable: '+type(error).__name__,flush=True)
   raise ValueError('No article images extracted')
  send([result],[])
