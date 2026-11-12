@@ -5,6 +5,7 @@ import { relativeTime,groupStories } from './reading-utils.js';
 import SelectionTranslator from './SelectionTranslator.vue';
 import BackToTop from './BackToTop.vue';
 import ArticleCover from './ArticleCover.vue';
+import { prefetchNewsImage } from './news-images.js';
 const route=useRoute(),router=useRouter();
 const categories=['全部','国际','军事','科技','财经','教育','文娱','生活'];
 const articles=ref([]),selected=ref(null),category=ref('全部'),source=ref('全部来源'),query=ref(''),sourceList=ref([]),total=ref(0);
@@ -109,7 +110,7 @@ onMounted(()=>{load();clockTimer=setInterval(()=>clock.value=Date.now(),60000);w
         <div class="feed-heading"><h1>今日简报 <span class="count">({{ total }})</span></h1><select v-model="source" aria-label="按来源筛选"><option v-for="item in sources" :key="item">{{ item }}</option></select></div>
         <p v-if="error" class="feed-error" role="alert">{{error}} <button @click="load()">重试</button></p><p v-if="loading" class="feed-state" role="status">正在读取报道…</p><div class="feed-list">
           <div v-for="article in filtered" :key="article.id" class="story-group" :class="{selected:selected?.id===article.id||article.folded.some(item=>item.id===selected?.id)}">
-            <button class="story-card" :aria-current="selected?.id===article.id?'true':undefined" @click="selectArticle(article.id)">
+            <button @mouseenter="prefetchNewsImage(article.cover_image)" @focus="prefetchNewsImage(article.cover_image)" class="story-card" :aria-current="selected?.id===article.id?'true':undefined" @click="selectArticle(article.id)">
               <div class="story-meta"><span class="source-mark">{{ article.source_mark }}</span><span class="story-source">{{ article.source_name }}</span><span class="category-tag">{{ article.category }}</span><span v-if="article.lang==='zh'" class="original-language">中文原稿</span><time :datetime="article.published_at" :title="exactDate(article.published_at)">{{ dateLabel(article.published_at) }}</time></div>
               <p v-if="article.lang!=='zh'&&mode==='bilingual'&&article.title_zh&&article.title_zh!==article.title_en" class="story-en" lang="en">{{ article.title_en }}</p>
               <h2 :class="{'title-zh':mode!=='en'}">{{ mode==='en'?article.title_en:(article.title_zh||article.title_en) }}</h2>

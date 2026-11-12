@@ -108,6 +108,13 @@ services:
 
   news-web:
     build: ./news-web
+    volumes:
+      - news-image-cache:/var/cache/news-images
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/news/"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
     container_name: codedog-news-web
     restart: unless-stopped
     networks:
@@ -145,5 +152,6 @@ networks:
     name: codemao_default
 
 volumes:
+  news-image-cache:
   news-mtran-models:
   news-mtran-config:

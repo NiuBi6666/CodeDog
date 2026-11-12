@@ -12,15 +12,17 @@ const assert=require('node:assert/strict'),path=require('path');
   p.on('pageerror',e=>errors.push(e.message));
   await c.addInitScript(()=>localStorage.setItem('cdnews.cover-mode','compact'));
   await c.route('https://image.test/**',r=>r.abort());
-  await c.route('https://wsrv.nl/**',async r=>{
+  const imageRoute=async r=>{
    const src=new URL(r.request().url()).searchParams.get('url');
    if(src.endsWith('fail.svg'))return r.fulfill({status:404,body:'Not found'});
    await new Promise(resolve=>setTimeout(resolve,700));
    const [w,h]=shapes[Number(src.match(/(\d+)\.svg$/)[1])-1];
    return r.fulfill({headers:{'Cache-Control':'public,max-age=3600'},contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#c8d4d5"/><rect x="24" y="24" width="${w-48}" height="${h-48}" fill="none" stroke="#385c6f" stroke-width="16"/><circle cx="${w/2}" cy="${h*.28}" r="${Math.min(w,h)*.14}" fill="#688d9a"/><path d="M${w*.15} ${h*.9} Q${w/2} ${h*.2} ${w*.85} ${h*.9}" fill="#486d79"/><text x="${w/2}" y="${h-60}" text-anchor="middle" font-family="Georgia" font-size="40" fill="#fff">CDNews / Full frame</text></svg>`});
-  });
+  };
+  await c.route('https://wsrv.nl/**',imageRoute);
+  await c.route('**/news/media/**',imageRoute);
   await c.route('http://cdnews.test/**',async r=>{
-   const u=new URL(r.request().url());let data;
+   const u=new URL(r.request().url());if(u.pathname.startsWith('/news/media/'))return r.fallback();let data;
    if(u.pathname==='/api/news')data={articles:rows,total:rows.length,sources:[{source_name:'Test News'}],has_more:false};
    else if(/^\/api\/news\/\d+$/.test(u.pathname))data=rows.find(a=>a.id===Number(u.pathname.split('/').pop()));
    else if(u.pathname.startsWith('/api/'))data={};
@@ -29,6 +31,8 @@ const assert=require('node:assert/strict'),path=require('path');
    return r.fulfill({path:file,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'text/html'});
   });
   await p.goto('http://cdnews.test/news/article/6');
+  await p.getByRole('status',{name:'图片加载中'}).waitFor();
+  assert.equal(await p.locator('.article-cover-stage img').count(),0,'no broken image before decode');
   for(const [i,[w,h]] of shapes.entries()){
    const img=p.locator('.article-cover-stage img');
    await p.waitForFunction(expected=>document.querySelector('.article-cover-stage img')?.naturalWidth===expected,w);
@@ -89,7 +93,7 @@ const assert=require('node:assert/strict'),path=require('path');
    if(i===1)await p.screenshot({path:'/qa/news-image-modes-'+width+'.png',fullPage:true});
    console.log('ADAPTIVE_IMAGE_OK',width,w+'x'+h);
   }
-  await p.goto('http://cdnews.test/news/article/4');await p.getByText('图片暂不可用',{exact:true}).waitFor();assert.equal(await p.locator('.article-cover-tools').count(),0);
+  await p.goto('http://cdnews.test/news/article/4');await p.getByText('图片暂不可用',{exact:true}).waitFor();assert.equal(await p.locator('.article-cover-tools').count(),0);assert((await p.locator('.article-cover-media').boundingBox()).height<120);await p.getByRole('button',{name:'重试',exact:true}).waitFor();
   await p.goto('http://cdnews.test/news/article/5');await p.locator('.paragraphs').waitFor();assert.equal(await p.locator('.article-cover').count(),0);
   assert.deepEqual(errors,[]);console.log('FALLBACK_AND_NO_COVER_OK',width);await c.close();
  }
