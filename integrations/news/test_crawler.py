@@ -162,6 +162,22 @@ class CollectorTest(unittest.TestCase):
   self.assertNotIn('Copy link',clean)
   self.assertIn('CloseMore',crawler.prepare_article_html(raw,'https://example.com/news'))
 
+ def test_corrupted_title_is_recovered_from_publisher_not_guessed(self):
+  entry={'title':'机器人制\ufffd\ufffd商Agile Robots融资5亿美元','link':'https://36kr.com/newsflashes/123'}
+  with patch.object(crawler,'download',return_value=('<html><h1>机器人制造商Agile Robots融资5亿美元</h1></html>'.encode(),'https://www.36kr.com/newsflashes/123')):
+   self.assertEqual(crawler.article_title(entry,{},entry['link']),'机器人制造商Agile Robots融资5亿美元')
+  with patch.object(crawler,'download',return_value=('<html><h1>仍然损\ufffd坏</h1></html>'.encode(),'https://www.36kr.com/newsflashes/123')):
+   with self.assertRaises(ValueError):crawler.article_title(entry,{},entry['link'])
+  with patch.object(crawler,'download') as fetch:
+   self.assertEqual(crawler.article_title({'title':'Valid original title'},{},'https://example.com/a'),'Valid original title')
+   fetch.assert_not_called()
+
+ def test_corrupted_title_cannot_enter_via_full_rss(self):
+  entry={'title':'坏\ufffd标题','link':'https://example.com/a','content':[{'value':'<p>'+('Original reporting with verified facts. '*30)+'</p>'}]}
+  with patch.object(crawler,'download',side_effect=ConnectionError()):
+   self.assertIsNone(crawler.extract_article(entry,self.source()))
+   self.assertEqual(getattr(crawler._sessions,'rejection'),'encoding_error')
+
  def source(self,n=1):return {'id':n,'rss_url':'https://example.com/rss'}
  def test_batches_arrive_before_slow_article_and_completion_is_last(self):
   slow=threading.Event();first_push=threading.Event();sent=[]

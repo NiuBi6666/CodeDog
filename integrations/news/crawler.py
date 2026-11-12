@@ -260,6 +260,23 @@ def publication_date(entry,result):
   if entry.get(field):return datetime.datetime.fromtimestamp(calendar.timegm(entry[field]),datetime.timezone.utc).isoformat().replace('+00:00','Z')
  return datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z')
 
+def article_title(entry,result,url):
+ title=(entry.get('title') or result.get('title') or '').strip()
+ if '\ufffd' not in title:return title[:1000]
+ # A replacement character cannot be decoded back into the missing text.
+ # Recover only from the publisher page, never infer it from the body.
+ raw,final=download(url.replace('https://36kr.com/','https://www.36kr.com/',1) if urllib.parse.urlsplit(url).hostname=='36kr.com' else url)
+ from lxml import html
+ try:root=html.fromstring(raw.decode('utf-8',errors='strict') if isinstance(raw,bytes) else raw)
+ except UnicodeDecodeError:raise ValueError('Publisher title encoding invalid')
+ candidates=root.xpath('//h1//text()')
+ if candidates:candidates=[''.join(candidates).strip()]
+ candidates+=root.xpath('//meta[@property="og:title"]/@content|//meta[@name="twitter:title"]/@content')
+ for value in candidates:
+  value=value.strip()
+  if value and '\ufffd' not in value and len(value)<=1000:return value
+ raise ValueError('Publisher title unavailable')
+
 def extract_article(entry,source):
  try:
   url=entry.get('link','');brief=brief_entry(entry,source);images=[]
@@ -290,7 +307,9 @@ def extract_article(entry,source):
   if len(text)>100000:return reject('too_large')
   if any(p.lower().strip().startswith(('subscribe to continue reading','already a subscriber?','sign in to continue reading','you have reached your article limit','verify you are human','access denied')) for p in paragraphs):return reject('restricted_content')
   if not has_body(text,source,brief):return reject('too_short')
-  return {'source_id':source['id'],'origin_url':url,'title_en':(entry.get('title') or result.get('title',''))[:1000],
+  try:title=article_title(entry,result,url)
+  except Exception:return reject('encoding_error')
+  return {'source_id':source['id'],'origin_url':url,'title_en':title,
           'author':result.get('author') or '', 'published_at':publication_date(entry,result),'cover_image':(merge_images(images,result.get('images',[]),[result.get('image'),feed_image(entry)]) or [''])[0], 'images':merge_images(images,result.get('images',[]),[result.get('image'),feed_image(entry)]), 'paragraphs_en':paragraphs,'content_kind':'brief' if brief else 'article'}
  except Exception:
   return reject('extraction_failed')
