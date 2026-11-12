@@ -18,16 +18,31 @@ public final class NewsContentCleaner {
   }
   return rows.size();
  }
- public static List<String> clean(List<String> rows){return List.copyOf(rows.subList(0,end(rows)));}
+ private static final Pattern CHROME_SIGNATURE=Pattern.compile("CloseMore on this story|Shareclose panel|Subsection[A-Za-z ]{1,60}Published",Pattern.CASE_INSENSITIVE);
+ public static boolean pageChrome(String text){
+  if(!CHROME_SIGNATURE.matcher(text).find())return false;
+  String lower=text.toLowerCase(Locale.ROOT);
+  return List.of("share page","copy link","about sharing","related topics","read description","follow ").stream().filter(lower::contains).count()>=3;
+ }
+ public static List<String> clean(List<String> rows){return rows.subList(0,end(rows)).stream().filter(p->!pageChrome(p)).toList();}
  public static void cleanArticle(Map<String,Object> article){
   var original=paragraphs((String)article.get("content_en"));
   var translated=paragraphs((String)article.get("content_zh"));
   int originalEnd=end(original),translatedEnd=end(translated);
-  // Apply the same boundary to both languages only when their original paragraph counts match.
+  var cleanOriginal=new ArrayList<String>();
+  var cleanTranslated=new ArrayList<String>();
   if(original.size()==translated.size()){
-   int pairedEnd=Math.min(originalEnd,translatedEnd);originalEnd=pairedEnd;translatedEnd=pairedEnd;
+   int pairedEnd=Math.min(originalEnd,translatedEnd);
+   for(int i=0;i<pairedEnd;i++){
+    if(pageChrome(original.get(i))||pageChrome(translated.get(i)))continue;
+    cleanOriginal.add(original.get(i));cleanTranslated.add(translated.get(i));
+   }
+  }else{
+   cleanOriginal.addAll(clean(original));cleanTranslated.addAll(clean(translated));
+   // No surviving original means no translation may be displayed without a source.
+   if(cleanOriginal.isEmpty())cleanTranslated.clear();
   }
-  article.put("content_en",String.join("\n\n",original.subList(0,originalEnd)));
-  if(article.get("content_zh")!=null)article.put("content_zh",String.join("\n\n",translated.subList(0,translatedEnd)));
+  article.put("content_en",String.join("\n\n",cleanOriginal));
+  if(article.get("content_zh")!=null)article.put("content_zh",String.join("\n\n",cleanTranslated));
  }
 }

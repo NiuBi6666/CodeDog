@@ -91,8 +91,15 @@ def rss_fulltext(entry,source=None):
 # Only remove a complete, recognizable footer module; dates inside reporting are meaningful.
 _RECOMMENDATION_HEADING=re.compile(r'^(?:[\u3400-\u9fff]{0,12}新闻精选|相关推荐|相关阅读|推荐阅读|Related (?:articles|stories|coverage)|Recommended (?:stories|articles)|Read more|More on this story)[:：]?$',re.I)
 _FOOTER_ITEM=re.compile(r'^(?:[-•*]\s*)?(?:\d{4}(?:年\d{1,2}月\d{1,2}日|[-/]\d{1,2}[-/]\d{1,2})\s+\d{1,2}:\d{2}(?::\d{2})?|\[[^\]]+\]\(https?://[^)]+\))$')
+def page_chrome(text):
+ # Require a glued publisher UI signature AND several independent controls.
+ # A normal report mentioning sharing, dates or topics must remain intact.
+ signature=re.search(r'CloseMore on this story|Shareclose panel|Subsection[A-Za-z ]{1,60}Published',text,re.I)
+ controls=('share page','copy link','about sharing','related topics','read description','follow ')
+ return bool(signature and sum(value in text.lower() for value in controls)>=3)
+
 def clean_paragraphs(paragraphs):
- rows=[p.strip() for p in paragraphs if p.strip()]
+ rows=[p.strip() for p in paragraphs if p.strip() and not page_chrome(p)]
  for i,p in enumerate(rows):
   if i and _RECOMMENDATION_HEADING.fullmatch(p):
    tail=rows[i+1:]
@@ -106,12 +113,43 @@ def prepare_article_html(raw,url):
  root=html.fromstring(raw)
  # A known publisher-specific body container excludes its sibling recommendation list.
  host=(urllib.parse.urlparse(url).hostname or '').lower()
+ if host in ('bbc.com','www.bbc.com','bbc.co.uk','www.bbc.co.uk'):
+  bodies=root.xpath('//body')
+  blocks=root.xpath('//main//*[@data-component="text-block"]')
+  if not blocks:
+   # Video-only pages sometimes have no transcript: use a genuine supplied
+   # description, never the player's navigation text.
+   descriptions=[]
+   def visit(value):
+    if isinstance(value,dict):
+     types=value.get('@type',[])
+     if isinstance(types,str):types=[types]
+     text=value.get('description')
+     if 'VideoObject' in types and isinstance(text,str) and not page_chrome(text) and len(text.split())>=35:
+      descriptions.append(text)
+     for child in value.values():visit(child)
+    elif isinstance(value,list):
+     for child in value:visit(child)
+   for script in root.xpath('//script[@type="application/ld+json"]/text()'):
+    try:visit(json.loads(script))
+    except (ValueError,TypeError):pass
+   blocks=[]
+   for text in dict.fromkeys(descriptions):
+    node=html.Element('p');node.text=text;blocks.append(node)
+  if bodies and blocks:
+   content=html.Element('article')
+   for block in blocks:content.append(deepcopy(block))
+   bodies[0].clear();bodies[0].append(content)
+  else:
+   for node in root.xpath('//*[@data-component]'):
+    if node.get('data-component') in ('metadata-block','links-block','topics','share-tools','video-block','social-embed-block'):
+     if node.getparent() is not None:node.drop_tree()
  if host=='chinanews.com.cn' or host.endswith('.chinanews.com.cn'):
   bodies=root.xpath('//body')
   article=root.xpath('//*[contains(concat(" ",normalize-space(@class)," ")," left_zw ")]')
   if bodies and article:
    content=deepcopy(article[0]);bodies[0].clear();bodies[0].append(content)
- for node in root.xpath('//nav|//footer|//form|//script[not(@type="application/ld+json")]|//style|//noscript|//*[@role="navigation"]'):
+ for node in root.xpath('//nav|//footer|//form|//button|//*[@role="button"]|//script[not(@type="application/ld+json")]|//style|//noscript|//*[@role="navigation"]'):
   if node.getparent() is not None:node.drop_tree()
  return html.tostring(root,encoding='unicode')
 
@@ -229,6 +267,7 @@ def extract_article(entry,source):
   if result:
    for content in entry.get('content',[]):images.extend(article_images('<article>'+content.get('value','')+'</article>',url))
    if publisher_full_feed(entry,source):images.extend(article_images('<article>'+entry.get('summary','')+'</article>',url))
+  if result:result['text']='\n'.join(clean_paragraphs((result.get('text') or '').split('\n')))
   if result and not has_body(result.get('text') or '',source,brief):result=None
   failure='empty_body'
   if result is None:
@@ -239,6 +278,7 @@ def extract_article(entry,source):
     result=trafilatura.bare_extraction(prepare_article_html(raw,final_url),url=final_url,include_comments=False,include_tables=False,with_metadata=True,as_dict=True)
    except Exception as e:
     failure='deadline' if isinstance(e,TimeoutError) else 'blocked' if isinstance(e,requests.HTTPError) and e.response is not None and e.response.status_code in (401,403,429) else 'download_failed'
+   if result:result['text']='\n'.join(clean_paragraphs((result.get('text') or '').split('\n')))
    if not result or not has_body(result.get('text') or '',source,brief):
     try:
      with _reader_slots:result=jina_article(url)

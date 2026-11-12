@@ -40,4 +40,23 @@ class NewsContentCleanerTest {
   assertThat(article.get("content_en")).isEqualTo("新闻正文。");
   assertThat(article).doesNotContainKey("content_zh");
  }
+
+ private static final String CHROME="Video titleCloseMore on this story.SubsectionHealthPublished4 minutes agoShareclose panelShare pageCopy linkAbout sharingRelated topicsFluFollow FluRead description";
+ @Test void removesGluedPlayerControlsAndPairedTranslationButKeepsReporting(){
+  var article=new HashMap<String,Object>();
+  article.put("content_en","Real reporting on 12 November.\n\n"+CHROME+"\n\nA doctor explains the results.");
+  article.put("content_zh","11月12日的真实报道。\n\n乱七八糟的分享控件译文\n\n医生解释结果。");
+  NewsContentCleaner.cleanArticle(article);
+  assertThat(article.get("content_en")).isEqualTo("Real reporting on 12 November.\n\nA doctor explains the results.");
+  assertThat(article.get("content_zh")).isEqualTo("11月12日的真实报道。\n\n医生解释结果。");
+ }
+ @Test void doesNotMistakeReportingAboutInterfacesForPlayerControls(){
+  String report="The review discusses Share page, Copy link, About sharing and related topics as interface labels.";
+  assertThat(NewsContentCleaner.clean(List.of(report))).containsExactly(report);
+ }
+ @Test void pollutedOnlyBodyCannotLeaveAnOrphanTranslation(){
+  var article=new HashMap<String,Object>();article.put("content_en",CHROME);article.put("content_zh","分享乱码\n\n更多乱码");
+  NewsContentCleaner.cleanArticle(article);
+  assertThat(article.get("content_en")).isEqualTo("");assertThat(article.get("content_zh")).isEqualTo("");
+ }
 }

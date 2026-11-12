@@ -42,6 +42,13 @@ class NewsIntegrationTest {
   mvc.perform(get("/api/news/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.content_en").value("正文事实。")).andExpect(jsonPath("$.content_zh").value("正文事实。")).andExpect(jsonPath("$.content_original").value("正文事实。"));
   assertThat(db.queryForObject("SELECT content_en FROM news_articles WHERE id=?",String.class,id)).isEqualTo(original);
  }
+ @Test void pollutedVideoReturnsNoOrphanTranslationOrProgress()throws Exception{
+  String junk="TitleCloseMore on this story.SubsectionHealthPublished4 minutes agoShareclose panelShare pageCopy linkAbout sharingRelated topicsFluFollow FluRead description";
+  db.update("INSERT INTO news_articles(source_id,url_hash,origin_url,source_name,category,title_en,title_zh,content_en,content_zh,status,lang,published_at) VALUES((SELECT MIN(id) FROM news_sources),?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",NewsService.digest("https://example.com/video"),"https://example.com/video","test","生活","Title","标题",junk,"混乱的分享菜单译文","ready","en");
+  long id=db.queryForObject("SELECT id FROM news_articles WHERE origin_url='https://example.com/video'",Long.class);
+  mvc.perform(get("/api/news/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.content_en").value("")).andExpect(jsonPath("$.content_zh").value("")).andExpect(jsonPath("$.content_original").value("")).andExpect(jsonPath("$.paragraphs_zh.length()").value(0)).andExpect(jsonPath("$.translation_total").value(0)).andExpect(jsonPath("$.translation_completed").value(0));
+  assertThat(db.queryForObject("SELECT content_en FROM news_articles WHERE id=?",String.class,id)).isEqualTo(junk);
+ }
  @Test void publicReadOnlyAndMissingConfigurationAreHonest()throws Exception{
   mvc.perform(get("/api/news/sync-status")).andExpect(status().isOk()).andExpect(jsonPath("$.pending_articles").value(0)).andExpect(jsonPath("$.phase").value("idle"));
   mvc.perform(get("/api/news")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));

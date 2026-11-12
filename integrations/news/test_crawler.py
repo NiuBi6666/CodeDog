@@ -139,6 +139,29 @@ class CollectorTest(unittest.TestCase):
   self.assertEqual(restore_images([old],[unrelated],lambda u:False),([old],False,1))
   self.assertEqual(restore_images([original],[old],lambda u:u==original),([original],False,0))
 
+ def test_bbc_video_controls_are_not_article_text(self):
+  junk='Repeated video titleCloseMore on this story.SubsectionHealthPublished4 minutes agoShareclose panelShare pageCopy linkAbout sharingRelated topicsFluFollow FluRead description'
+  body='The doctor explained that symptoms usually improve after several days.'
+  self.assertEqual(crawler.clean_paragraphs([body,junk,'The investigation continues.']),[body,'The investigation continues.'])
+  self.assertEqual(crawler.clean_paragraphs(['The report discusses Share page, Copy link, About sharing and related topics as interface labels.']),['The report discusses Share page, Copy link, About sharing and related topics as interface labels.'])
+  with patch.object(crawler,'download',return_value=(b'<html></html>','https://example.com/a')),patch.object(crawler.trafilatura,'bare_extraction',return_value={'text':junk}):
+   self.assertIsNone(crawler.extract_article({'link':'https://example.com/a'},self.source()))
+
+ def test_bbc_body_blocks_exclude_metadata_and_sharing_without_harming_other_publishers(self):
+  raw='<html><body><main><h1>Title</h1><div data-component="metadata-block">Published 4 minutes ago</div><div data-component="text-block"><p>A doctor discussed the results of the trial on 12 November.</p></div><div data-component="links-block">Related topics Share page Copy link</div><button>Read description</button></main></body></html>'
+  clean=crawler.prepare_article_html(raw,'https://www.bbc.co.uk/news/articles/test')
+  self.assertIn('A doctor discussed',clean);self.assertIn('12 November',clean)
+  self.assertNotIn('Published',clean);self.assertNotIn('Copy link',clean);self.assertNotIn('Read description',clean)
+  self.assertIn('Published',crawler.prepare_article_html(raw,'https://example.com/news'))
+
+ def test_bbc_video_uses_only_publisher_description_and_does_not_invent_a_transcript(self):
+  description='A reporter explains how the medicines compare in a controlled investigation, with interviews from pharmacists and doctors, and considers the differences in active ingredients, price and recommended use for people with common cold symptoms.'
+  raw='<html><body><main><script type="application/ld+json">'+__import__('json').dumps({'@type':'VideoObject','description':description})+'</script><div data-component="video-block">CloseMore on this story Share page Copy link About sharing</div></main></body></html>'
+  clean=crawler.prepare_article_html(raw,'https://www.bbc.com/news/videos/test')
+  self.assertIn(description,clean);self.assertNotIn('CloseMore',clean)
+  self.assertNotIn('Copy link',clean)
+  self.assertIn('CloseMore',crawler.prepare_article_html(raw,'https://example.com/news'))
+
  def source(self,n=1):return {'id':n,'rss_url':'https://example.com/rss'}
  def test_batches_arrive_before_slow_article_and_completion_is_last(self):
   slow=threading.Event();first_push=threading.Event();sent=[]

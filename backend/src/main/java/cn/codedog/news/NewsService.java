@@ -133,9 +133,9 @@ public class NewsService {
   var rows=db.queryForList("SELECT * FROM news_articles WHERE id=?"+(admin?"":" AND (status='ready' OR (title_zh IS NOT NULL AND title_zh<>''))"),id);require(!rows.isEmpty(),HttpStatus.NOT_FOUND,"文章不存在或仍在编译");var a=rows.getFirst();
   a.put("images",imageList(a.get("images_json"),a.get("cover_image")));a.remove("images_json");
   NewsContentCleaner.cleanArticle(a);a.put("title_original",a.get("title_en"));a.put("content_original",a.get("content_en"));a.remove("url_hash");a.put("translation_status","ready".equals(a.get("status"))?"ready":a.get("body_requested_at")==null?"not_requested":a.get("status"));a.put("related_sources",db.queryForList("SELECT source_name,origin_url FROM news_articles WHERE event_id=?",id));
-  var original=Arrays.asList(((String)a.get("content_en")).split("\n\n"));
+  var original=NewsContentCleaner.paragraphs((String)a.get("content_en"));
   List<String> partial;
-  if("ready".equals(a.get("status")))partial=Arrays.asList(Objects.toString(a.get("content_zh"),"").split("\n\n",-1));
+  if("ready".equals(a.get("status")))partial=NewsContentCleaner.paragraphs(Objects.toString(a.get("content_zh"),""));
   else if(translation.config().mode().equals("translators"))partial=translation.cachedParagraphs(translation.config(),original);
   else partial=Collections.nCopies(original.size(),"");
   a.put("paragraphs_zh",partial);a.put("translation_completed",partial.stream().filter(t->!t.isBlank()).count());a.put("translation_total",original.size());
